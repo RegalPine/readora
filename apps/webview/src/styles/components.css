@@ -1,0 +1,186 @@
+/*
+ * 组件层：图表容器与工具控件（PRD-003 §13.4）。
+ * 颜色只引用 var(--readora-*)，尺寸常量留在 tokens.css。
+ */
+
+/* ---------- 焦点环（ARC-006 §12 第 3 条） ----------
+ * 用 :where() 把特异性压到 0，控件自己的 :hover / [aria-pressed] 样式不会被顶掉。 */
+
+:where(a, button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--readora-color-focus);
+  outline-offset: 2px;
+  border-radius: var(--readora-radius-sm);
+}
+
+/* ---------- 图表容器、工具栏、错误卡与全屏（STORY-05-03） ---------- */
+
+.readora-diagram {
+  position: relative;
+  margin: 0 0 1.4em;
+  padding: var(--readora-space-2) var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-diagram-border);
+  border-radius: var(--readora-radius-lg);
+  background: var(--readora-diagram-canvas);
+  color: var(--readora-diagram-text);
+}
+
+.readora-diagram-note {
+  margin: 0 0 var(--readora-space-2);
+  font-size: var(--readora-font-md);
+  color: var(--readora-diagram-muted);
+}
+
+/* 接管后不再需要 M2 的占位说明；源码默认收起。 */
+.readora-diagram[data-readora-diagram-state="rendered"] .readora-diagram-note,
+.readora-diagram[data-readora-diagram-state="failed"] .readora-diagram-note,
+.readora-diagram[data-readora-diagram-state="rendered"] .readora-diagram-source,
+.readora-diagram[data-readora-diagram-state="failed"] .readora-diagram-source {
+  display: none;
+}
+
+/* 展开态：选择器必须与上面那条「接管后默认收起」同权重且靠后，否则
+ * `.readora-diagram[data-readora-diagram-state=…] .readora-diagram-source` 以 0-3-0
+ * 赢过 0-2-0 —— 按钮点了、class 上了、源码还是不可见（浏览器实测）。 */
+.readora-diagram.readora-diagram--source-open .readora-diagram-source {
+  display: block;
+}
+
+.readora-diagram-container {
+  overflow: hidden;
+}
+
+/* 图在栏内居中：走块级 + auto 外边距而不是 flex。两个理由都是实测：
+ * flex 项的 `min-width: auto` 会退到 SVG 固有宽度，本来该缩小的宽图反而撑破容器；
+ * 而一旦 Pele 给 svg 写了 `max-width: <px>`（它的浮层控件在让位），Chrome 会把
+ * 剩余空间全划给 margin-right，flex 下连 auto 都不生效。居中交给引擎不占位后的
+ * 普通情形：图宽 < 栏宽时两侧 auto 均分（实测 754 栏里的 130 图 → 312/312）。 */
+.readora-diagram-container svg {
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+.readora-diagram-toolbar,
+.readora-diagram-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--readora-space-1);
+  align-items: center;
+}
+
+.readora-diagram-toolbar {
+  /* 工具栏靠右收尾：图在栏内居中（上面那段 auto 外边距），沿口左侧留下的
+   * 是图的余量，按钮钉在左上会和那块余量打架。 */
+  justify-content: flex-end;
+  margin-bottom: var(--readora-space-1);
+}
+
+/* `filename=…`（M10 围栏属性）吃掉按钮左侧留下的那块空白：文本由接管层用
+ * textContent 写入，不存在注入面，只需要与工具栏同一档字号不抢图的视觉重心。 */
+.readora-diagram-filename {
+  margin-right: auto;
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-xs);
+  color: var(--readora-diagram-muted);
+}
+
+.readora-diagram-tool,
+.readora-diagram-error-actions .readora-diagram-tool {
+  padding: 2px 10px;
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--readora-motion-fast) ease;
+}
+
+.readora-diagram-tool:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+/* 纯图标按钮（目前只有全屏）：改成 inline-flex 并收回横向内边距，
+ * 否则 16px 图标配 10px 左右 padding 会比旁边的文字按钮宽出一截。 */
+.readora-diagram-tool--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+}
+
+/* 连线加粗：引擎不给边线宽度留变量，也根本不写 stroke-width（实测所有描边都落在
+ * SVG 初始的 1px）。只动边线本体，不动 `path.pele-marker`（箭头是填充不是描边，
+ * 给它加宽度只会把箭头糊大一圈）。 */
+.readora-diagram-container .pele-edge > path:not(.pele-marker) {
+  stroke-width: var(--readora-diagram-edge-width);
+}
+
+.readora-diagram-error {
+  margin-top: var(--readora-space-2);
+  padding: var(--readora-space-2) var(--readora-space-2);
+  border-radius: var(--readora-radius-md);
+  background: var(--readora-danger-background);
+  color: var(--readora-danger-color);
+  font-size: var(--readora-font-md);
+}
+
+.readora-diagram-error-message {
+  margin: 0 0 var(--readora-space-1);
+  word-break: break-word;
+}
+
+/* 全屏：优先走原生 Fullscreen API，class 是无该 API 环境（含单测）的等效降级。 */
+.readora-diagram:fullscreen,
+.readora-diagram--fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  margin: 0;
+  padding: var(--readora-space-4);
+  border-radius: 0;
+  overflow: auto;
+  /* 毛玻璃三处之一（PRD-003 §7.2）：不支持或用户要求降低透明度时退回实色。 */
+  background: var(--readora-color-canvas);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .readora-diagram:fullscreen,
+  .readora-diagram--fullscreen {
+    background: var(--readora-color-glass);
+    backdrop-filter: blur(8px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .readora-diagram:fullscreen,
+  .readora-diagram--fullscreen {
+    background: var(--readora-color-canvas);
+    backdrop-filter: none;
+  }
+}
+
+/* 全屏自动缩放：把图交给整块可用画面。
+ * 72px = 上下 padding（两档 16px）+ 工具栏一行，与旧那行 svg `max-height` 同口径。
+ * 这里改用 flex：定高盒里要的是两个方向都居中，而 `width: 100%` 已把图铺满栏宽，
+ * 不再需要 auto 外边距。超出高度由 `max-height` 夹住，而 SVG 默认的
+ * `preserveAspectRatio="meet"` 会在元素盒里等比缩放并留白，所以不会拉形；
+ * 矢量放大不糊，原本只画巴掌大的小图到这里就铺满画面。 */
+.readora-diagram:fullscreen .readora-diagram-container,
+.readora-diagram--fullscreen .readora-diagram-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 72px);
+}
+
+.readora-diagram:fullscreen .readora-diagram-container svg,
+.readora-diagram--fullscreen .readora-diagram-container svg {
+  /* flex 项要能真的缩下去：`min-width: 0` 拆掉 min-content 下限。 */
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+}

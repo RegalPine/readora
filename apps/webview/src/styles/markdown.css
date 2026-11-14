@@ -1,0 +1,745 @@
+/*
+ * 文档内容层：.readora-document 内的 Markdown 元素（PRD-003 §8）。
+ * 顺序不变量：本文件在 components / shell 之前，正文样式可以被上层覆盖。
+ * 取色一律引用语义层与组件层 token，主题分支不在这里出现（PRD-003 §13.2）。
+ */
+
+/* ---------- 文档头 ---------- */
+
+.readora-document-header {
+  margin-bottom: var(--readora-space-8);
+  padding-bottom: var(--readora-space-3);
+  border-bottom: var(--readora-hairline) solid var(--readora-color-border);
+}
+
+.readora-document-title {
+  margin: 0;
+  /* 标题用 display 字族、字号按 em 相对正文，缩放只改一个变量即可整体跟随（§5.4）。 */
+  font-family: var(--readora-font-family-display);
+  font-size: 2.25em;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: var(--readora-tracking-tight);
+}
+
+.readora-document-source {
+  margin: var(--readora-space-1) 0 0;
+  font-size: var(--readora-font-sm);
+  color: var(--readora-color-text-muted);
+  word-break: break-all;
+}
+
+/* ---------- 排版 ---------- */
+
+.readora-document {
+  overflow-wrap: break-word;
+}
+
+.readora-document p {
+  margin: 0 0 1em;
+}
+
+.readora-paragraph {
+  margin: 0 0 1em;
+}
+
+.readora-heading {
+  margin: 1.6em 0 0.6em;
+  font-weight: 600;
+  line-height: 1.3;
+  scroll-margin-top: var(--readora-space-4);
+}
+
+.readora-heading--h1 {
+  font-family: var(--readora-font-family-display);
+  font-size: 1.875em;
+  line-height: 1.25;
+  letter-spacing: var(--readora-tracking-tight);
+}
+
+.readora-heading--h2 {
+  font-family: var(--readora-font-family-display);
+  font-size: 1.5em;
+  line-height: 1.3;
+  letter-spacing: var(--readora-tracking-tight);
+}
+
+.readora-heading--h3 {
+  font-family: var(--readora-font-family-display);
+  font-size: 1.25em;
+  line-height: 1.4;
+}
+
+.readora-heading--h4 {
+  font-size: 1.125em;
+}
+
+.readora-heading--h5 {
+  font-size: 1em;
+}
+
+.readora-heading--h6 {
+  font-size: 1em;
+  letter-spacing: var(--readora-tracking-label);
+}
+
+.readora-heading:first-child,
+.readora-document > .readora-heading:first-child {
+  margin-top: 0;
+}
+
+.readora-delete {
+  text-decoration: line-through;
+  color: var(--readora-color-text-muted);
+}
+
+.readora-inline-code {
+  padding: 0.12em 0.36em;
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-inline-code-background);
+  font-family: var(--readora-font-family-mono);
+  font-size: 0.9em;
+}
+
+.readora-thematic-break {
+  margin: 2em 0;
+  border: 0;
+  border-top: var(--readora-hairline) solid var(--readora-color-border);
+}
+
+/* ---------- 引用 ---------- */
+
+.readora-blockquote {
+  margin: 0 0 1em;
+  padding: 0.2em 1em;
+  border-left: 3px solid var(--readora-color-border-strong);
+  background: var(--readora-quote-background);
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-blockquote > .readora-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- 列表与任务列表（展示态，不可交互） ---------- */
+
+.readora-list {
+  margin: 0 0 1em;
+  padding-left: 1.6em;
+}
+
+.readora-list-item {
+  margin: 0.2em 0;
+}
+
+.readora-task-item {
+  list-style: none;
+  margin-left: -1.2em;
+}
+
+.readora-task-marker {
+  margin-right: 0.5em;
+  font-variant-numeric: tabular-nums;
+  color: var(--readora-color-text-secondary);
+}
+
+/* ---------- 表格 ---------- */
+
+.readora-table-scroll {
+  margin: 0 0 1.2em;
+  overflow-x: auto;
+}
+
+.readora-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.95em;
+}
+
+.readora-table-cell {
+  padding: var(--readora-space-1) var(--readora-space-3);
+  border: var(--readora-hairline) solid var(--readora-color-border-strong);
+  word-break: break-word;
+}
+
+.readora-table-cell--header {
+  font-weight: 600;
+  letter-spacing: var(--readora-tracking-label);
+  background: var(--readora-table-header-bg);
+}
+
+.readora-table-cell[data-align="left"] {
+  text-align: left;
+}
+
+.readora-table-cell[data-align="right"] {
+  text-align: right;
+}
+
+.readora-table-cell[data-align="center"] {
+  text-align: center;
+}
+
+/* ---------- 代码块 ---------- */
+
+/* 一整圈 hairline 边框（产品反馈：代码段加边框）：底色与正文同为 canvas（硬口径），
+ * 不给第二层面，轮廓全靠这根线。`box-sizing: border-box` 是这里必须的 —— 本仓无
+ * 全局 border-box，不给的话左右两条线各向外撑 1px，宽代码块会顶出正文栏。 */
+.readora-code-block {
+  box-sizing: border-box;
+  margin: 0 0 1.4em;
+  border: var(--readora-hairline) solid var(--readora-code-border);
+  border-radius: var(--readora-radius-lg);
+  overflow: hidden;
+}
+
+/* 头部与正文的横向内边距取同一个值（`--readora-space-5`），语言标签才会和
+ * 代码左缘对齐；纵向各留一档，块与正文之间的呼吸交给 margin-bottom。 */
+.readora-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--readora-space-2) var(--readora-space-5);
+  font-size: var(--readora-font-xs);
+  color: var(--readora-color-text-muted);
+}
+
+.readora-code-lang {
+  font-family: var(--readora-font-family-mono);
+  letter-spacing: var(--readora-tracking-label);
+}
+
+.readora-code-copy {
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  padding: 2px 10px;
+  font: inherit;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--readora-motion-fast) ease;
+}
+
+.readora-code-copy:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-code-pre {
+  margin: 0;
+  padding: var(--readora-space-5);
+  overflow-x: auto;
+  background: var(--readora-code-background);
+  border-top: var(--readora-hairline) solid var(--readora-code-border);
+}
+
+.readora-code-pre code {
+  display: block;
+  font-family: var(--readora-font-family-mono);
+  font-size: 0.88em;
+  line-height: 1.55;
+  white-space: pre;
+  color: var(--readora-syntax-foreground);
+}
+
+/* ---------- 代码编辑器接管层（M8） ---------- */
+
+/* 接管后静态视图收起，但**继续留在 DOM 里**：文档内搜索唯一的可搜文本源就是它
+ * （CodeMirror 只渲染视口内的行，拿它的 DOM 去匹配会漏命中）。 */
+.readora-code-block[data-readora-code-editor-state="mounted"] .readora-code-pre {
+  display: none;
+}
+
+/* 搜索命中落进块里时反过来：把静态视图显形（`mark` 在它身上），暂时收起编辑器。
+ * 这条是「看得见命中位置」与「编辑器是主视图」能同时成立的关键 —— 搜索层不必
+ * 知道编辑器存在，靠 `:has()` 自己判。写成后置规则靠顺序赢过上面那条。 */
+.readora-code-block:has(.readora-code-pre .readora-search-hit) .readora-code-pre {
+  display: block;
+}
+
+.readora-code-block:has(.readora-code-pre .readora-search-hit) .readora-code-editor {
+  display: none;
+}
+
+/* 编辑器宿主：内边距、分隔线与静态视图取同一套值，两个视图切换时版面不跳。
+ * 底色不写：CodeMirror 的主题里一律 transparent，画布从块底透上来（硬口径：
+ * 代码块背景必须与容器一致，不许再出现第二层面）。 */
+.readora-code-editor {
+  padding: var(--readora-space-5);
+  border-top: var(--readora-hairline) solid var(--readora-code-border);
+  font-family: var(--readora-font-family-mono);
+  font-size: 0.88em;
+  line-height: 1.55;
+  overflow: hidden;
+}
+
+.readora-code-editor .cm-editor {
+  max-width: 100%;
+}
+
+/* 行号与代码用同一等宽字号：混着两套字号会让整块看上去像两张表。 */
+.readora-code-editor .cm-scroller {
+  font-family: inherit;
+}
+
+.readora-diagram-source pre,
+.readora-plain {
+  margin: 0;
+  padding: var(--readora-space-5);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--readora-font-family-mono);
+  font-size: 0.88em;
+  color: var(--readora-syntax-foreground);
+}
+
+/* highlight.js token 配色：类名来自引擎，色值一律挂 --readora-syntax-*（PRD-003 §8.6）。 */
+.hljs-comment,
+.hljs-quote {
+  font-style: italic;
+  color: var(--readora-syntax-comment);
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-doctag {
+  color: var(--readora-syntax-keyword);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: var(--readora-syntax-string);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-type,
+.hljs-class .hljs-title {
+  color: var(--readora-syntax-number);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: var(--readora-syntax-title);
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--readora-syntax-attr);
+}
+
+.hljs-deletion {
+  color: var(--readora-syntax-deletion);
+  background: var(--readora-danger-background);
+}
+
+/* ---------- 链接 / 图片 / 图表占位 ---------- */
+
+.readora-link--external {
+  text-decoration: underline;
+  cursor: pointer;
+  color: var(--readora-color-link);
+}
+
+.readora-link--anchor {
+  text-decoration: dotted underline;
+  cursor: pointer;
+  color: var(--readora-color-link);
+}
+
+.readora-link--inert {
+  text-decoration: dotted underline;
+  cursor: not-allowed;
+  color: var(--readora-color-text-muted);
+}
+
+.readora-image {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  max-width: 100%;
+  padding: var(--readora-space-1) var(--readora-space-2);
+  border: var(--readora-hairline) dashed var(--readora-color-border-strong);
+  border-radius: var(--readora-radius-md);
+  font-size: 0.86em;
+  color: var(--readora-color-text-secondary);
+  cursor: help;
+  vertical-align: middle;
+}
+
+/* 无 src 的 <img>：语义结构就位但永不发请求，M3 resource.resolve 后接管显示 */
+.readora-image-element {
+  display: none;
+  max-width: 100%;
+  height: auto;
+}
+
+.readora-image-label {
+  font-weight: 500;
+}
+
+.readora-image-hint {
+  color: var(--readora-color-text-muted);
+}
+
+.readora-diagram {
+  margin: 0 0 1.4em;
+}
+
+.readora-unsupported {
+  padding: 0 var(--readora-space-1);
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-warning-background);
+  font-family: var(--readora-font-family-mono);
+}
+
+/* ---------- 行内降级提示与诊断条 ---------- */
+
+.readora-inline-note {
+  display: inline-block;
+  margin-left: var(--readora-space-1);
+  padding: 1px var(--readora-space-2);
+  border-radius: var(--readora-radius-full);
+  background: var(--readora-note-background);
+  color: var(--readora-note-color);
+  font-size: var(--readora-font-xs);
+}
+
+.readora-diagnostic-bar {
+  margin: 0 0 var(--readora-space-6);
+  padding: var(--readora-space-2) var(--readora-space-3);
+  border-radius: var(--readora-radius-lg);
+  background: var(--readora-danger-background);
+  color: var(--readora-danger-color);
+  font-size: var(--readora-font-md);
+}
+
+.readora-diagnostic-toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.readora-diagnostic-list {
+  margin: var(--readora-space-1) 0 0;
+  padding-left: 1.2em;
+}
+
+.readora-copy-helper {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  opacity: 0;
+}
+
+/* ---------- 本地图片三态（STORY-08-02，AUD-001 F06-006） ---------- */
+
+/* 状态类与 data-readora-image-state 同源，由 image-layer 同时写入。 */
+.readora-image--ready {
+  border-style: solid;
+  border-color: var(--readora-color-border-strong);
+  cursor: zoom-in;
+  opacity: 1;
+  color: inherit;
+}
+
+.readora-image--ready .readora-image-element {
+  display: block;
+}
+
+.readora-image--missing {
+  background: var(--readora-warning-background);
+  border-color: var(--readora-warning-border);
+  cursor: not-allowed;
+}
+
+.readora-image--blocked {
+  cursor: not-allowed;
+}
+
+.readora-image--blocked .readora-image-label {
+  color: var(--readora-color-text-muted);
+}
+
+/* 图片尺寸闸门：宽度跟随正文栏，高度做上限，长图不吃掉整屏。 */
+.readora-image-element {
+  max-width: 100%;
+  max-height: 60vh;
+  height: auto;
+  object-fit: contain;
+}
+
+/* ---------- 数学公式（IMP-001 §10.3，EPIC-06）----------
+ *
+ * KaTeX 自己的样式表负责字形、基线与伸缩，这里只补三件它管不到的事：
+ * 块级公式与相邻段落的间距、超宽公式的横向滚动、渲染失败时的源码呈现。
+ * 选择器一律限定在 .readora-math* 之内，不覆盖 .katex 的内部结构 ——
+ * 那是升级 KaTeX 时最容易踩到的隐式契约。 */
+
+.readora-math--block {
+  display: block;
+  margin: 0 0 1.4em;
+  /* 超宽公式在自己的盒子里横向滚动，不撑破正文栏，也不换行拆散排版。 */
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.readora-math--block .katex-display {
+  margin: 0;
+  text-align: start;
+}
+
+.readora-math--inline {
+  /* 行内式的高度由 KaTeX 的 strut 决定，正文行高不该被它进一步撑开。 */
+  line-height: normal;
+}
+
+/* 降级：显示这条公式自身的源码（可见、可复制），不显示 KaTeX 的错误结构。
+ * 判定走 data-readora-math-status（IMP-001 §10.3 固定的输出形态），
+ * 而不是再加一个类名 —— --inline / --block 已经被排版模式占掉了。 */
+.readora-math[data-readora-math-status="error"] {
+  padding: 0 var(--readora-space-1);
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-warning-background);
+  color: var(--readora-color-text-secondary);
+  font-family: var(--readora-font-family-mono);
+  font-size: 0.88em;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.readora-math--block[data-readora-math-status="error"] {
+  padding: var(--readora-space-2) var(--readora-space-3);
+}
+
+/* ---------- Wiki Link（STORY-06-03）---------- */
+
+/*
+ * 与 --anchor 同族但用实线下划：`[[Note]]` 指向的是另一篇文档，
+ * 不是本页的某个位置，虚线（页内跳转的既有语言）会把它读成后者。
+ * 没有 href，所以 :hover 之外还要接住 :focus-visible —— 键盘用户唯一的
+ * 可见反馈就在这条环上（focus ring 由 components.css 的通用规则给）。
+ */
+.readora-link--wikilink {
+  text-decoration: underline;
+  cursor: pointer;
+  color: var(--readora-color-link);
+}
+
+.readora-link--wikilink:hover {
+  text-decoration-thickness: 2px;
+}
+
+/* ---------- Frontmatter 属性卡片（PRD-003 §4.6 / STORY-06-02）---------- */
+
+.readora-properties {
+  /* 卡片排在文件名之下：标题 → 出处 → 元信息，读者的视线是自上而下变细的。 */
+  margin-top: var(--readora-space-4);
+  padding: var(--readora-space-3) var(--readora-space-4);
+  border: var(--readora-hairline) solid var(--readora-color-border);
+  border-radius: var(--readora-radius-md);
+  background: var(--readora-color-surface-subtle);
+}
+
+.readora-properties-heading {
+  margin: 0 0 var(--readora-space-2);
+  font-size: var(--readora-font-sm);
+  font-weight: 600;
+  letter-spacing: var(--readora-tracking-label);
+  text-transform: uppercase;
+  color: var(--readora-color-text-secondary);
+}
+
+/* caption 是这张表唯一的无障碍标题来源；视觉上与 heading 重复，故只给读屏器。 */
+.readora-properties-caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.readora-properties-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--readora-font-sm);
+}
+
+.readora-property-row > * {
+  padding: var(--readora-space-1) 0;
+  text-align: left;
+  vertical-align: top;
+}
+
+.readora-property-key {
+  /* 键名列固定宽度：值列才能对齐，长键名换行也不推挤值。 */
+  width: 30%;
+  padding-right: var(--readora-space-4);
+  font-weight: 500;
+  color: var(--readora-color-text-secondary);
+  word-break: break-word;
+}
+
+.readora-property-value {
+  color: var(--readora-color-text-primary);
+  word-break: break-word;
+}
+
+.readora-property-row + .readora-property-row > * {
+  border-top: var(--readora-hairline) solid var(--readora-color-border);
+}
+
+.readora-property-number {
+  /* 数字用等宽 + 表格数字：0 与 1 对齐，多行数字列才看得出量级差异。 */
+  font-family: var(--readora-font-family-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.readora-property-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--readora-space-1) var(--readora-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.readora-property-list li {
+  padding: 0 var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-color-border);
+  border-radius: var(--readora-radius-full);
+  background: var(--readora-color-surface);
+  line-height: 1.6;
+}
+
+/* 空列表：给一个诚实的占位文案，而不是让单元格看上去像渲染坏了。 */
+.readora-property-empty {
+  font-style: italic;
+  color: var(--readora-color-text-muted);
+}
+
+/* ---------- 脚注（M10 / PRD-001 F01-017）----------
+ *
+ * 产物里没有 `<sup>`：Sanitizer 白名单不含它，为脚注扩面不值。上标观感由
+ * 「缩字号 + vertical-align: super + line-height: 0」三件事承担 —— 最后一件
+ * 是把标记从行盒里摘出去：正文行距是排版的地基，一个 `[1]` 不该把它顶高。
+ * 选择器一律用渲染器给出的 class（`renderers/footnote.ts`），不新造名字。 */
+
+.readora-footnote-ref-wrap {
+  font-size: 0.75em;
+  line-height: 0;
+  vertical-align: super;
+}
+
+/* 引用本身就长成 `[1]`：方括号已经是 affordance，再压一条虚下划线只会糊。 */
+.readora-footnote-ref {
+  text-decoration: none;
+}
+
+.readora-footnotes {
+  margin: var(--readora-space-8) 0 0;
+}
+
+/* 分隔线在区块内部，间距交给区块自己：沿用 `.readora-thematic-break` 的 2em
+ * 会让脚注区看起来像文档之外的第二篇文章。 */
+.readora-footnotes .readora-footnotes-rule {
+  margin: 0 0 var(--readora-space-4);
+}
+
+.readora-footnotes-title {
+  margin: 0 0 var(--readora-space-2);
+  font-size: var(--readora-font-sm);
+  font-weight: 600;
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-footnotes-list {
+  margin: 0;
+  padding-left: 1.6em;
+}
+
+.readora-footnote-item {
+  margin: 0.2em 0;
+  /* 条目与回跳都是跳转落点：与标题同一套 scroll-margin，滚过去不会被顶栏压住。 */
+  scroll-margin-top: var(--readora-space-4);
+  font-size: 0.9em;
+  color: var(--readora-color-text-secondary);
+}
+
+/* 条目正文本身就是散文，再留一整段的下边距会把脚注区撑成一串孤立的块。 */
+.readora-footnote-item > .readora-paragraph:last-child,
+.readora-footnote-definition > .readora-paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.readora-footnote-backref {
+  margin-left: 0.35em;
+  text-decoration: none;
+}
+
+/* ---------- 块级对齐（M10 块属性 `{align=…}`）----------
+ *
+ * 单元格对齐早已就位（上面 `.readora-table-cell[data-align=…]`），这里补的是
+ * **块**上的同一份白名单。选择器逐个点名而不是一条 `[data-align]` 通吃：
+ * 属性谁都可能挂上，写进样式表的只能是渲染器真会输出的那八类，多一类就是死选择器。 */
+
+.readora-heading[data-align="left"],
+.readora-paragraph[data-align="left"],
+.readora-blockquote[data-align="left"],
+.readora-list[data-align="left"],
+.readora-list-item[data-align="left"],
+.readora-table-scroll[data-align="left"],
+.readora-footnote-item[data-align="left"],
+.readora-footnote-definition[data-align="left"] {
+  text-align: left;
+}
+
+.readora-heading[data-align="center"],
+.readora-paragraph[data-align="center"],
+.readora-blockquote[data-align="center"],
+.readora-list[data-align="center"],
+.readora-list-item[data-align="center"],
+.readora-table-scroll[data-align="center"],
+.readora-footnote-item[data-align="center"],
+.readora-footnote-definition[data-align="center"] {
+  text-align: center;
+}
+
+.readora-heading[data-align="right"],
+.readora-paragraph[data-align="right"],
+.readora-blockquote[data-align="right"],
+.readora-list[data-align="right"],
+.readora-list-item[data-align="right"],
+.readora-table-scroll[data-align="right"],
+.readora-footnote-item[data-align="right"],
+.readora-footnote-definition[data-align="right"] {
+  text-align: right;
+}
+
+/* ---------- 围栏文件名（M10 `{filename=…}`）----------
+ *
+ * 头部三件套（语言 / 文件名 / Copy）用 flex 分摊：文件名吃掉中间余量并在
+ * 超宽处截断，行高不能被一个长路径撑起来 —— 那是唯一一个「属性写对了但
+ * 版面坏了」的失败模式。 */
+
+.readora-code-filename {
+  flex: 1;
+  min-width: 0;
+  margin-left: var(--readora-space-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--readora-font-family-mono);
+}

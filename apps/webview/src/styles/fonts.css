@@ -1,0 +1,25 @@
+/*
+ * 字体子集（PRD-003 §5.2）。
+ *
+ * 只引 latin 子集：CJK 不随包分发，中文一律走字族栈里的系统回退——
+ * 一套中文字库就是几十 MB，装进 vsix 等于把体积预算一次花光。
+ *
+ * `font-display: swap` 由 fontsource 的 css 自带，正文字形不阻塞首帧；
+ * 字重只取实际用到的那几档，多一档就是一档 woff2 + woff。
+ *
+ * 必须排在 tokens.css 之前引入：字族 token 只是名字，@font-face 要先注册，
+ * 否则首帧按系统字体排版、字体到位后整页重排（FOIT 之后跟着 reflow）。
+ */
+
+/* 标题字族：Newsreader 400 / 500 / 600（§5.2 的 display 三档）。 */
+@import "@fontsource/newsreader/latin-400.css";
+@import "@fontsource/newsreader/latin-500.css";
+@import "@fontsource/newsreader/latin-600.css";
+
+/* 正文字族：Geist 400 / 500（Inter 不打包，走系统回退，见 README 偏差登记）。 */
+@import "@fontsource/geist/latin-400.css";
+@import "@fontsource/geist/latin-500.css";
+
+/* 等宽字族：JetBrains Mono 400 / 500（代码块与行内代码）。 */
+@import "@fontsource/jetbrains-mono/latin-400.css";
+@import "@fontsource/jetbrains-mono/latin-500.css";

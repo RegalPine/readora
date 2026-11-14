@@ -1,0 +1,46 @@
+/*
+ * 基础层：文档级重置与画布容器（PRD-003 §13.4）。
+ * 取色一律走 tokens.css 的变量，本文件不定义设计常量。
+ */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* 字号与行高由阅读偏好单点驱动（PRD-003 §11.4）：App 改 :root 上的两个变量，
+   * 正文与按 em 给的标题一起跟着走，不再叠内联样式。 */
+  font-family: var(--readora-font-family-body);
+  font-size: var(--readora-font-size);
+  line-height: var(--readora-line-height);
+  background: var(--readora-color-canvas);
+  color: var(--readora-color-text-primary);
+  transition:
+    background-color var(--readora-motion-slow) ease,
+    color var(--readora-motion-slow) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    transition: none;
+  }
+}
+
+.readora-canvas {
+  box-sizing: border-box;
+  margin: 0 auto;
+  max-width: var(--readora-content-width);
+  padding: var(--readora-space-12) var(--readora-space-6);
+}
+
+.readora-loading {
+  padding: var(--readora-space-12) var(--readora-space-6);
+  color: var(--readora-color-text-muted);
+}
+
+.readora-error {
+  padding: var(--readora-space-12) var(--readora-space-6);
+  color: var(--readora-color-danger);
+}

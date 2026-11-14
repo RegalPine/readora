@@ -1,0 +1,21 @@
+/*
+ * 视觉基线夹具的外壳样式（dev only，不进产物）。
+ *
+ * 只剩一件事：在整屏截图里标出这是哪一档 palette。正文与外壳一律用真实组件自己的
+ * 类，这里不覆盖任何组件样式，否则基线量的就不是生产形态；取色仍只走 Token。
+ * 角标是 fixed，不进气流，不会影响任何被测量的 rect。
+ */
+
+.readora-visual-label {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  margin: 0;
+  padding: var(--readora-space-1) var(--readora-space-3);
+  background: var(--readora-color-surface-raised);
+  color: var(--readora-color-text-secondary);
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-xs);
+  letter-spacing: var(--readora-tracking-label);
+}

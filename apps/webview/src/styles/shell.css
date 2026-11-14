@@ -1,0 +1,769 @@
+/*
+ * 外壳层：四段栅格、目录面板、顶栏、状态条、顶部章节条与 Reader Settings 弹层
+ *（ARC-005 §5、PRD-002 §4/§5、PRD-003 §10.5 / §10.6）。
+ *
+ * 段高一律走 token（`--readora-topbar-height` 等），不在这里写死像素；
+ * 颜色一律走语义 token，字面量色值会同时被 no-hardcoded-color 与 design-tokens
+ * 两套护栏打回（§13.4）。
+ */
+
+/* ---------- 四段栅格（PRD-003 §10.5） ---------- */
+
+.readora-shell {
+  display: flex;
+  flex-direction: column;
+  /* 状态条 sticky 贴底、左栏按视口算高，因此外壳至少占满一屏，短文档才谈得上「贴」与「满」。 */
+  min-height: 100vh;
+}
+
+.readora-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  height: var(--readora-topbar-height);
+  background: var(--readora-toolbar-background);
+  border-bottom: var(--readora-hairline) solid var(--readora-toolbar-border);
+}
+
+/* 搜索段「随内容」：面板整行展开，没打开搜索时这一段根本不输出 DOM。 */
+.readora-searchbar {
+  position: sticky;
+  top: var(--readora-topbar-height);
+  z-index: 29;
+  min-height: var(--readora-searchbar-height);
+}
+
+.readora-body {
+  display: grid;
+  grid-template-columns: var(--readora-outline-width) minmax(0, 1fr);
+  align-items: start;
+  /* flex 列里的主体段要吃掉剩余高度，但仍按内容增长（正文比视口长时以内容为准）。 */
+  flex: 1 1 auto;
+  width: 100%;
+}
+
+/* 目录收起、专注模式、窄窗口三种情形都退成单列（ARC-005 §5.3 左右栏独立显隐）。 */
+.readora-shell--columns-one .readora-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.readora-statusbar {
+  position: sticky;
+  bottom: 0;
+  z-index: 30;
+  height: var(--readora-statusbar-height);
+}
+
+.readora-shell-nav {
+  position: sticky;
+  /* 顶栏是粘住的，左栏的贴顶必须让出它的高度，否则第一条目录被压在后头。 */
+  top: var(--readora-topbar-height);
+  /* 本仓无全局 border-box（同 .readora-canvas 的写法）：不给的话下面那个 height
+   * 只算内容盒，左右 padding 会向外撑出滚动条。 */
+  box-sizing: border-box;
+  /* 左栏恒占主体段的可用高度：文档只写两行时也不许跟着内容缩短（对齐右侧分栏线、
+   * 让目录区自己滚）。用 height 而不是 max-height，短内容才会「撑满」而非「封顶」；
+   * 多减一根 hairline 是因为状态条的高也含它自己的上分隔线，否则末行会渗到条下 1px。 */
+  height: calc(100vh - var(--readora-topbar-height) - var(--readora-statusbar-height) - var(--readora-hairline));
+  /* 滚动下沉到 `.readora-outline-list`：整栏不滚，头部动作才不会跟着滚走。 */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: var(--readora-space-5) var(--readora-space-2) var(--readora-space-4) var(--readora-space-4);
+  border-right: var(--readora-hairline) solid var(--readora-color-border);
+}
+
+.readora-shell-main {
+  min-width: 0;
+}
+
+/* 标题定位预留顶部空间（ARC-007 §5.4）：预留量本身仍是 `--readora-navigation-offset`，
+ * 顶栏高度已经包含在那 5rem 里，改它会同时改定位判定，两者不同步更糟。 */
+.readora-heading {
+  scroll-margin-top: var(--readora-navigation-offset, 5rem);
+}
+
+/* ---------- 目录面板（ARC-007 §6.1 / PRD-002 §5.1） ---------- */
+
+.readora-outline-panel {
+  /* 吃掉左栏剩余高度并把滚动交给列表，于是列表恰好占满可用高度。 */
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: var(--readora-font-sm);
+  line-height: 1.5;
+}
+
+.readora-outline-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  /* 目录比窗口长时只滚这一段：头部动作常驻可见。 */
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.readora-outline-item {
+  margin: 0;
+}
+
+.readora-outline-row {
+  border-radius: var(--readora-radius-md);
+  align-items: flex-start;
+  gap: 2px;
+  display: flex;
+}
+
+.readora-outline-row:hover {
+  background: var(--readora-color-surface-raised);
+}
+
+.readora-outline-toggle,
+.readora-outline-toggle-spacer {
+  flex: 0 0 16px;
+  width: 16px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 1.7;
+  cursor: pointer;
+}
+
+.readora-outline-toggle {
+  border-radius: var(--readora-radius-sm);
+}
+
+.readora-outline-toggle-spacer {
+  cursor: default;
+}
+
+.readora-outline-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  padding: 2px var(--readora-space-1);
+  border-radius: var(--readora-radius-sm);
+  text-decoration: none;
+  color: var(--readora-outline-link-color);
+  /* 长标题省略（§6.1「标题文本溢出处理」），完整文本由 title 属性兜底。 */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transition: background-color var(--readora-motion-fast) ease;
+}
+
+/* Active：强调色 + 左侧指示条（PRD-002 §5.1）。 */
+.readora-outline-link[aria-current="location"] {
+  font-weight: 600;
+  color: var(--readora-outline-active-color);
+  box-shadow: inset 2px 0 0 var(--readora-outline-active-color);
+}
+
+.readora-outline-empty {
+  margin: var(--readora-space-2) var(--readora-space-1);
+  color: var(--readora-color-text-muted);
+  flex: 0 0 auto;
+}
+
+/* ---------- 目录面板（PRD-003 §10.7） ----------
+ * 头部两个动作、过滤输入、行内标签：数据源全部是本地已有的
+ * outline / 源文，没有一项需要新协议。进度只住在快速条那一栏，面板不再读它；
+ * 底部的 `N Sections` / `Depth` 统计已按产品要求下掉（节数在状态条已有）。
+ * 宽度用 `--readora-space-1` 的左右 margin 与列表对齐；纵向滚动只属于列表那一段，
+ * 头部常驻（见 `.readora-shell-nav` 与 `.readora-outline-panel`）。 */
+
+.readora-outline-header {
+  align-items: center;
+  gap: var(--readora-space-1);
+  margin: 0 var(--readora-space-1) var(--readora-space-2);
+  /* 面板纵向 flex 里头部不被列表挤扁（滚动只属于列表）。 */
+  flex: 0 0 auto;
+  display: flex;
+}
+
+.readora-outline-action {
+  align-items: center;
+  gap: var(--readora-space-1);
+  border: 1px solid var(--readora-color-border);
+  border-radius: var(--readora-radius-sm);
+  background: transparent;
+  color: var(--readora-color-text-secondary);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  padding: 2px var(--readora-space-2);
+  cursor: pointer;
+  display: inline-flex;
+}
+
+.readora-outline-action:hover:not(:disabled) {
+  background: var(--readora-color-surface-raised);
+  color: var(--readora-color-text-primary);
+}
+
+/* 过滤中「展开全部」没有可见效果（折叠态不参与过滤视图），禁用而不是空转。 */
+.readora-outline-action:disabled {
+  color: var(--readora-color-text-muted);
+  cursor: default;
+}
+
+.readora-outline-filter-input {
+  box-sizing: border-box;
+  width: calc(100% - var(--readora-space-2));
+  flex: 0 0 auto;
+  border: 1px solid var(--readora-color-border);
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-color-surface);
+  color: var(--readora-color-text-primary);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  margin: 0 var(--readora-space-1) var(--readora-space-2);
+  padding: 2px var(--readora-space-2);
+}
+
+.readora-outline-filter-note {
+  flex: 0 0 auto;
+  margin: 0 var(--readora-space-1) var(--readora-space-2);
+  color: var(--readora-color-text-muted);
+  font-size: var(--readora-font-xs);
+}
+
+/* 行内标签（H1 的 `840w`）：等宽数字对齐，颜色让位给标题。 */
+.readora-outline-meta {
+  color: var(--readora-color-text-muted);
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-xs);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  align-self: center;
+  padding-right: var(--readora-space-1);
+}
+
+/* 焦点跟随：活动项落在可见区外时由 `OutlinePanel` 把列表滚到它身上，
+ * 只动 `.readora-outline-list` 自己的 scrollTop，不碰 window 也不碰条目样式。*/
+
+/* ---------- 顶栏（PRD-003 §10.5） ----------
+ * 段本身（.readora-topbar）负责粘顶与底色，工具栏只负责一行内的排布：
+ * 面包屑靠左、控件组靠右。pill（阅读时长 + 模式标签）已按产品反馈迁到状态条
+ * 右端，顶栏不再挤第三段；窄窗口先挤面包屑的中间目录段（省略号），控件组永不让位。 */
+
+.readora-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-2);
+  height: 100%;
+  padding: 0 var(--readora-space-4);
+  font-size: var(--readora-font-sm);
+}
+
+/* 没有 pill 那一段占位后，靠右全靠这一枚 auto 左边距。 */
+.readora-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-1);
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+/* 专注模式只留退出入口（PRD-002 §11.2）。 */
+.readora-toolbar--focus {
+  justify-content: center;
+  gap: var(--readora-space-2);
+}
+
+/* 退出入口默认不显示，鼠标移到顶部才浮现（产品反馈：类浏览器全屏）。
+ * 淡出只作用在工具栏内容上，段本身那 44px 不收：段一旦从流里拿掉，鼠标划过顶部
+ * 就会把正文往下顶一下，“浮出即抖动”比留着一条空带更难接受；而浏览器的浮层
+ * 覆盖正文需要把顶栏改 position: fixed 并给正文补等高的 padding，代价是四段栅格与
+ * 基线的 rects 全要重采。
+ * 触发区就是这条带自己（:hover 命中它）；淡出不摘 tabindex，所以键盘 Tab 到入口
+ * 同样浮现（:focus-within），不会因为看不见而把焦点丢在空气里。 */
+.readora-topbar[data-readora-topbar-reveal="hover"] .readora-toolbar--focus {
+  opacity: 0;
+  transition: opacity var(--readora-motion-normal) ease;
+}
+
+.readora-topbar[data-readora-topbar-reveal="hover"]:hover .readora-toolbar--focus,
+.readora-topbar[data-readora-topbar-reveal="hover"]:focus-within .readora-toolbar--focus {
+  opacity: 1;
+}
+
+/* 缩放组的三枚沿用同一套外观，但类名分开：`.readora-toolbar-button` 说的是
+ * 「顶栏动作」，缩放组是另一类控件（连排步进器），混在一个类里会让
+ * 「数一下有几枚动作按钮」这种断言变成随机数。 */
+.readora-toolbar-button,
+.readora-zoom-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--readora-space-1);
+  padding: 3px 10px;
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--readora-motion-fast) ease;
+}
+
+.readora-toolbar-button:hover,
+.readora-zoom-button:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-toolbar-button[aria-pressed="true"] {
+  font-weight: 600;
+  background: var(--readora-outline-active-bg);
+  color: var(--readora-outline-active-color);
+  border-color: var(--readora-color-accent);
+}
+
+.readora-toolbar-button:disabled,
+.readora-zoom-button:disabled {
+  /* 区间端点上的 − / +：禁用态用 muted，不用 opacity 造出第四种颜色。 */
+  color: var(--readora-color-text-muted);
+  cursor: default;
+}
+
+/* ---------- 面包屑（§10.5：纯文本不可点） ---------- */
+
+.readora-breadcrumb {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--readora-font-xs);
+}
+
+.readora-breadcrumb-segment {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 目录段 muted、文件名 primary：不给假 affordance，也就不给 hover 反馈。 */
+.readora-breadcrumb-segment--directory {
+  color: var(--readora-color-text-muted);
+}
+
+.readora-breadcrumb-segment--file {
+  color: var(--readora-color-text-primary);
+  font-weight: 600;
+  flex: 0 0 auto;
+}
+
+/* ---------- pill（§10.5：radius-full + shadow-pill + font-xs + tracking-label） ----------
+ * 外观归这里，位置归状态条右端（`.readora-status-pills`）。 */
+
+.readora-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--readora-space-2);
+  border-radius: var(--readora-radius-full);
+  box-shadow: var(--readora-shadow-pill);
+  font-size: var(--readora-font-xs);
+  letter-spacing: var(--readora-tracking-label);
+  background: var(--readora-color-surface-raised);
+  color: var(--readora-color-text-secondary);
+  white-space: nowrap;
+}
+
+/* ---------- 缩放组（§10.5：三枚连排，点百分号复位） ---------- */
+
+.readora-zoom {
+  display: inline-flex;
+  align-items: stretch;
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  overflow: hidden;
+}
+
+.readora-zoom .readora-zoom-button {
+  border: 0;
+  border-radius: 0;
+}
+
+.readora-zoom .readora-zoom-button + .readora-zoom-button {
+  border-left: var(--readora-hairline) solid var(--readora-button-border);
+}
+
+.readora-zoom-value {
+  min-width: 4.2em;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.readora-zoom-step {
+  padding-inline: var(--readora-space-2);
+}
+
+/* ---------- 状态条（PRD-003 §4.6 的诚实字段清单） ---------- */
+
+.readora-statusbar {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-3);
+  padding: 0 var(--readora-space-4);
+  background: var(--readora-toolbar-background);
+  border-top: var(--readora-hairline) solid var(--readora-toolbar-border);
+}
+
+.readora-status {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-3);
+  width: 100%;
+  /* 作为 `.readora-statusbar` 的 flex 项，不给 min-width 就永远不小于内容宽，
+   * 下面那些字段层面的省略根本不生效。 */
+  min-width: 0;
+  font-size: var(--readora-font-xs);
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-status-item {
+  /* 窗口不够宽时让位的是左侧字段（省略号），右端 pill 不参与压缩：
+   * `min-width: 0` 去掉 flex 项「不小于内容」的自动下限，否则整条横向溢出
+   * 会把 pill 顶出窗口。 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 状态条右端不穿 pill 外观（产品反馈：直接显示文本）：撤掉视觉容器
+ * （`shadow-pill` + `surface-raised` + `radius-full` + `tracking-label`），排版与左侧
+ * 字段同源。`data-readora-pill` 的定位语义与 `text-metrics` 文案口径都不动。 */
+.readora-status-pills .readora-pill {
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+  letter-spacing: normal;
+}
+
+/* pill 组贴右端（产品反馈：Reading / N min read / Focus 放底部右侧）：
+ * `flex: 0 0 auto` 让它不参与压缩，让位的一直是左侧字段。 */
+.readora-status-pills {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-1);
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.readora-status-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--readora-radius-full);
+  margin-right: 4px;
+  background: var(--readora-color-success);
+}
+
+.readora-status-indicator[data-readora-bridge-state="disconnected"] {
+  background: var(--readora-color-text-muted);
+}
+
+/* ---------- 顶部章节条（§10.5） ----------
+ * 不浮动、不卡片化：它是顶栏之下的第二条带，当前章节信息就在眼睛已经在的地方。
+ * 贴顶量出让给顶栏高度，z-index 低于顶栏与搜索段，于是搜索面板展开时盖住它。 */
+
+.readora-quickbar {
+  position: sticky;
+  top: var(--readora-topbar-height);
+  z-index: 28;
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-2);
+  /* 横向 padding 走 border-box，100% 宽才是栏宽本身（本仓无全局重置）。 */
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--readora-space-1) var(--readora-space-4);
+  border-bottom: var(--readora-hairline) solid var(--readora-color-border);
+  background: var(--readora-color-surface-subtle);
+  font-size: var(--readora-font-xs);
+  /* 条高要算给定位预留：顶栏 45 + 本条 28 仍在 `--readora-navigation-offset`（5rem）
+   * 以内，点目录后目标标题才不会藏在条子后头。 */
+  line-height: 1.5;
+}
+
+/* 超长标题自动截断：`flex-basis: auto` + `min-width: 0` 才能真的缩，
+ * 完整文本由 title 属性兜底（与目录行同一口径）。 */
+.readora-quickbar-heading {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--readora-color-text-primary);
+}
+
+.readora-quickbar-progress {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--readora-tracking-label);
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-quickbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-1);
+  flex: 0 0 auto;
+}
+
+.readora-quickbar-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.readora-quickbar-button:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-quickbar-button[aria-pressed="true"] {
+  background: var(--readora-outline-active-bg);
+  color: var(--readora-outline-active-color);
+}
+
+/* ---------- Reader Settings 弹层（§4.6 / §10.5） ---------- */
+
+.readora-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--readora-space-6);
+  background: var(--readora-color-overlay);
+}
+
+.readora-settings-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--readora-space-3);
+  width: min(420px, 100%);
+  max-height: calc(100vh - var(--readora-space-16));
+  overflow-y: auto;
+  padding: var(--readora-space-4);
+  border: var(--readora-hairline) solid var(--readora-panel-border);
+  border-radius: var(--readora-radius-lg);
+  box-shadow: var(--readora-shadow-lg);
+  background: var(--readora-panel-background);
+  color: var(--readora-color-text-primary);
+  font-size: var(--readora-font-md);
+  /* 弹层是外壳控件，不是文档内容，行高必须钉住。不写这一行时它继承 body 的
+   * `var(--readora-line-height)`，实测拖 Line height 滑杆会把弹层自己从 529px 顶到
+   * 690px（1.4 / 1.75 / 2.4 三档），手指还没离开滑杆整块面板就在跳。
+   * 字号已经走 --readora-font-md 固定值，漏的只有行高这一路。 */
+  line-height: 1.5;
+}
+
+.readora-settings-dialog:focus {
+  outline: none;
+}
+
+.readora-settings-header {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-2);
+}
+
+.readora-settings-title {
+  margin: 0;
+  font-size: var(--readora-font-md);
+  font-weight: 600;
+  letter-spacing: var(--readora-tracking-label);
+  /* 弹层标题不是正文标题，不参与大纲，也不该继承正文衬线字族。 */
+  font-family: var(--readora-font-family-body);
+  flex: 1 1 auto;
+}
+
+.readora-settings-close,
+.readora-toolbar-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.readora-settings-close {
+  padding: 2px var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.readora-settings-close:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--readora-space-1);
+}
+
+.readora-settings-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--readora-space-2);
+  font-size: var(--readora-font-xs);
+  letter-spacing: var(--readora-tracking-label);
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-settings-value {
+  font-variant-numeric: tabular-nums;
+  color: var(--readora-color-text-primary);
+}
+
+.readora-settings-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--readora-space-1);
+}
+
+.readora-settings-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.readora-settings-choice:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-settings-choice[aria-pressed="true"] {
+  font-weight: 600;
+  background: var(--readora-outline-active-bg);
+  color: var(--readora-outline-active-color);
+  border-color: var(--readora-color-accent);
+}
+
+.readora-settings-slider {
+  width: 100%;
+  accent-color: var(--readora-color-accent);
+}
+
+.readora-settings-check {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-2);
+  font-size: var(--readora-font-sm);
+}
+
+.readora-settings-hint,
+.readora-settings-note {
+  margin: 0;
+  font-size: var(--readora-font-xs);
+  color: var(--readora-color-text-muted);
+}
+
+.readora-settings-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-top: var(--readora-space-2);
+  border-top: var(--readora-hairline) solid var(--readora-color-border);
+}
+
+.readora-settings-note code {
+  font-family: var(--readora-font-family-mono);
+}
+
+/* 专注模式：正文上间距收紧（宽度仍由 --readora-content-width 决定，不在此对抗它）。 */
+.readora-canvas--focus {
+  padding-top: var(--readora-space-6);
+}
+
+/* 窄窗口（≤900px）收单栏由 ReaderShell 的 matchMedia 写 --columns-one 类，
+ * 这里不再重复一遍：两处判宽度迟早会判出两个答案。 */
+
+/* 图标基线：内联 SVG 跟文字并排时不该把行高压出来（§10.6）。 */
+.readora-icon {
+  flex: 0 0 auto;
+  vertical-align: -2px;
+}
+/* ---------- Export 下拉菜单（M11 · §10.5 顶栏动作） ---------- */
+
+/* 菜单是触发器的绝对定位子层：不新增栅格单元，顶栏那 44px 一行的列宽与
+ * rects 基线因此不受影响（菜单展开是覆盖，不是插进去挤开邻居）。 */
+.readora-toolbar-export-group {
+  position: relative;
+  display: inline-flex;
+}
+
+.readora-export-menu {
+  position: absolute;
+  top: calc(100% + var(--readora-space-1));
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 168px;
+  padding: var(--readora-space-1);
+  border: var(--readora-hairline) solid var(--readora-panel-border);
+  border-radius: var(--readora-radius-lg);
+  box-shadow: var(--readora-shadow-lg);
+  background: var(--readora-panel-background);
+  color: var(--readora-color-text-primary);
+  font-size: var(--readora-font-sm);
+  /* 外壳控件不跟正文行高走（与 Settings 弹层同一条理由）。 */
+  line-height: 1.5;
+}
+
+.readora-export-menu:focus {
+  outline: none;
+}
+
+.readora-export-menu-item {
+  display: block;
+  padding: var(--readora-space-1) var(--readora-space-2);
+  border: 0;
+  border-radius: var(--readora-radius-md);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.readora-export-menu-item:hover,
+.readora-export-menu-item:focus-visible {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-export-menu-item:focus-visible {
+  outline: var(--readora-hairline) solid var(--readora-color-accent);
+  outline-offset: 1px;
+}

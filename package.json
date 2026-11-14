@@ -1,0 +1,49 @@
+{
+  "name": "readora",
+  "version": "0.11.0",
+  "private": true,
+  "type": "module",
+  "description": "Readora — a focused Markdown reading experience for VS Code (monorepo root)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RegalPine/readora.git"
+  },
+  "packageManager": "pnpm@10.28.2",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "fixtures": "node scripts/gen-fixture-assets.mjs",
+    "test": "pnpm fixtures && pnpm -r test",
+    "coverage": "pnpm fixtures && pnpm --filter @readora/diagram-core coverage && pnpm --filter ./apps/extension coverage",
+    "build:host": "node scripts/build-host.mjs",
+    "smoke:host": "node scripts/host-activation-smoke.mjs",
+    "build:webview": "pnpm --filter @readora/webview build",
+    "build": "pnpm typecheck && pnpm test && pnpm build:host && pnpm build:webview",
+    "notices": "node scripts/gen-notices.mjs",
+    "license:sync": "node scripts/sync-license.mjs",
+    "package": "pnpm build && pnpm notices && pnpm license:sync && pnpm --filter readora package:vsix",
+    "verify": "node scripts/verify-vsix.mjs",
+    "visual:check": "node scripts/visual-baseline.mjs",
+    "visual:update": "node scripts/visual-baseline.mjs --update",
+    "test:e2e": "pnpm build:webview && playwright test",
+    "test:e2e:security": "pnpm build:webview && playwright test --project=security",
+    "perf": "pnpm build:webview && node scripts/perf-report.mjs",
+    "quality:report": "node scripts/quality-report.mjs",
+    "install:check": "node scripts/install-check.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^24.10.0",
+    "esbuild": "^0.28.2",
+    "eslint": "^10.14.0",
+    "globals": "^16.5.0",
+    "playwright": "1.56.1",
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.72.2",
+    "vitest": "^5.1.0"
+  }
+}

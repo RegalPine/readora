@@ -1,0 +1,174 @@
+/*
+ * 浮层层：图片预览与文档内搜索（PRD-002 §9.2 / §10.2）。
+ * 排在最后：浮层的背景与边界要压得住下面各层。
+ */
+
+/* ---------- Lightbox 覆盖层 ---------- */
+
+.readora-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: var(--readora-space-4);
+  background: var(--readora-lightbox-backdrop);
+}
+
+/* 毛玻璃三处之一（PRD-003 §7.2）：不支持或用户要求降低透明度时退回 glass 的实色形态。 */
+.readora-lightbox-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-1);
+  padding: var(--readora-space-1) var(--readora-space-2);
+  border-radius: var(--readora-radius-full);
+  background: var(--readora-color-canvas);
+  box-shadow: var(--readora-shadow-pill);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .readora-lightbox-toolbar {
+    background: var(--readora-color-glass);
+    backdrop-filter: blur(8px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .readora-lightbox-toolbar {
+    background: var(--readora-color-canvas);
+    backdrop-filter: none;
+  }
+}
+
+.readora-lightbox-tool {
+  padding: 3px 12px;
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  font-size: 0.82em;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.readora-lightbox-tool:disabled {
+  cursor: default;
+  color: var(--readora-color-text-muted);
+}
+
+.readora-lightbox-scale {
+  min-width: 4em;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82em;
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-lightbox-image {
+  max-width: 92vw;
+  max-height: 74vh;
+  object-fit: contain;
+  cursor: grab;
+  touch-action: none;
+  /* 缩放与平移只动 transform：布局不参与，拖动才不抖 */
+  transform-origin: center center;
+}
+
+.readora-lightbox-caption {
+  margin: 0;
+  max-width: 90vw;
+  font-size: 0.8em;
+  color: var(--readora-color-text-secondary);
+  word-break: break-all;
+  text-align: center;
+}
+
+/* ---------- 文档内搜索（ARC-007 §9） ---------- */
+
+/* 搜索面板（PRD-002 §10.3、PRD-003 §10.5）。
+ *
+ * M6 之前它是右上角一枚浮层；§10.5 把它定为外壳第二段 `.readora-searchbar` 的
+ * 「整行展开」，于是它回到流内：不 fixed、不叠阴影、只留一条下边界。
+ * 段高「随内容」——这里不写 height，面板多高段就多高。 */
+.readora-search-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--readora-space-1);
+  padding: var(--readora-space-1) var(--readora-space-4);
+  border-bottom: var(--readora-hairline) solid var(--readora-panel-border);
+  font-size: var(--readora-font-sm);
+  /* 毛玻璃三处之三：底色实色兜底，支持时才上 blur。 */
+  background: var(--readora-search-panel-background);
+}
+
+@supports (backdrop-filter: blur(1px)) {
+  .readora-search-panel {
+    background: var(--readora-color-glass);
+    backdrop-filter: blur(8px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .readora-search-panel {
+    background: var(--readora-search-panel-background);
+    backdrop-filter: none;
+  }
+}
+
+.readora-search-input {
+  width: 180px;
+  padding: 3px var(--readora-space-1);
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  background: transparent;
+  color: inherit;
+}
+
+.readora-search-count {
+  min-width: 5.5em;
+  font-variant-numeric: tabular-nums;
+  color: var(--readora-color-text-secondary);
+}
+
+.readora-search-tool {
+  padding: 2px var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-md);
+  font: inherit;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color var(--readora-motion-fast) ease;
+}
+
+.readora-search-tool:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+.readora-search-tool:disabled {
+  cursor: default;
+  color: var(--readora-color-text-muted);
+  border-color: var(--readora-color-border);
+}
+
+.readora-search-tool[aria-pressed="true"] {
+  font-weight: 600;
+  background: var(--readora-outline-active-bg);
+  color: var(--readora-outline-active-color);
+}
+
+/* 临时高亮：只加背景，不动正文结构（§9.4「高亮不得破坏原始 DOM 结构」）。 */
+mark.readora-search-hit {
+  border-radius: 2px;
+  background: var(--readora-hit-background);
+  color: inherit;
+}
+
+mark.readora-search-hit[data-readora-search-active] {
+  background: var(--readora-hit-active-background);
+  color: var(--readora-hit-active-border);
+  outline: var(--readora-hairline) solid var(--readora-hit-active-border);
+}

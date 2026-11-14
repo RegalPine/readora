@@ -1,0 +1,80 @@
+/*
+ * Tailwind v4 utility 层（ARC-005 §11.3 / IMP-001 §3.3）。
+ *
+ * 只取 theme 与 utilities 两层，**不启用 preflight**：基础重置在 base.css 里，
+ * 而且 preflight 会把宿主注入的排版规则一起抹掉。
+ *
+ * `@theme inline` 把 Tailwind 的默认尺度整体换成我们的 token——utility 里写的是
+ * `var(--readora-color-*)` 本身而不是又一层 `--color-*`，所以主题切换即时生效，
+ * 不必等 Tailwind 重新求值（护栏测试 tailwind.spec.ts 逐名断言）。
+ *
+ * 分工：新写的样式优先用 utility，既有 CSS 排在 utility 之后可以覆盖它；
+ * markdown.css 与引擎覆盖（Pele）保持非 utility 形态。
+ */
+
+@layer theme, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+
+@import "tailwindcss/utilities.css" layer(utilities);
+
+/* ARC-006 §10.2 不使用 `dark:` 变体：明暗由 <html> 上的属性决定，
+ * 跟着 prefers-color-scheme 走的 `dark:` 在 vscode 模式下必然判错。
+ * 这里把它重定义成属性选择器，是为了让误用仍然正确，而不是为了启用它。 */
+@custom-variant dark (&:where([data-readora-theme="dark"], [data-readora-theme="dark"] *));
+
+@theme inline {
+  /* 语义色（PRD-003 §4.2 全 21 名，逐名映射，不做取舍） */
+  --color-canvas: var(--readora-color-canvas);
+  --color-surface: var(--readora-color-surface);
+  --color-surface-subtle: var(--readora-color-surface-subtle);
+  --color-surface-raised: var(--readora-color-surface-raised);
+  --color-surface-sunken: var(--readora-color-surface-sunken);
+  --color-glass: var(--readora-color-glass);
+  --color-text-primary: var(--readora-color-text-primary);
+  --color-text-secondary: var(--readora-color-text-secondary);
+  --color-text-muted: var(--readora-color-text-muted);
+  --color-border: var(--readora-color-border);
+  --color-border-strong: var(--readora-color-border-strong);
+  --color-accent: var(--readora-color-accent);
+  --color-accent-text: var(--readora-color-accent-text);
+  --color-accent-on: var(--readora-color-accent-on);
+  --color-accent-soft: var(--readora-color-accent-soft);
+  --color-link: var(--readora-color-link);
+  --color-info: var(--readora-color-info);
+  --color-success: var(--readora-color-success);
+  --color-warning: var(--readora-color-warning);
+  --color-danger: var(--readora-color-danger);
+  --color-overlay: var(--readora-color-overlay);
+  --color-focus: var(--readora-color-focus);
+
+  /* 字族与字号（PRD-003 §5.2 / §5.3） */
+  --font-display: var(--readora-font-family-display);
+  --font-body: var(--readora-font-family-body);
+  --font-mono: var(--readora-font-family-mono);
+  --text-xs: var(--readora-font-xs);
+  --text-sm: var(--readora-font-sm);
+  --text-md: var(--readora-font-md);
+  --text-base: var(--readora-font-base);
+  --text-lg: var(--readora-font-lg);
+  --text-xl: var(--readora-font-xl);
+  --text-2xl: var(--readora-font-2xl);
+  --text-3xl: var(--readora-font-3xl);
+  --text-4xl: var(--readora-font-4xl);
+  --tracking-tight: var(--readora-tracking-tight);
+  --tracking-label: var(--readora-tracking-label);
+
+  /* 间距 / 圆角 / 阴影 / 动效（§6.1、§7.1、§7.2、§12.2） */
+  --spacing: var(--readora-space-1);
+  --radius-none: var(--readora-radius-none);
+  --radius-sm: var(--readora-radius-sm);
+  --radius-md: var(--readora-radius-md);
+  --radius-lg: var(--readora-radius-lg);
+  --radius-xl: var(--readora-radius-xl);
+  --radius-full: var(--readora-radius-full);
+  --shadow-sm: var(--readora-shadow-sm);
+  --shadow-md: var(--readora-shadow-md);
+  --shadow-lg: var(--readora-shadow-lg);
+  --shadow-pill: var(--readora-shadow-pill);
+  --default-transition-duration: var(--readora-motion-normal);
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@readora/test-utils",
+  "version": "0.11.0",
+  "private": true,
+  "type": "module",
+  "description": "共享测试工具（夹具构造、协议断言；随里程碑按需扩充）",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@readora/contracts": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3"
+  }
+}

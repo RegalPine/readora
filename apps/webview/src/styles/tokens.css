@@ -1,0 +1,574 @@
+/*
+ * Design Tokens（PRD-003 §4~§7 / §11~§13，ARC-006 §4）。
+ *
+ * 三层结构，取值只能往下引用，不许跨层抄色值：
+ *   Primitive（`--readora-palette-*`）→ 语义（`--readora-color-*`）→ 组件（`--readora-*-`）
+ * 业务样式只消费语义层与组件层：`design-tokens.spec.ts` 按名断言每一层的取值来源，
+ * `no-hardcoded-color.spec.ts` 禁止本文件之外的样式出现 `#hex` / `rgb(` / `hsl(`。
+ *
+ * 两块键位要分清：
+ *   - `[data-readora-theme=...]` 是 **palette 轴**（light / dark / vscode 三选一）；
+ *   - `[data-readora-scheme=...]` 是 **明暗轴**，只有 `vscode` 模式下才需要单独判，
+ *     因为代码配色与图表系列色在「宿主主题 + 暗色」下也得跟着变暗。
+ * 两个属性都由 Host 首帧写进 `<html>`（PRD-003 §11.3），不是等 theme.update 回来才上色。
+ */
+
+/* ---------- Primitive：亮色板（PRD-003 §4.2） ---------- */
+
+:root {
+  --readora-palette-light-canvas: #f8f9ff;
+  --readora-palette-light-surface: #eff4ff;
+  --readora-palette-light-surface-subtle: #e5eeff;
+  --readora-palette-light-surface-raised: #dce9ff;
+  --readora-palette-light-surface-sunken: #ffffff;
+  --readora-palette-light-text-primary: #0b1c30;
+  --readora-palette-light-text-secondary: #4a4455;
+  --readora-palette-light-text-muted: #6b6478;
+  /* text-muted 相对原型 #7b7486 加深过：后者在 canvas 上只有约 4.3:1，
+   * 过不了小字号 AA（PRD-003 §4.2，由 contrast.spec.ts 固化）。 */
+  --readora-palette-light-border: rgb(204 195 215 / 0.7);
+  --readora-palette-light-border-strong: #ccc3d7;
+  --readora-palette-light-accent: #6d28d9;
+  --readora-palette-light-accent-text: #5300b7;
+  --readora-palette-light-accent-on: #ffffff;
+  --readora-palette-light-accent-soft: rgb(109 40 217 / 0.08);
+  --readora-palette-light-link: #5300b7;
+  --readora-palette-light-info: #00645b;
+  --readora-palette-light-success: #0f6a43;
+  --readora-palette-light-warning: #8a5a00;
+  --readora-palette-light-danger: #ba1a1a;
+  --readora-palette-light-glass: rgb(255 255 255 / 0.86);
+  /* PRD-003 §4.2 的表里没有 overlay（ARC-006 §4.3 的语义清单里有），
+   * 这里按「压住正文的遮罩」取值，登记进 README 偏差。 */
+  --readora-palette-light-overlay: rgb(11 28 48 / 0.86);
+
+  /* ---------- Primitive：暗色板（PRD-003 §4.3） ---------- */
+
+  --readora-palette-dark-canvas: #10141a;
+  --readora-palette-dark-surface: #181c22;
+  --readora-palette-dark-surface-subtle: #1c2026;
+  --readora-palette-dark-surface-raised: #262a31;
+  --readora-palette-dark-surface-sunken: #0a0e14;
+  --readora-palette-dark-text-primary: #dfe2eb;
+  --readora-palette-dark-text-secondary: #ccc3d8;
+  --readora-palette-dark-text-muted: #958da1;
+  --readora-palette-dark-border: rgb(74 68 85 / 0.6);
+  --readora-palette-dark-border-strong: #4a4455;
+  --readora-palette-dark-accent: #7c3aed;
+  --readora-palette-dark-accent-text: #d2bbff;
+  --readora-palette-dark-accent-on: #ede0ff;
+  --readora-palette-dark-accent-soft: rgb(124 58 237 / 0.2);
+  --readora-palette-dark-link: #58a6ff;
+  --readora-palette-dark-info: #a2c9ff;
+  --readora-palette-dark-success: #34d399;
+  --readora-palette-dark-warning: #fbbf24;
+  --readora-palette-dark-danger: #ffb4ab;
+  --readora-palette-dark-glass: rgb(49 53 60 / 0.9);
+  --readora-palette-dark-overlay: rgb(3 6 10 / 0.86);
+
+  /* ---------- Primitive：高对比预设专用取值（F08-010） ----------
+   * 只补默认色板达不到的那几档，其余语义名一律复用上面的原值：
+   * 抄一份「差不多」的色板等于造第二个真相源（PRD-003 §13.4）。
+   * 门槛由 `contrast.spec.ts` 按实测断言，这里的注释只说取值理由。 */
+  --readora-palette-light-hc-text-muted: #4e4857;
+  --readora-palette-light-hc-border-strong: #7d7884;
+  --readora-palette-light-hc-accent-text: #440096;
+  --readora-palette-dark-hc-text-muted: #b8b3c0;
+  --readora-palette-dark-hc-border-strong: #807c88;
+  --readora-palette-dark-hc-accent-text: #e0d0ff;
+
+  /* ---------- Primitive：代码配色（每套 scheme 一组） ---------- */
+
+  --readora-palette-light-syntax-foreground: #1f2328;
+  --readora-palette-light-syntax-comment: #6e7781;
+  --readora-palette-light-syntax-keyword: #cf222e;
+  --readora-palette-light-syntax-string: #0a3069;
+  --readora-palette-light-syntax-number: #0550ae;
+  --readora-palette-light-syntax-title: #8250df;
+  --readora-palette-light-syntax-attr: #953800;
+  --readora-palette-light-syntax-deletion: #cf222e;
+
+  --readora-palette-dark-syntax-foreground: #e6e6e3;
+  --readora-palette-dark-syntax-comment: #8b949e;
+  --readora-palette-dark-syntax-keyword: #ff7b72;
+  --readora-palette-dark-syntax-string: #a5d6ff;
+  --readora-palette-dark-syntax-number: #79c0ff;
+  --readora-palette-dark-syntax-title: #d2a8ff;
+  --readora-palette-dark-syntax-attr: #ffa657;
+  --readora-palette-dark-syntax-deletion: #ffdcd7;
+
+  /* ---------- Primitive：图表系列色（ARC-003 §8.2 的 8 条通道） ---------- */
+
+  --readora-palette-light-series-1: #0969da;
+  --readora-palette-light-series-2: #8250df;
+  --readora-palette-light-series-3: #bf3989;
+  --readora-palette-light-series-4: #d1242f;
+  --readora-palette-light-series-5: #bc4c00;
+  --readora-palette-light-series-6: #9a6700;
+  --readora-palette-light-series-7: #1a7f37;
+  --readora-palette-light-series-8: #6639ba;
+
+  --readora-palette-dark-series-1: #4493f8;
+  --readora-palette-dark-series-2: #d2a8ff;
+  --readora-palette-dark-series-3: #ff7b72;
+  --readora-palette-dark-series-4: #ffa657;
+  --readora-palette-dark-series-5: #7ee787;
+  --readora-palette-dark-series-6: #a5d6ff;
+  --readora-palette-dark-series-7: #f2cc60;
+  --readora-palette-dark-series-8: #ff9bce;
+}
+
+/* ---------- 非颜色 Primitive（PRD-003 §5、§6、§7、§12） ---------- */
+
+:root {
+  /* 字号：主题不改字号尺度，只有用户偏好改 --readora-font-size（§11.4）。 */
+  --readora-font-xs: 12px;
+  --readora-font-sm: 13px;
+  --readora-font-md: 14px;
+  --readora-font-base: 16px;
+  --readora-font-lg: 18px;
+  --readora-font-xl: 20px;
+  --readora-font-2xl: 24px;
+  --readora-font-3xl: 30px;
+  --readora-font-4xl: 36px;
+  --readora-tracking-tight: -0.02em;
+  --readora-tracking-label: 0.04em;
+
+  /* 字族栈（Primitive）：字族偏好在下面按属性覆写映射，栈本身只在这里出现一次。
+   * 拉丁字形随包分发（fonts.css），CJK 走系统回退，不打包中文字库（§5.2）。 */
+  --readora-font-stack-serif:
+    Newsreader, "Songti SC", "Noto Serif CJK SC", serif;
+  --readora-font-stack-sans:
+    Geist, Inter, -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --readora-font-stack-ui:
+    Inter, Geist, -apple-system, "Segoe UI", "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  --readora-font-stack-mono:
+    "JetBrains Mono", var(--vscode-editor-font-family, ui-monospace),
+    "SF Mono", Menlo, Consolas, monospace;
+
+  /* 默认映射：标题衬线、正文无衬线（PRD-003 §5.2 的「Display 与 Body 分工」）。 */
+  --readora-font-family-display: var(--readora-font-stack-serif);
+  --readora-font-family-body: var(--readora-font-stack-sans);
+  --readora-font-family-mono: var(--readora-font-stack-mono);
+
+  --readora-space-1: 4px;
+  --readora-space-2: 8px;
+  --readora-space-3: 12px;
+  --readora-space-4: 16px;
+  --readora-space-5: 20px;
+  --readora-space-6: 24px;
+  --readora-space-8: 32px;
+  --readora-space-10: 40px;
+  --readora-space-12: 48px;
+  --readora-space-16: 64px;
+
+  --readora-radius-none: 0;
+  --readora-radius-sm: 4px;
+  --readora-radius-md: 6px;
+  --readora-radius-lg: 8px;
+  --readora-radius-xl: 12px;
+  --readora-radius-full: 999px;
+
+  /* 亮色阴影带品牌紫相：纯黑投影在蓝白底上发脏（§7.2）。 */
+  --readora-shadow-none: none;
+  --readora-shadow-sm: 0 1px 2px rgb(109 40 217 / 0.08);
+  --readora-shadow-md: 0 6px 18px rgb(109 40 217 / 0.12);
+  --readora-shadow-lg: 0 12px 32px rgb(109 40 217 / 0.16);
+
+  --readora-motion-fast: 100ms;
+  --readora-motion-normal: 160ms;
+  --readora-motion-slow: 220ms;
+  --readora-motion-dialog: 260ms;
+
+  /* 阅读偏好（PRD-003 §11.4）：App 只改这三个变量，正文与标题按 em 跟着走。 */
+  --readora-font-size: var(--readora-font-base);
+  --readora-line-height: 1.75;
+  --readora-content-width: 820px;
+}
+
+/* ---------- 语义层：默认亮色（ARC-006 §4.3） ---------- */
+
+:root {
+  --readora-color-canvas: var(--readora-palette-light-canvas);
+  --readora-color-surface: var(--readora-palette-light-surface);
+  --readora-color-surface-subtle: var(--readora-palette-light-surface-subtle);
+  --readora-color-surface-raised: var(--readora-palette-light-surface-raised);
+  --readora-color-surface-sunken: var(--readora-palette-light-surface-sunken);
+  --readora-color-glass: var(--readora-palette-light-glass);
+  --readora-color-text-primary: var(--readora-palette-light-text-primary);
+  --readora-color-text-secondary: var(--readora-palette-light-text-secondary);
+  --readora-color-text-muted: var(--readora-palette-light-text-muted);
+  --readora-color-border: var(--readora-palette-light-border);
+  --readora-color-border-strong: var(--readora-palette-light-border-strong);
+  --readora-color-accent: var(--readora-palette-light-accent);
+  --readora-color-accent-text: var(--readora-palette-light-accent-text);
+  --readora-color-accent-on: var(--readora-palette-light-accent-on);
+  --readora-color-accent-soft: var(--readora-palette-light-accent-soft);
+  --readora-color-link: var(--readora-palette-light-link);
+  --readora-color-info: var(--readora-palette-light-info);
+  --readora-color-success: var(--readora-palette-light-success);
+  --readora-color-warning: var(--readora-palette-light-warning);
+  --readora-color-danger: var(--readora-palette-light-danger);
+  --readora-color-overlay: var(--readora-palette-light-overlay);
+  /* 焦点环走宿主，缺变量时退回本色板（ARC-006 §6.1 第 7 条、§12 第 3 条）。 */
+  --readora-color-focus: var(--vscode-focusBorder, var(--readora-palette-light-accent));
+}
+
+/* ---------- 组件层（ARC-006 §4.4）：只能引用语义层 ---------- */
+
+:root {
+  --readora-panel-background: var(--readora-color-surface);
+  --readora-panel-border: var(--readora-color-border);
+
+  --readora-button-hover-bg: var(--readora-color-surface-raised);
+  --readora-button-text: var(--readora-color-accent-on);
+  --readora-button-border: var(--readora-color-border-strong);
+
+  --readora-inline-code-background: var(--readora-color-surface-subtle);
+  --readora-quote-background: var(--readora-color-surface-subtle);
+  /* 代码块贴正文底色（偏离 PRD-003 §4.2 / §4.3 的「surface-sunken 给代码块」，README
+   * 已登记）：实测 sunken 在画布上留下一块与正文不同色的补丁 —— 亮色是纯白
+   * `#ffffff` 对 `#f8f9ff`，暗色是 `#0a0e14` 对 `#10141a`，宿主模式下更是直接与编辑器
+   * 底色打架。代码块的身份靠等宽字与语法色就够了，不需要额外的面。表格与数学块
+   * 继续用 sunken（它们是真·独立面板）。 */
+  --readora-code-background: var(--readora-color-canvas);
+  --readora-code-border: var(--readora-color-border-strong);
+
+  --readora-table-header-bg: var(--readora-color-surface-sunken);
+  --readora-table-stripe-bg: var(--readora-color-surface-subtle);
+
+  --readora-outline-active-bg: var(--readora-color-accent-soft);
+  --readora-outline-active-color: var(--readora-color-accent-text);
+  --readora-outline-link-color: var(--readora-color-text-secondary);
+
+  --readora-toolbar-background: var(--readora-color-canvas);
+  --readora-toolbar-border: var(--readora-color-border);
+  --readora-search-panel-background: var(--readora-color-surface);
+  --readora-lightbox-backdrop: var(--readora-color-overlay);
+
+  /* 状态色派生的柔和底色：语义色本身是「文字级」对比度，直接当大面积底色会刺眼，
+   * 用 color-mix 掺到透明上，两套主题各自跟随，不必再写第二组色值。 */
+  --readora-note-background: color-mix(in srgb, var(--readora-color-info) 14%, transparent);
+  --readora-note-color: var(--readora-color-info);
+  --readora-danger-background: color-mix(in srgb, var(--readora-color-danger) 12%, transparent);
+  --readora-danger-color: var(--readora-color-danger);
+  --readora-warning-background: color-mix(in srgb, var(--readora-color-warning) 16%, transparent);
+  --readora-warning-border: var(--readora-color-warning);
+  --readora-hit-background: color-mix(in srgb, var(--readora-color-warning) 45%, transparent);
+  --readora-hit-active-background: var(--readora-color-warning);
+  --readora-hit-active-border: var(--readora-color-text-primary);
+
+  /* 语法高亮：跟着 scheme 走，见下面的 `[data-readora-scheme="dark"]`。 */
+  --readora-syntax-foreground: var(--readora-palette-light-syntax-foreground);
+  --readora-syntax-comment: var(--readora-palette-light-syntax-comment);
+  --readora-syntax-keyword: var(--readora-palette-light-syntax-keyword);
+  --readora-syntax-string: var(--readora-palette-light-syntax-string);
+  --readora-syntax-number: var(--readora-palette-light-syntax-number);
+  --readora-syntax-title: var(--readora-palette-light-syntax-title);
+  --readora-syntax-attr: var(--readora-palette-light-syntax-attr);
+  --readora-syntax-deletion: var(--readora-palette-light-syntax-deletion);
+
+  /* 图表（ARC-003 §8.2）：引擎读 --pele-*，取值来自阅读器语义层，
+   * 名字清单由 diagram-core 的 PELE_TOKEN_MAP 双向锁定。 */
+  --readora-diagram-canvas: var(--readora-color-canvas);
+  --readora-diagram-text: var(--readora-color-text-primary);
+  --readora-diagram-muted: var(--readora-color-text-muted);
+  --readora-diagram-border: var(--readora-color-border-strong);
+  /* 连线（边线）单独一路：引擎的 `--pele-line` 默认 `#1f1f1f`，原先不在
+   * PELE_TOKEN_MAP 的清单里，于是暗色主题下连线仍是近黑色，贴在 `#10141a` 的画布上
+   * 几乎看不见（实测两套主题 stroke 都是 rgb(31, 31, 31)）。取色走正文主色。 */
+  --readora-diagram-line: var(--readora-color-text-primary);
+  --readora-diagram-surface: var(--readora-color-surface);
+  --readora-diagram-surface-subtle: var(--readora-color-surface-subtle);
+  --readora-diagram-accent: var(--readora-color-accent-text);
+  --readora-diagram-font: var(--readora-font-family-body);
+  /* 连线宽度：引擎不写 stroke-width，全部落在 SVG 初始的 1px（实测），在 HiDPI 屏上
+   * 几乎看不出是条线。1.5px 与内置图标描边同口径（Icon.tsx 的 ICON_STROKE_WIDTH）。 */
+  --readora-diagram-edge-width: 1.5px;
+  --pele-bg: var(--readora-diagram-canvas);
+  --pele-fg: var(--readora-diagram-text);
+  --pele-muted: var(--readora-diagram-muted);
+  --pele-border: var(--readora-diagram-border);
+  --pele-line: var(--readora-diagram-line);
+  --pele-surface: var(--readora-diagram-surface);
+  --pele-surface-alt: var(--readora-diagram-surface-subtle);
+  --pele-accent: var(--readora-diagram-accent);
+  --pele-font: var(--readora-diagram-font);
+  --pele-series-1: var(--readora-palette-light-series-1);
+  --pele-series-2: var(--readora-palette-light-series-2);
+  --pele-series-3: var(--readora-palette-light-series-3);
+  --pele-series-4: var(--readora-palette-light-series-4);
+  --pele-series-5: var(--readora-palette-light-series-5);
+  --pele-series-6: var(--readora-palette-light-series-6);
+  --pele-series-7: var(--readora-palette-light-series-7);
+  --pele-series-8: var(--readora-palette-light-series-8);
+
+  /* 外壳度量（PRD-003 §13.1；导航两项沿用 M4 既有默认值，改了会回归定位与活动标题）。 */
+  --readora-topbar-height: 44px;
+  /* 搜索段「随内容」，但下限要给：面板高度就是这一段的尺寸基准（§10.5）。 */
+  --readora-searchbar-height: 40px;
+  --readora-statusbar-height: 24px;
+  --readora-outline-width: 256px;
+  --readora-hairline: 1px;
+  --readora-navigation-offset: 5rem;
+  --readora-baseline-ratio: 0.25;
+  --readora-shadow-pill: 0 4px 12px rgb(109 40 217 / 0.08);
+}
+
+/* ---------- 宿主中转层（PRD-003 §13.3，映射表来自 host-theme-map） ---------- */
+
+:root {
+  --readora-host-editor-background: var(--vscode-editor-background, var(--readora-palette-light-canvas));
+  --readora-host-editor-foreground: var(--vscode-editor-foreground, var(--readora-palette-light-text-primary));
+  --readora-host-panel-background: var(--vscode-panel-background, var(--readora-palette-light-surface));
+  --readora-host-panel-border: var(--vscode-panel-border, var(--readora-palette-light-border-strong));
+  --readora-host-side-bar-background: var(--vscode-sideBar-background, var(--readora-palette-light-surface-subtle));
+  --readora-host-description-foreground: var(--vscode-descriptionForeground, var(--readora-palette-light-text-secondary));
+  --readora-host-focus-border: var(--vscode-focusBorder, var(--readora-palette-light-accent));
+  --readora-host-text-link-foreground: var(--vscode-textLink-foreground, var(--readora-palette-light-link));
+  --readora-host-error-foreground: var(--vscode-errorForeground, var(--readora-palette-light-danger));
+}
+
+/* ---------- 暗色板：21 个语义名逐个覆盖（PRD-003 §13.2） ----------
+ * 漏一个就是「暗色里渗出一块亮色」，design-tokens.spec.ts 按清单逐名断言。 */
+
+[data-readora-theme="dark"] {
+  --readora-color-canvas: var(--readora-palette-dark-canvas);
+  --readora-color-surface: var(--readora-palette-dark-surface);
+  --readora-color-surface-subtle: var(--readora-palette-dark-surface-subtle);
+  --readora-color-surface-raised: var(--readora-palette-dark-surface-raised);
+  --readora-color-surface-sunken: var(--readora-palette-dark-surface-sunken);
+  --readora-color-glass: var(--readora-palette-dark-glass);
+  --readora-color-text-primary: var(--readora-palette-dark-text-primary);
+  --readora-color-text-secondary: var(--readora-palette-dark-text-secondary);
+  --readora-color-text-muted: var(--readora-palette-dark-text-muted);
+  --readora-color-border: var(--readora-palette-dark-border);
+  --readora-color-border-strong: var(--readora-palette-dark-border-strong);
+  --readora-color-accent: var(--readora-palette-dark-accent);
+  --readora-color-accent-text: var(--readora-palette-dark-accent-text);
+  --readora-color-accent-on: var(--readora-palette-dark-accent-on);
+  --readora-color-accent-soft: var(--readora-palette-dark-accent-soft);
+  --readora-color-link: var(--readora-palette-dark-link);
+  --readora-color-info: var(--readora-palette-dark-info);
+  --readora-color-success: var(--readora-palette-dark-success);
+  --readora-color-warning: var(--readora-palette-dark-warning);
+  --readora-color-danger: var(--readora-palette-dark-danger);
+  --readora-color-overlay: var(--readora-palette-dark-overlay);
+  --readora-color-focus: var(--vscode-focusBorder, var(--readora-palette-dark-accent));
+}
+
+/* ---------- 明暗轴：代码配色、图表系列色与阴影形状 ----------
+ * `vscode` 模式下宿主主题变暗时，这几组也要跟着变暗，所以键在 scheme 轴上。
+ * 阴影也挂在这里：它换的是「形状」而不是颜色（PRD-003 §7.2），挂在 palette 轴上
+ * 会漏掉 `vscode` + 暗色那一格——暗背景上渗出一圈亮紫边，正是 §13.2 要防的形态。 */
+
+[data-readora-scheme="dark"] {
+  --readora-shadow-pill: 0 8px 24px rgb(0 0 0 / 0.35);
+  --readora-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
+  --readora-shadow-md: 0 6px 18px rgb(0 0 0 / 0.45);
+  --readora-shadow-lg: 0 12px 32px rgb(0 0 0 / 0.5);
+  --readora-syntax-foreground: var(--readora-palette-dark-syntax-foreground);
+  --readora-syntax-comment: var(--readora-palette-dark-syntax-comment);
+  --readora-syntax-keyword: var(--readora-palette-dark-syntax-keyword);
+  --readora-syntax-string: var(--readora-palette-dark-syntax-string);
+  --readora-syntax-number: var(--readora-palette-dark-syntax-number);
+  --readora-syntax-title: var(--readora-palette-dark-syntax-title);
+  --readora-syntax-attr: var(--readora-palette-dark-syntax-attr);
+  --readora-syntax-deletion: var(--readora-palette-dark-syntax-deletion);
+  --pele-series-1: var(--readora-palette-dark-series-1);
+  --pele-series-2: var(--readora-palette-dark-series-2);
+  --pele-series-3: var(--readora-palette-dark-series-3);
+  --pele-series-4: var(--readora-palette-dark-series-4);
+  --pele-series-5: var(--readora-palette-dark-series-5);
+  --pele-series-6: var(--readora-palette-dark-series-6);
+  --pele-series-7: var(--readora-palette-dark-series-7);
+  --pele-series-8: var(--readora-palette-dark-series-8);
+}
+
+/* ---------- 宿主模式：融入 VS Code 视觉环境（ARC-006 §6） ----------
+ * 语义层全覆盖：九个来自宿主，其余沿用产品色板。 */
+
+[data-readora-theme="vscode"] {
+  --readora-color-canvas: var(--readora-host-editor-background);
+  --readora-color-text-primary: var(--readora-host-editor-foreground);
+  --readora-color-surface: var(--readora-host-panel-background);
+  --readora-color-border: var(--readora-host-panel-border);
+  --readora-color-surface-subtle: var(--readora-host-side-bar-background);
+  --readora-color-text-secondary: var(--readora-host-description-foreground);
+  --readora-color-focus: var(--readora-host-focus-border);
+  --readora-color-link: var(--readora-host-text-link-foreground);
+  --readora-color-danger: var(--readora-host-error-foreground);
+  /* 宿主没有对应变量的九项：留在产品色板里，比硬套一个不相干的宿主变量诚实。 */
+  --readora-color-surface-raised: var(--readora-palette-light-surface-raised);
+  --readora-color-surface-sunken: var(--readora-palette-light-surface-sunken);
+  --readora-color-glass: var(--readora-palette-light-glass);
+  --readora-color-text-muted: var(--readora-palette-light-text-muted);
+  --readora-color-border-strong: var(--readora-palette-light-border-strong);
+  --readora-color-accent: var(--readora-palette-light-accent);
+  --readora-color-accent-text: var(--readora-palette-light-accent-text);
+  --readora-color-accent-on: var(--readora-palette-light-accent-on);
+  --readora-color-accent-soft: var(--readora-palette-light-accent-soft);
+  --readora-color-info: var(--readora-palette-light-info);
+  --readora-color-success: var(--readora-palette-light-success);
+  --readora-color-warning: var(--readora-palette-light-warning);
+  --readora-color-overlay: var(--readora-palette-light-overlay);
+}
+
+/* 宿主主题偏暗时：上面十三项换成暗色板（九项宿主映射不受影响，
+ * 但中转层的兜底色也得换，否则宿主变量缺失时会闪出一块亮色）。 */
+
+[data-readora-theme="vscode"][data-readora-scheme="dark"] {
+  --readora-color-surface-raised: var(--readora-palette-dark-surface-raised);
+  --readora-color-surface-sunken: var(--readora-palette-dark-surface-sunken);
+  --readora-color-glass: var(--readora-palette-dark-glass);
+  --readora-color-text-muted: var(--readora-palette-dark-text-muted);
+  --readora-color-border-strong: var(--readora-palette-dark-border-strong);
+  --readora-color-accent: var(--readora-palette-dark-accent);
+  --readora-color-accent-text: var(--readora-palette-dark-accent-text);
+  --readora-color-accent-on: var(--readora-palette-dark-accent-on);
+  --readora-color-accent-soft: var(--readora-palette-dark-accent-soft);
+  --readora-color-info: var(--readora-palette-dark-info);
+  --readora-color-success: var(--readora-palette-dark-success);
+  --readora-color-warning: var(--readora-palette-dark-warning);
+  --readora-color-overlay: var(--readora-palette-dark-overlay);
+
+  --readora-host-editor-background: var(--vscode-editor-background, var(--readora-palette-dark-canvas));
+  --readora-host-editor-foreground: var(--vscode-editor-foreground, var(--readora-palette-dark-text-primary));
+  --readora-host-panel-background: var(--vscode-panel-background, var(--readora-palette-dark-surface));
+  --readora-host-panel-border: var(--vscode-panel-border, var(--readora-palette-dark-border-strong));
+  --readora-host-side-bar-background: var(--vscode-sideBar-background, var(--readora-palette-dark-surface-subtle));
+  --readora-host-description-foreground: var(--vscode-descriptionForeground, var(--readora-palette-dark-text-secondary));
+  --readora-host-focus-border: var(--vscode-focusBorder, var(--readora-palette-dark-accent));
+  --readora-host-text-link-foreground: var(--vscode-textLink-foreground, var(--readora-palette-dark-link));
+  --readora-host-error-foreground: var(--vscode-errorForeground, var(--readora-palette-dark-danger));
+}
+
+/* ---------- 主题预设：高对比（F08-010，闭合 ARC-006 §13.1 的高对比边界） ----------
+ *
+ * ARC-006 全篇没有「预设」条款（grep 0 命中），本节取值与门槛是 M6 定案并登记偏差。
+ * 四条结构性决定：
+ *
+ * 1. **只改颜色，不改结构**：选择器是 palette 轴 × preset 轴的求交，切预设 = 改
+ *    `<html>` 上一个属性，因此 ARC-006 §11.1「切主题不重建 DOM、不重置滚动」的
+ *    约束对预设同样成立。
+ * 2. **必须排在 palette 与 scheme 两级之后**：`[data-readora-theme="dark"]` 与
+ *    `[data-readora-preset="high-contrast"]` 特异度相同（各一个属性选择器），
+ *    谁在后面谁赢。写在前面会让暗色 + 高对比读到亮色取值——正是 §13.2 要防的形态。
+ * 3. **文字三档压成两档**：`text-secondary` 直接取 `text-primary` 的 Primitive。
+ *    高对比要的是可读性而不是层级感，这不是配色退化；`text-muted` 单独给一档，
+ *    保证「弱化」这个语义还有第三种颜色可用。
+ * 4. **宿主模式只补宿主没有的那几项**：`vscode` 下 `text-secondary`、`link`、
+ *    `canvas`、`danger`、`focus` 来自 `--vscode-*`（§6.2 的融入契约），预设不去
+ *    覆盖用户自己装的主题色；只覆盖仍留在产品色板里的那四项。
+ *
+ * `border` 也在覆写之列：默认它是 `border-strong` 的 0.6~0.7 alpha，实测只有
+ * 1.39 / 1.45，是「高对比边界」里漏得最多的一项。IMP-003 §4.7 的清单没点名它，
+ * 属于本批按实测扩面，一并登记偏差。
+ */
+
+[data-readora-theme="light"][data-readora-preset="high-contrast"] {
+  --readora-color-text-secondary: var(--readora-palette-light-text-primary);
+  --readora-color-text-muted: var(--readora-palette-light-hc-text-muted);
+  --readora-color-border: var(--readora-palette-light-hc-border-strong);
+  --readora-color-border-strong: var(--readora-palette-light-hc-border-strong);
+  --readora-color-accent-text: var(--readora-palette-light-hc-accent-text);
+}
+
+[data-readora-theme="dark"][data-readora-preset="high-contrast"] {
+  --readora-color-text-secondary: var(--readora-palette-dark-text-primary);
+  --readora-color-text-muted: var(--readora-palette-dark-hc-text-muted);
+  --readora-color-border: var(--readora-palette-dark-hc-border-strong);
+  --readora-color-border-strong: var(--readora-palette-dark-hc-border-strong);
+  --readora-color-accent-text: var(--readora-palette-dark-hc-accent-text);
+}
+
+/* 宿主 + 亮色：四项产品色板兜底值换成高对比档（宿主派生的那五项不动）。 */
+[data-readora-theme="vscode"][data-readora-preset="high-contrast"] {
+  --readora-color-text-muted: var(--readora-palette-light-hc-text-muted);
+  --readora-color-border: var(--readora-palette-light-hc-border-strong);
+  --readora-color-border-strong: var(--readora-palette-light-hc-border-strong);
+  --readora-color-accent-text: var(--readora-palette-light-hc-accent-text);
+}
+
+/* 宿主 + 暗色：三个属性选择器（0,3,0），稳定压过上面那条与 scheme 轴那条。 */
+[data-readora-theme="vscode"][data-readora-scheme="dark"][data-readora-preset="high-contrast"] {
+  --readora-color-text-muted: var(--readora-palette-dark-hc-text-muted);
+  --readora-color-border: var(--readora-palette-dark-hc-border-strong);
+  --readora-color-border-strong: var(--readora-palette-dark-hc-border-strong);
+  --readora-color-accent-text: var(--readora-palette-dark-hc-accent-text);
+}
+
+/* ---------- 字族偏好（PRD-003 §5.2 / §10.4，F08 的 readora.typography） ----------
+ *
+ * 1. 与预设同理：`data-readora-typography` 由 `html-template.ts` 首帧预置、
+ *    `applyTheme` 事后覆写，取值先过 contracts 的枚举白名单，因此这里只需按
+ *    属性给映射；特异度 (0,1,0) 与 :root 的默认映射同层，靠源码顺序压过它。
+ * 2. 三个取值只改 display / body 两个语义 token 的指向，栈本身在上面只写一次；
+ *    mono 不参与字族偏好（代码字族与正文字族是两件事，PRD-003 §5.4）。
+ * 3. `inter` 仍不打包（沿用 M5 偏差登记）：命中系统已装的 Inter 才生效，
+ *    否则按栈回退到 Geist 与系统 UI 字体 —— 这是「优先使用」而非承诺分发。
+ */
+
+[data-readora-typography="newsreader"] {
+  --readora-font-family-display: var(--readora-font-stack-serif);
+  --readora-font-family-body: var(--readora-font-stack-sans);
+}
+
+[data-readora-typography="geist"] {
+  --readora-font-family-display: var(--readora-font-stack-sans);
+  --readora-font-family-body: var(--readora-font-stack-sans);
+}
+
+[data-readora-typography="inter"] {
+  --readora-font-family-display: var(--readora-font-stack-ui);
+  --readora-font-family-body: var(--readora-font-stack-ui);
+}
+
+/* ---------- 无障碍（ARC-006 §12、PRD-003 §7.2 / §12.3） ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* 收敛到 1ms 而不是 0：保留 transition 事件，避免依赖 transitionend 的收起逻辑失效。 */
+    --readora-motion-fast: 1ms;
+    --readora-motion-normal: 1ms;
+    --readora-motion-slow: 1ms;
+    --readora-motion-dialog: 1ms;
+  }
+}
+
+/* 高对比与强制颜色模式：分隔线换成系统边框色，保证边界在系统配色下仍然可见。 */
+
+@media (forced-colors: active) {
+  :root {
+    --readora-color-border: CanvasText;
+    --readora-color-border-strong: CanvasText;
+    --readora-color-focus: Highlight;
+    --readora-hairline: 1px;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --readora-color-text-muted: var(--readora-palette-light-text-secondary);
+    --readora-color-border: var(--readora-palette-light-border-strong);
+  }
+
+  [data-readora-theme="dark"] {
+    --readora-color-text-muted: var(--readora-palette-dark-text-secondary);
+    --readora-color-border: var(--readora-palette-dark-border-strong);
+  }
+}
+
+/* 用户要求降低透明度时，毛玻璃退回实色：backdrop-filter 的三处消费方都读这个开关。 */
+
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --readora-color-glass: var(--readora-palette-light-canvas);
+  }
+
+  [data-readora-theme="dark"] {
+    --readora-color-glass: var(--readora-palette-dark-canvas);
+  }
+}

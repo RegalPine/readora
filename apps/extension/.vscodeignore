@@ -1,0 +1,19 @@
+src/**
+coverage/**
+DEVELOPMENT.md
+node_modules/**
+tsconfig.json
+vitest.config.mts
+**/*.map
+**/__tests__/**
+**/__stubs__/**
+.gitignore
+# M5/M6 的 dev 夹具（视觉基线与 Playwright e2e）只在 dev server 里用，绝不进包；
+# 构建入口只有 index.html，这三条与 e2e 两条都是「万一有人把它加进 input」的兜底
+dev/**
+**/visual.html
+**/visual.tsx
+**/visual.css
+**/e2e.html
+**/e2e.tsx
+tests/**

@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<!--
+  端到端夹具页（dev only，IMP-003 §7.1 / EPIC-11~12）。
+
+  由 `playwright.config.ts` 起 Vite dev server 后按 `/dev/e2e.html` 访问，
+  与 `dev/visual.html` 同一处置：不进 `build:webview` 入口，`.vscodeignore` 排除，
+  `scripts/verify-vsix.mjs` 反向断言 vsix 内不含它。
+
+  这里刻意没有 CSP `<meta>`：CSP 与真实产物 bundle 的组合由 `tests/security` 用
+  Host 的 `renderWebviewHtml()` 现场生成页面来验（那才是生产同一份模板），
+  dev 页面挂着 CSP 反而会让 Vite 的行内脚本与 HMR 跑不起来。
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Readora E2E Fixture</title>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/dev/e2e.tsx"></script>
+</body>
+</html>

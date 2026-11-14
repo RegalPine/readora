@@ -1,0 +1,9 @@
+# IMP-001 §3.4 建议配置
+packages:
+  - "packages/*"
+  - "apps/*"
+
+# pnpm 10 默认拦截依赖构建脚本；以下依赖需要 postinstall（显式放行）
+onlyBuiltDependencies:
+  - esbuild
+  - "@vscode/vsce-sign"

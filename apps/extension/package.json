@@ -1,0 +1,256 @@
+{
+  "name": "readora",
+  "displayName": "Readora — Markdown Reader",
+  "description": "A beautiful, focused reading experience for Markdown in Visual Studio Code.",
+  "version": "0.11.0",
+  "publisher": "readora-dev",
+  "license": "MIT",
+  "icon": "resources/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RegalPine/readora.git",
+    "directory": "apps/extension"
+  },
+  "bugs": {
+    "url": "https://github.com/RegalPine/readora/issues"
+  },
+  "homepage": "https://github.com/RegalPine/readora#readme",
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "reader",
+    "preview",
+    "reading"
+  ],
+  "main": "./dist/extension.js",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "activationEvents": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "readora.openReader",
+        "title": "Readora: Open Reader"
+      },
+      {
+        "command": "readora.openToSide",
+        "title": "Readora: Open to the Side"
+      },
+      {
+        "command": "readora.focusMode",
+        "title": "Readora: Toggle Focus Mode"
+      },
+      {
+        "command": "readora.toggleOutline",
+        "title": "Readora: Toggle Outline"
+      },
+      {
+        "command": "readora.adjustContentWidth",
+        "title": "Readora: Adjust Content Width"
+      },
+      {
+        "command": "readora.refresh",
+        "title": "Readora: Refresh"
+      },
+      {
+        "command": "readora.exportHtml",
+        "title": "Readora: Export as HTML"
+      },
+      {
+        "command": "readora.exportPdf",
+        "title": "Readora: Export as PDF"
+      },
+      {
+        "command": "readora.exportPng",
+        "title": "Readora: Export as PNG"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "readora.adjustContentWidth",
+          "when": "false"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "readora.openReader",
+          "when": "editorLangId == markdown",
+          "group": "navigation@100"
+        },
+        {
+          "command": "readora.openToSide",
+          "when": "editorLangId == markdown",
+          "group": "navigation@101"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "readora.openReader",
+          "when": "resourceExtname =~ /\\.(md|markdown)$/i",
+          "group": "navigation@100"
+        },
+        {
+          "command": "readora.openToSide",
+          "when": "resourceExtname =~ /\\.(md|markdown)$/i",
+          "group": "navigation@101"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "readora.openReader",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r"
+      },
+      {
+        "command": "readora.focusMode",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "readora.readerActive"
+      },
+      {
+        "command": "readora.toggleOutline",
+        "key": "ctrl+alt+o",
+        "mac": "cmd+alt+o",
+        "when": "readora.readerActive"
+      },
+      {
+        "command": "readora.adjustContentWidth",
+        "key": "ctrl+alt+left",
+        "mac": "cmd+alt+left",
+        "args": -1,
+        "when": "readora.readerActive"
+      },
+      {
+        "command": "readora.adjustContentWidth",
+        "key": "ctrl+alt+right",
+        "mac": "cmd+alt+right",
+        "args": 1,
+        "when": "readora.readerActive"
+      }
+    ],
+    "configuration": {
+      "title": "Readora",
+      "properties": {
+        "readora.theme": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "light",
+            "dark",
+            "vscode",
+            "system"
+          ],
+          "enumDescriptions": [
+            "Follow the VS Code color theme (alias of system).",
+            "Readora light theme.",
+            "Readora dark theme.",
+            "Map reader tokens onto the active VS Code theme colors.",
+            "Pick the Readora light/dark theme from the VS Code color scheme."
+          ],
+          "default": "auto",
+          "description": "Reader theme. 'auto' follows the VS Code color theme."
+        },
+        "readora.fontSize": {
+          "type": "number",
+          "default": 16,
+          "minimum": 8,
+          "maximum": 32,
+          "description": "Base font size of the reading canvas (px)."
+        },
+        "readora.lineHeight": {
+          "type": "number",
+          "default": 1.75,
+          "minimum": 1,
+          "maximum": 3,
+          "description": "Line height of the reading canvas."
+        },
+        "readora.contentWidth": {
+          "type": "number",
+          "default": 820,
+          "minimum": 480,
+          "maximum": 1600,
+          "description": "Maximum content width of the reading canvas (px)."
+        },
+        "readora.showOutline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the outline sidebar when a reader opens. 'Readora: Toggle Outline' switches it per session without touching this setting."
+        },
+        "readora.typography": {
+          "type": "string",
+          "enum": [
+            "newsreader",
+            "geist",
+            "inter"
+          ],
+          "enumDescriptions": [
+            "Serif display + sans body (default, matches the editorial spec).",
+            "Sans body and headings via bundled Geist.",
+            "Prefer system Inter for body text (Inter is not bundled)."
+          ],
+          "default": "newsreader",
+          "description": "Body typeface of the reading canvas. CJK and Inter fall back to system fonts; only latin subsets ship with the extension."
+        },
+        "readora.themePreset": {
+          "type": "string",
+          "enum": [
+            "default",
+            "high-contrast"
+          ],
+          "enumDescriptions": [
+            "Readora palette as designed (PRD-003 §4.2 / §4.3).",
+            "Raise secondary text, muted text and borders to WCAG 2.2 AA contrast on both palettes."
+          ],
+          "default": "default",
+          "description": "Token override layer applied on top of the active palette. Does not change hues of the product palette, only raises contrast."
+        },
+        "readora.customCss": {
+          "type": "string",
+          "default": "",
+          "maxLength": 32768,
+          "editPresentation": "multilineText",
+          "description": "Optional CSS applied to the reader after main.css. Only rules whose selectors start with .readora- or [data-readora-] are accepted; anything else rejects the whole block and logs readora.custom-css.rejected."
+        },
+        "readora.resources.allowExternalImages": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow remote (http/https) images. Disabled in M3: remote image loading is not delivered yet."
+        },
+        "readora.resources.maxImageSizeMb": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Maximum size of a single local resource resolved for the reader, in MB."
+        },
+        "readora.export.chromePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional absolute path to a Chrome/Chromium/Edge executable. Used only by 'Export as PDF' and 'Export as PNG'; 'Export as HTML' never starts a browser. Leave empty to auto-detect: the configured path, then CHROME_PATH, then known install locations, then PATH."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "package:vsix": "vsce package --no-dependencies",
+    "coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@readora/contracts": "workspace:*",
+    "@readora/design-tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.95.0",
+    "@vitest/coverage-v8": "5.1.0",
+    "@vscode/vsce": "^4.1.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

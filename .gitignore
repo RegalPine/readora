@@ -1,0 +1,20 @@
+node_modules/
+dist/
+out/
+coverage/
+*.vsix
+.DS_Store
+# 环境变量文件不入库（公开仓库里任何 .env 都是攻击面）
+.env
+.env.*
+*.log
+.vitest/
+tests/fixtures/diagrams-over-limit.md
+# 三档性能夹具由 scripts/gen-fixture-assets.mjs 现场生成（体积是算出来的，不该入库）
+tests/fixtures/perf/
+.playwright-cli/
+.tmp-evidence/
+# Playwright 的失败产物（trace/截图/json 报告）只作当次取证，入库的是用例本身
+test-results/
+# 视觉基线的截图产物只作人工复核，入库的是 tests/visual/baseline.json
+tests/visual/artifacts/
