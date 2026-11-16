@@ -145,25 +145,31 @@ test.describe("外壳与状态条", () => {
     await expect(page.locator('[data-readora-pill="mode"]')).toHaveText("Focus");
 
     // 退出入口默认不显示，鼠标移到顶部才浮现（产品反馈：类浏览器全屏）。
-    // 断言走 computed opacity 而不是 toBeHidden：淡出留着那 44px 带子当触发区，
-    // 换成 visibility 会把命中区一起摘掉，鼠标便没处可移了。
-    // 量的是工具栏而不是按钮：`opacity` 不是继承属性，量按钮只会永远拿到 "1"；
-    // 选择器里带上门控属性，这样「属性没挂上」与「挂了但不淡出」两种跑偏都能红。
+    // 断言量的是几何位置而不是 opacity：隐藏手段已从「淡出」换成整条带子
+    // `translateY` 抬出视口，opacity 在这条路径上恒为 "1"，拿它断言只会假绿。
+    // 量工具栏内容自己的矩形，选择器里带上门控属性，这样「属性没挂上」与
+    // 「挂了但不收起」两种跑偏都能红。
     const exit = page.getByRole("button", { name: "Exit focus mode" });
     await expect(exit).toHaveCount(1);
     const focusToolbar = page.locator(
       '.readora-topbar[data-readora-topbar-reveal="hover"] .readora-toolbar--focus'
     );
+    // transform 走 --readora-motion-normal 过渡，插值帧里的中间值不能作为结论：poll 到稳态。
+    // 两道稳态以视口上沿为分界：静默态整条带子被抬到 `4px - 100%`，内容矩形 top 取负值；
+    // 浮现态回到 translateY(0)，内容矩形 top 落在带子里而非负。
+    const toolbarTop = () =>
+      focusToolbar.evaluate((node) => Math.round(node.getBoundingClientRect().top));
     // 上面那枚 Enter focus mode 就按在顶栏里，指针还停在带上：先移开再断言静默态。
     await page.mouse.move(640, 400);
-    await expect(focusToolbar).toHaveCSS("opacity", "0");
-    await page.mouse.move(640, 8);
-    await expect(focusToolbar).toHaveCSS("opacity", "1");
-    // 键盘路径不能因为淡出变成死胡同：聚焦到入口自己就浮现。
+    await expect.poll(toolbarTop).toBeLessThan(0);
+    // 触发沿就是那 4px：被抬走的带子只有 0~4 这一段还在视口里，指针落在 8px 就命中不到它。
+    await page.mouse.move(640, 2);
+    await expect.poll(toolbarTop).toBeGreaterThanOrEqual(0);
+    // 键盘路径不能因为收起变成死胡同：聚焦到入口自己就滑回。
     await page.mouse.move(640, 400);
-    await expect(focusToolbar).toHaveCSS("opacity", "0");
+    await expect.poll(toolbarTop).toBeLessThan(0);
     await exit.focus();
-    await expect(focusToolbar).toHaveCSS("opacity", "1");
+    await expect.poll(toolbarTop).toBeGreaterThanOrEqual(0);
 
     const outline = page.getByRole("navigation", { name: "Document outline" });
     await expect(outline).toBeHidden();

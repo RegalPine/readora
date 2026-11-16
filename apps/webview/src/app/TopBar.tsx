@@ -120,6 +120,8 @@ export function TopBar({
           type="button"
           className="readora-toolbar-button"
           aria-pressed="true"
+          aria-label="Exit focus mode"
+          title="Exit full screen reading mode"
           onClick={onToggleFocusMode}
         >
           Exit focus mode

@@ -1,13 +1,13 @@
-# M3 图表夹具（STORY-05-01 / 05-02，IMP-001 §9.4）
+# Pele 图表夹具（STORY-05-01 / 05-02，IMP-001 §9.4）
 
-本文件是 14 类图表源码的**唯一来源**：`packages/diagram-core` 的 Pele 兼容测试逐节解析它，
+本文件是 Pele 全部 33 类图表源码的**唯一来源**：`packages/diagram-core` 的兼容测试逐节解析它，
 浏览器 harness 直接把它当文档加载。夹具与单测各写一套源码的话，
 「测过的类型」和「看得见的类型」迟早会分叉。
 
 约定（解析规则见 `src/__tests__/fixture-source.ts`）：
 
 - 二级标题即用例 id；不带点的是**已注册类型**，必须出图；
-- `invalid.<name>` 必须落到错误态；`unregistered.<name>` 必须落到「类型未启用」；
+- `invalid.<name>` 必须落到错误态；全部内置类型都必须通过渲染和 SVG 安全检查；
 - 每节只取第一个围栏块，语言必须是 `mermaid`；
 - 每类源码都刻意混入中文、长文本、特殊字符（`< > & 「」 ()`）与大节点，避免只测最顺利路径。
 
@@ -219,6 +219,136 @@ xychart-beta
   line [30, 60, 45, 80]
 ```
 
+## agentflow
+```mermaid
+agentflow-beta TB
+  User[Reader] --> Agent[Assistant]
+```
+
+## architecture
+```mermaid
+architecture-beta
+  service api(server)[API]
+  service db(database)[DB]
+  db:R --> L:api
+```
+
+## block
+```mermaid
+block-beta
+  columns 2
+  A["Reader"]
+  B["Renderer"]
+```
+
+## c4
+```mermaid
+C4Context
+  Person(user, "Reader")
+  System(app, "Readora")
+  Rel(user, app, "reads")
+```
+
+## cynefin
+```mermaid
+cynefin-beta
+```
+
+## eventmodeling
+```mermaid
+eventmodeling
+```
+
+## ishikawa
+```mermaid
+ishikawa-beta
+  延迟交付
+    流程
+      审核耗时
+    人员
+      资源不足
+```
+
+## info
+```mermaid
+info
+```
+
+## journey
+```mermaid
+journey
+  title Reader journey
+  section Reading
+    Open document: 5: Reader
+```
+
+## kanban
+```mermaid
+kanban
+  Todo
+    task1[Read]
+  Done
+    task2[Finish]
+```
+
+## packet
+```mermaid
+packet-beta
+  0-7: "magic"
+  8-15: "length"
+```
+
+## radar
+```mermaid
+radar-beta
+  axis Ease,Speed,Quality
+  curve Current{3,4,5}
+```
+
+## railroad
+```mermaid
+railroad-ebnf-beta
+  entry = "start" "end" ;
+```
+
+## swimlane
+```mermaid
+swimlane-beta
+```
+
+## treemap
+```mermaid
+treemap-beta
+  "Root"
+    "Docs": 2
+```
+
+## treeView
+```mermaid
+treeView-beta
+  Readora/
+    docs/
+      guide.md
+```
+
+## usecase
+```mermaid
+usecase-beta
+  actor Reader("Reader")
+  Read("Read document")
+  Reader --> Read
+```
+
+## venn
+```mermaid
+venn-beta
+```
+
+## wardley
+```mermaid
+wardley-beta
+```
+
 ## invalid.syntax
 
 ```mermaid
@@ -235,23 +365,3 @@ graph TD
 ```
 
 识别不出类型 → `unknown-syntax`，同样走错误卡，不炸整篇。
-
-## unregistered.journey
-
-```mermaid
-journey
-  title 我的旅程
-  section 假
-    出发: 5, 小明, 很棒
-```
-
-## unregistered.pie-outer
-
-```mermaid
-packet
-  0-7: "magic"
-  8-15: "长度"
-```
-
-Pele 认得这些类型，但本产品没注册（ARC-003 §5.4）：显示源码 + 「类型未启用」，
-而不是空白容器或整篇失败。

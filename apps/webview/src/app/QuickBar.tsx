@@ -54,7 +54,16 @@ export function QuickBar({
       >
         {activeHeadingTitle ?? ""}
       </span>
-      <span className="readora-quickbar-progress" data-readora-quickbar="progress">
+      <span
+        className="readora-quickbar-progress"
+        data-readora-quickbar="progress"
+        role="progressbar"
+        aria-label="Document reading progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(Math.min(1, Math.max(0, progress)) * 100)}
+        aria-valuetext={`${formatProgress(progress)} through document`}
+      >
         {formatProgress(progress)}
       </span>
       {focusMode ? (

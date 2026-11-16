@@ -35,6 +35,17 @@ body {
   padding: var(--readora-space-12) var(--readora-space-6);
 }
 
+/* Keep long-form prose at a comfortable line length even when the reader canvas is wide. */
+.readora-canvas > .readora-document-header {
+  max-width: 72ch;
+  margin-inline: auto;
+}
+
+.readora-document :is(.readora-paragraph, .readora-heading, .readora-list, .readora-blockquote) {
+  max-width: 72ch;
+  margin-inline: auto;
+}
+
 .readora-loading {
   padding: var(--readora-space-12) var(--readora-space-6);
   color: var(--readora-color-text-muted);

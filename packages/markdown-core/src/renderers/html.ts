@@ -50,8 +50,12 @@ export const diagramBlockRenderer: MarkdownRenderer = {
       node.attributes?.["code_block"] === "true" ? ' data-readora-diagram-code-block="true"' : "";
     const filenameAttribute =
       filename.length > 0 ? ` data-readora-diagram-filename="${attr(escapeHtml(filename))}"` : "";
+    const diagramId = node.attributes?.["diagram_id"];
+    const idAttribute = typeof diagramId === "string" ? ` id="${attr(escapeHtml(diagramId))}"` : "";
+    const diagramTitle = node.attributes?.["diagram_title"];
+    const titleAttribute = typeof diagramTitle === "string" ? ` data-readora-diagram-title="${attr(escapeHtml(diagramTitle))}"` : "";
     return fragment(
-      `<div class="readora-diagram" data-readora-diagram-state="pending"${codeBlockAttribute}${filenameAttribute}${sizeAttributes(node)}>` +
+      `<div class="readora-diagram" data-readora-diagram-state="pending"${idAttribute}${titleAttribute}${codeBlockAttribute}${filenameAttribute}${sizeAttributes(node)}>` +
         `<p class="readora-diagram-note">Diagram rendering lands in M3 (ARC-003). Source is kept below.</p>` +
         `<pre class="readora-diagram-source"><code class="hljs">${escapeHtml(source)}</code></pre>` +
         `</div>`,

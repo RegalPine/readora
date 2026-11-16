@@ -73,6 +73,21 @@ pnpm install:check               # 显式步骤：`code --install-extension` 安
 `install:check` 打 `SKIPPED: <原因>` 并 exit 0 —— 那是「未执行」，不是「通过」；
 `test:e2e` 反过来会**明确报错**，静默跳过一支安全用例比红灯危险得多。
 
+### Mermaid 标题、引用与导出
+
+给图表添加稳定 ID 和显示标题，正文链接用标准 Markdown 片段语法跳转；图表工具栏可将当前渲染结果导出为带主题样式的 SVG 或 PNG，文件名取图表标题（未设置时回退到 `filename`）：
+
+````markdown
+[查看系统图](#system-map)
+
+```mermaid {diagram_id="system-map" diagram_title="System map"}
+flowchart TD
+  A[Read] --> B[Understand]
+```
+````
+
+`diagram_id` 仅允许字母开头的字母、数字、下划线和连字符；`diagram_title` 为纯文本，最长 120 个字符。省略这两个属性时图表照常渲染与导出。
+
 ## 能力边界（诚实声明）
 
 ### M1 · v0.1.0（Host / Webview 骨架）
@@ -1693,3 +1708,10 @@ PRD-003 → 1.3.0，另 AUD-001 补 §13.7）。按 0.x 顺延口径抬到 **0.1
 - 第三方许可证清单由 `pnpm notices` 生成为 `apps/extension/resources/NOTICES.md`
   （M8 起 **60 个包**，新增的是 `@codemirror/*` / `@lezer/*` 一族）；新增运行时依赖时要
   重跑，`pnpm verify` 断言它在包内
+
+#### Pele 全类型覆盖更新（0.11.0）
+
+- 注册 Pele 1.13.0 的全部 33 个内置图表入口；统一夹具逐类型验证识别、SVG 渲染和安全清洗。
+- 静态注册后的主包约 2.34 MB，超过原 2.2 MiB 护栏；按全类型覆盖范围将 `pnpm verify`
+  的主包上限调整至 2.4 MiB，实际字节数和基线差值仍由验证器输出。
+- 保留 CSP、安全限额和 SVG Sanitizer；不使用 Pele lazy 入口的运行时动态加载。

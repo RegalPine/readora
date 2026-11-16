@@ -281,6 +281,7 @@ export function OutlinePanel({
                   href={`#${node.item.anchor}`}
                   className="readora-outline-link"
                   title={label}
+                  aria-label={label}
                   aria-current={node.key === activeKey ? "location" : undefined}
                   onClick={(event) => {
                     // 阻止原生 hash 跳转：定位必须由 locator 统一执行（§5.3），

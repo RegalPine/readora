@@ -149,14 +149,8 @@ describe("门面暴露面", () => {
     expect(exportedNames).not.toContain("DIAGRAM_CORE_MILESTONE");
   });
 
-  it("注册集是 14 类且顺序稳定", () => {
-    expect(REGISTERED_DIAGRAM_TYPES).toHaveLength(14);
-    expect(REGISTERED_DIAGRAM_TYPES.slice(0, 5)).toEqual([
-      "flowchart",
-      "sequence",
-      "class",
-      "state",
-      "er"
-    ]);
+  it("注册 Pele 1.13.0 的全部 33 类图表", () => {
+    expect(REGISTERED_DIAGRAM_TYPES).toHaveLength(33);
+    expect(new Set(REGISTERED_DIAGRAM_TYPES).size).toBe(33);
   });
 });

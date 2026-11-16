@@ -1,5 +1,5 @@
 /**
- * 14 类图表兼容性测试（IMP-001 §9.4、F04-001~005 P0 清单）。
+ * Pele 全部 33 类图表兼容性测试（IMP-001 §9.4、F04-001~005 P0 清单）。
  *
  * 阶段 0 结论：Pele 在 jsdom + 注入 measurer 下可完整出图，因此兼容测试留在 vitest，
  * 浏览器 harness 只补「交互 / 主题 / 真实排版」那部分取证。
@@ -21,9 +21,9 @@ import {
 import { createDiagramEngine } from "../index";
 import {
   overLimitSource,
+  readDiagramFixture,
   registeredSections,
   sectionSource,
-  sectionsWithPrefix
 } from "./fixture-source";
 
 const measurer: DiagramTextMeasurer = {
@@ -32,12 +32,12 @@ const measurer: DiagramTextMeasurer = {
 
 const CASES = registeredSections();
 
-describe("Pele 14 类兼容渲染（jsdom + 注入 measurer）", () => {
+describe("Pele 33 类兼容渲染（jsdom + 注入 measurer）", () => {
   const engine = createDiagramEngine();
 
   it("夹具与注册集一一对应，缺类多类都算失败", () => {
-    expect(CASES.map((item) => item.id)).toEqual([...REGISTERED_DIAGRAM_TYPES]);
-    expect(REGISTERED_DIAGRAM_TYPES).toHaveLength(14);
+    expect(CASES.map((item) => item.id).sort()).toEqual([...REGISTERED_DIAGRAM_TYPES].sort());
+    expect(REGISTERED_DIAGRAM_TYPES).toHaveLength(33);
   });
 
   it("夹具确实承载了疑难字符，而不是被简化成最顺利路径", () => {
@@ -102,16 +102,11 @@ describe("非正常源码：识别得出来，也降级得下去", () => {
     });
   });
 
-  it("未启用类型显示为「未注册」而不是崩溃", async () => {
-    const sections = sectionsWithPrefix("unregistered.");
-    expect(sections.length).toBeGreaterThan(0);
-    for (const section of sections) {
-      const inspection = engine.inspect(section.source);
-      expect(inspection.detectedType, section.id).not.toBeNull();
-      expect(inspection.registered, section.id).toBe(false);
-      const diagnostic = await diagnosisOf(section.source);
-      expect(diagnostic.code, section.id).toBe(DIAGRAM_ERROR_CODES.NOT_REGISTERED);
-      expect(diagnostic.message, section.id).toContain(String(inspection.detectedType));
+  it("已启用 journey 和 packet 后标记为已注册", () => {
+    for (const id of ["journey", "packet"]) {
+      const section = readDiagramFixture().find((item) => item.id === id);
+      expect(section).toBeDefined();
+      expect(engine.inspect(section?.source ?? "").registered).toBe(true);
     }
   });
 

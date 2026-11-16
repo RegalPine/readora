@@ -34,6 +34,7 @@ export default defineConfig({
   reporter: [["list"], ["json", { outputFile: "test-results/playwright.json" }]],
   use: {
     baseURL: BASE_URL,
+    acceptDownloads: true,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off"

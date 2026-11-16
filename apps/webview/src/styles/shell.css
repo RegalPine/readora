@@ -281,14 +281,28 @@
  * 基线的 rects 全要重采。
  * 触发区就是这条带自己（:hover 命中它）；淡出不摘 tabindex，所以键盘 Tab 到入口
  * 同样浮现（:focus-within），不会因为看不见而把焦点丢在空气里。 */
-.readora-topbar[data-readora-topbar-reveal="hover"] .readora-toolbar--focus {
-  opacity: 0;
-  transition: opacity var(--readora-motion-normal) ease;
+.readora-topbar[data-readora-topbar-reveal="hover"] {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 70;
+  transform: translateY(calc(4px - 100%));
+  margin-bottom: calc(0px - var(--readora-topbar-height) + 4px);
+  transition: transform var(--readora-motion-normal) ease;
 }
 
-.readora-topbar[data-readora-topbar-reveal="hover"]:hover .readora-toolbar--focus,
-.readora-topbar[data-readora-topbar-reveal="hover"]:focus-within .readora-toolbar--focus {
-  opacity: 1;
+.readora-topbar[data-readora-topbar-reveal="hover"]:hover,
+.readora-topbar[data-readora-topbar-reveal="hover"]:focus-within {
+  transform: translateY(0);
+}
+
+.readora-shell[data-readora-focus-mode="true"] .readora-quickbar {
+  top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .readora-topbar[data-readora-topbar-reveal="hover"] {
+    transition: none;
+  }
 }
 
 /* 缩放组的三枚沿用同一套外观，但类名分开：`.readora-toolbar-button` 说的是
@@ -576,10 +590,6 @@
   line-height: 1.5;
 }
 
-.readora-settings-dialog:focus {
-  outline: none;
-}
-
 .readora-settings-header {
   display: flex;
   align-items: center;
@@ -739,10 +749,6 @@
   font-size: var(--readora-font-sm);
   /* 外壳控件不跟正文行高走（与 Settings 弹层同一条理由）。 */
   line-height: 1.5;
-}
-
-.readora-export-menu:focus {
-  outline: none;
 }
 
 .readora-export-menu-item {

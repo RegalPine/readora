@@ -15,6 +15,8 @@ import { describe, expect, it } from "vitest";
 import { buildAst } from "../ast";
 import {
   ALIGN_ATTR,
+  DIAGRAM_ID_ATTR,
+  DIAGRAM_TITLE_ATTR,
   FILENAME_ATTR,
   HEIGHT_ATTR,
   WIDTH_ATTR,
@@ -88,6 +90,16 @@ describe("块属性形状判定（attrs.ts）", () => {
     expect(isAllowedFilenameValue("a\u0007b")).toBe(false);
     expect(isAllowedFilenameValue("x".repeat(121))).toBe(false);
   });
+
+  it("图表 ID 与标题限制为可安全生成锚点和纯文本标签的值", () => {
+    expect(parseAttributeString('diagram_id="system-map" diagram_title="System map"')).toEqual({
+      [DIAGRAM_ID_ATTR]: "system-map",
+      [DIAGRAM_TITLE_ATTR]: "System map"
+    });
+    expect(parseAttributeString('diagram_id="bad id"')).toBeNull();
+    expect(parseAttributeString('diagram_title="<script>"')).toBeNull();
+    expect(parseAttributeString(`diagram_title="${"x".repeat(121)}"`)).toBeNull();
+  });
 });
 
 describe("三个挂载点", () => {
@@ -109,6 +121,17 @@ describe("三个挂载点", () => {
     expect(diagram.getAttribute("data-readora-diagram-filename")).toBe("flow");
     const [csvTable] = topLevel(documentOf("```csv {header=false}\na,b\n1,2\n```\n"));
     expect(csvTable?.attributes?.[ALIGN_ATTR]).toBeUndefined();
+  });
+
+  it("Mermaid 标题和 ID 成为可链接锚点，正文片段链接保留跳转目标", () => {
+    const result = htmlOf(
+      '[查看系统图](#system-map)\n\n```mermaid {diagram_id="system-map" diagram_title="System map"}\ngraph TD\nA-->B\n```\n'
+    );
+    expect(result).toContain('href="#system-map"');
+    expect(result).toContain('<div class="readora-diagram" data-readora-diagram-state="pending" id="system-map" data-readora-diagram-title="System map"');
+    const wrapper = container(result).querySelector(".readora-diagram") as HTMLElement;
+    expect(wrapper.id).toBe("system-map");
+    expect(wrapper.getAttribute("data-readora-diagram-title")).toBe("System map");
   });
 
   it("块级尾随：标题、段落、列表项、引用块、脚注定义都收 align", () => {

@@ -7,6 +7,7 @@
  * svg，且切主题时重画」。这一组只断言这些只有真实布局与真实解码能回答的事。
  */
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { nextFrame, openReader } from "../helpers/reader";
 
 /** 1×1 PNG：够让 `<img>` 真的走一遍解码，`naturalWidth` 为 1。 */
@@ -29,7 +30,9 @@ const IMAGE_DOC = ["# Image", "", "![截图](./assets/shot.png)", ""].join("\n")
 const DIAGRAM_DOC = [
   "# Diagram",
   "",
-  "```mermaid",
+  "[Jump to system map](#system-map)",
+  "",
+  '```mermaid {diagram_id="system-map" diagram_title="System map"}',
   "graph TD",
   "  A[Start] --> B{Done?}",
   "  B -->|yes| C[Ship]",
@@ -252,6 +255,37 @@ function viewBoxWidth(viewBox: string): number {
 }
 
 test.describe("图表", () => {
+  test("标题锚点可定位，SVG / PNG 可下载并以图表标题命名", async ({ page }) => {
+    await openReader(page, { text: DIAGRAM_DOC });
+    const block = page.locator(".readora-diagram");
+    await expect(block).toHaveAttribute("data-readora-diagram-state", "rendered", { timeout: 30_000 });
+    await expect(block.locator(".readora-diagram-filename")).toHaveText("System map");
+
+    // 该阅读器在内容容器内处理锚点并移动焦点，URL hash 保持不变。
+    await block.evaluate((node) => { node.scrollIntoView = () => {}; });
+    await page.locator('a[href="#system-map"]').click();
+    await expect(block).toBeFocused();
+
+    const svgDownloadPromise = page.waitForEvent("download");
+    await block.locator('[data-readora-diagram-action="export-svg"]').click();
+    const svgDownload = await svgDownloadPromise;
+    expect(svgDownload.suggestedFilename()).toBe("System-map.svg");
+    const svgPath = await svgDownload.path();
+    expect(svgPath).not.toBeNull();
+    const svg = await readFile(svgPath!);
+    expect(svg.toString("utf8")).toContain("<svg");
+    expect(svg.toString("utf8")).toContain("style=");
+
+    const pngDownloadPromise = page.waitForEvent("download");
+    await block.locator('[data-readora-diagram-action="export-png"]').click();
+    const pngDownload = await pngDownloadPromise;
+    expect(pngDownload.suggestedFilename()).toBe("System-map.png");
+    const pngPath = await pngDownload.path();
+    expect(pngPath).not.toBeNull();
+    const png = await readFile(pngPath!);
+    expect(png.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  });
+
   test("mermaid 真的画出 svg，且切主题时按新配色重画", async ({ page }) => {
     await openReader(page, { text: DIAGRAM_DOC });
 
@@ -415,7 +449,7 @@ test.describe("图表", () => {
       };
     });
 
-    expect(chrome.count).toBe(5);
+    expect(chrome.count).toBe(7);
     // 沿右：最后一个按钮贴右沿，首按钮左侧留出大段空白（图在栏内居中）。
     expect(chrome.rightGap).toBeLessThan(2);
     expect(chrome.leftGap).toBeGreaterThan(100);

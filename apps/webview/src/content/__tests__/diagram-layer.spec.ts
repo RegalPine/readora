@@ -115,7 +115,7 @@ describe("接管与懒挂载", () => {
     expect(h.calls[0]?.options?.zoom).toBe(true);
   });
 
-  it("接管后状态与结构齐备：工具栏五件套、源码节点仍在、状态为 rendered", () => {
+  it("接管后状态与结构齐备：工具栏支持缩放、导出和源码复制，状态为 rendered", () => {
     const h = setup(FLOW);
     const wrapper = h.container.querySelector<HTMLElement>(DIAGRAM_WRAPPER_SELECTOR) as HTMLElement;
     h.layer.scan(h.container);
@@ -131,6 +131,8 @@ describe("接管与懒挂载", () => {
       "zoom-out",
       "fit",
       "fullscreen",
+      "export-svg",
+      "export-png",
       "copy-source"
     ]);
     // 1:1 已按产品反馈下掉（窄图上它与 Fit 同义，宽图上又是一个让人猜该按哪的第二档）：
@@ -284,6 +286,85 @@ describe("工具栏指令转发", () => {
     await vi.waitFor(() => {
       expect(h.copy).toHaveBeenCalledWith("graph TD\n  开始 --> 结束\n");
     });
+  });
+
+  it("Export SVG 下载当前图表，并将主题样式内联到自包含 SVG", async () => {
+    const h = mounted();
+    const svg = h.container.querySelector("svg") as SVGSVGElement;
+    svg.setAttribute("viewBox", "0 0 240 120");
+    const node = document.createElementNS("http://www.w3.org/2000/svg", "text");
+    node.textContent = "Diagram";
+    svg.append(node);
+
+    const urlDescriptor = Object.getOwnPropertyDescriptor(window.URL, "createObjectURL");
+    const createObjectURL = vi.fn((_blob: Blob) => "blob:readora-diagram");
+    Object.defineProperty(window.URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    const clickAnchor = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      click(tool(h, "export-svg"));
+      expect(createObjectURL).toHaveBeenCalledOnce();
+      const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+      const content = await blob.text();
+      expect(blob.type).toContain("image/svg+xml");
+      expect(content).toContain('xmlns="http://www.w3.org/2000/svg"');
+      expect(content).toContain("data-readora-fake-svg=\"mounted\"");
+      expect(content).toContain("style=\"");
+      expect(clickAnchor).toHaveBeenCalledOnce();
+      expect(tool(h, "export-svg").textContent).toBe("Exported");
+    } finally {
+      if (urlDescriptor) Object.defineProperty(window.URL, "createObjectURL", urlDescriptor);
+      else delete (window.URL as unknown as { createObjectURL?: unknown }).createObjectURL;
+    }
+  });
+
+  it("Export PNG 将 SVG 栅格化为 PNG 并下载", async () => {
+    const h = mounted();
+    const created: Blob[] = [];
+    const urlDescriptor = Object.getOwnPropertyDescriptor(window.URL, "createObjectURL");
+    const revokeDescriptor = Object.getOwnPropertyDescriptor(window.URL, "revokeObjectURL");
+    const imageDescriptor = Object.getOwnPropertyDescriptor(window, "Image");
+    let imageSource = "";
+    Object.defineProperty(window.URL, "createObjectURL", {
+      configurable: true,
+      value: vi.fn((blob: Blob) => {
+        created.push(blob);
+        return `blob:readora-${created.length}`;
+      })
+    });
+    Object.defineProperty(window.URL, "revokeObjectURL", { configurable: true, value: vi.fn() });
+    class MockImage {
+      naturalWidth = 320;
+      naturalHeight = 160;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      set src(value: string) {
+        imageSource = value;
+        queueMicrotask(() => this.onload?.());
+      }
+    }
+    Object.defineProperty(window, "Image", { configurable: true, value: MockImage });
+    const drawImage = vi.fn();
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({ drawImage } as unknown as CanvasRenderingContext2D);
+    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
+      callback(new Blob(["png"], { type: "image/png" }));
+    });
+    const clickAnchor = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    try {
+      click(tool(h, "export-png"));
+      await vi.waitFor(() => expect(tool(h, "export-png").textContent).toBe("Exported"));
+      expect(imageSource).toMatch(/^data:image\/svg\+xml;charset=utf-8,/);
+      expect(created).toHaveLength(1);
+      expect(created[0]?.type).toBe("image/png");
+      expect(drawImage).toHaveBeenCalledOnce();
+      expect(clickAnchor).toHaveBeenCalledOnce();
+    } finally {
+      if (urlDescriptor) Object.defineProperty(window.URL, "createObjectURL", urlDescriptor);
+      else delete (window.URL as unknown as { createObjectURL?: unknown }).createObjectURL;
+      if (revokeDescriptor) Object.defineProperty(window.URL, "revokeObjectURL", revokeDescriptor);
+      else delete (window.URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL;
+      if (imageDescriptor) Object.defineProperty(window, "Image", imageDescriptor);
+      else delete (window as unknown as { Image?: unknown }).Image;
+    }
   });
 });
 
@@ -589,7 +670,7 @@ describe("围栏块属性（M10：code_block / filename / 尺寸）", () => {
     // 名字排在按钮之前，工具栏仍然是同一行：不新增第二行 chrome。
     const first = h.container.querySelector(".readora-diagram-toolbar > *");
     expect(first).toBe(label);
-    expect(h.container.querySelectorAll(".readora-diagram-tool")).toHaveLength(5);
+    expect(h.container.querySelectorAll(".readora-diagram-tool")).toHaveLength(7);
   });
 
   it("`filename=@外部文件` 属文件导入，本批不实现：值被拒收，不留半个假 affordance", () => {

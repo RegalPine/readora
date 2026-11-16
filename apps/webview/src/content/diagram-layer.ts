@@ -109,6 +109,8 @@ const TOOLS: readonly ToolDefinition[] = [
   // 名字也继续分开：顶栏那颗文档缩放按钮已经占着 “Reset zoom”。
   { action: "fit", label: "Fit", title: "Fit whole diagram" },
   { action: "fullscreen", label: "", title: "Fullscreen", icon: true },
+  { action: "export-svg", label: "SVG", title: "Export diagram as SVG" },
+  { action: "export-png", label: "PNG", title: "Export diagram as PNG" },
   { action: "copy-source", label: "Copy Source", title: "Copy diagram source" }
 ];
 
@@ -392,6 +394,70 @@ export function createDiagramLayer(deps: DiagramLayerDeps = {}): DiagramLayer {
     }, COPY_RESET_MS);
   }
 
+  async function exportDiagram(record: DiagramRecord, format: "svg" | "png", button: HTMLElement): Promise<void> {
+    const svg = record.container.querySelector("svg");
+    const view = record.wrapper.ownerDocument.defaultView;
+    if (!svg || !view) return;
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    // Pele 的 SVG 会引用主题 CSS。把当前渲染样式内联，导出的文件在编辑器外也能保持外观。
+    const originals = [svg, ...Array.from(svg.querySelectorAll("*"))];
+    const clones = [clone, ...Array.from(clone.querySelectorAll("*"))];
+    for (let index = 0; index < originals.length; index += 1) {
+      const original = originals[index];
+      const target = clones[index];
+      if (!original || !target) continue;
+      const computed = view.getComputedStyle(original);
+      const style = ["color", "fill", "fill-opacity", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-opacity", "font-family", "font-size", "font-weight", "text-anchor"]
+        .map((property) => [property, computed.getPropertyValue(property)] as const)
+        .filter(([, value]) => value.length > 0)
+        .map(([property, value]) => `${property}:${value}`)
+        .join(";");
+      if (style) target.setAttribute("style", style);
+    }
+    const serialized = new view.XMLSerializer().serializeToString(clone);
+    let blob = new Blob([serialized], { type: "image/svg+xml;charset=utf-8" });
+    let status = "Exported";
+    if (format === "png") {
+      const image = new view.Image();
+      try {
+        await new Promise<void>((resolve, reject) => {
+          image.onload = () => resolve();
+          image.onerror = () => reject(new Error("SVG rasterization failed"));
+          // Webview CSP allows data: images but intentionally denies blob: in img-src.
+          image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(serialized)}`;
+        });
+        const canvas = record.wrapper.ownerDocument.createElement("canvas");
+        const bounds = svg.getBoundingClientRect();
+        const viewBoxParts = (svg.getAttribute("viewBox") ?? "").trim().split(/[\s,]+/).map(Number);
+        const viewBoxWidth = Number.isFinite(viewBoxParts[2]) ? viewBoxParts[2] : 0;
+        const viewBoxHeight = Number.isFinite(viewBoxParts[3]) ? viewBoxParts[3] : 0;
+        canvas.width = Math.max(1, image.naturalWidth || Number(svg.getAttribute("width")) || Math.ceil(bounds.width) || viewBoxWidth || 1);
+        canvas.height = Math.max(1, image.naturalHeight || Number(svg.getAttribute("height")) || Math.ceil(bounds.height) || viewBoxHeight || 1);
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Canvas unavailable");
+        context.drawImage(image, 0, 0);
+        blob = await new Promise<Blob>((resolve, reject) =>
+          canvas.toBlob((result) => result ? resolve(result) : reject(new Error("PNG export failed")), "image/png")
+        );
+      } catch {
+        status = "Export failed";
+      }
+    }
+    if (status === "Export failed") {
+      button.textContent = status;
+      view.setTimeout(() => { button.textContent = labelFor(button.getAttribute(DIAGRAM_ACTION_ATTRIBUTE)); }, COPY_RESET_MS);
+      return;
+    }
+    const href = view.URL.createObjectURL(blob);
+    const anchor = record.wrapper.ownerDocument.createElement("a");
+    anchor.href = href;
+    anchor.download = `${exportBaseName(record.wrapper)}.${format}`;
+    anchor.click();
+    view.setTimeout(() => view.URL.revokeObjectURL(href), 1000);
+    button.textContent = status;
+    view.setTimeout(() => { button.textContent = labelFor(button.getAttribute(DIAGRAM_ACTION_ATTRIBUTE)); }, COPY_RESET_MS);
+  }
+
   function retry(record: DiagramRecord): void {
     clearCard(record);
     handled.delete(record.wrapper);
@@ -406,6 +472,18 @@ export function createDiagramLayer(deps: DiagramLayerDeps = {}): DiagramLayer {
 
   function labelFor(action: string | null): string {
     return TOOLS.find((tool) => tool.action === action)?.label ?? "Copy";
+  }
+
+  function exportBaseName(wrapper: HTMLElement): string {
+    const preferred = wrapper.getAttribute("data-readora-diagram-title") ?? wrapper.getAttribute(FILENAME_ATTRIBUTE) ?? "readora-diagram";
+    const safe = preferred
+      .normalize("NFKC")
+      .replace(/[\\/:*?"<>|]/g, "-")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^[-.]+|[-.]+$/g, "")
+      .slice(0, 80);
+    return safe.length > 0 ? safe : "readora-diagram";
   }
 
   function onClick(event: MouseEvent): void {
@@ -444,6 +522,12 @@ export function createDiagramLayer(deps: DiagramLayerDeps = {}): DiagramLayer {
       case "copy-source":
         void copySource(record, button as HTMLElement);
         break;
+      case "export-svg":
+        void exportDiagram(record, "svg", button as HTMLElement);
+        break;
+      case "export-png":
+        void exportDiagram(record, "png", button as HTMLElement);
+        break;
       case "toggle-source": {
         const open = wrapper.classList.toggle(SOURCE_OPEN_CLASS);
         paintSourceToggle(wrapper, open);
@@ -468,10 +552,11 @@ export function createDiagramLayer(deps: DiagramLayerDeps = {}): DiagramLayer {
     // `filename=…`：只开一个 textContent 写入面（与文件头的口径一致），
     // 文本永远不进 innerHTML，恶意文件名最多是一段难看的名字。
     const filename = wrapper.getAttribute(FILENAME_ATTRIBUTE);
-    if (filename !== null && filename.length > 0) {
+    const title = wrapper.getAttribute("data-readora-diagram-title") ?? filename;
+    if (title !== null && title.length > 0) {
       const label = owner.createElement("span");
       label.className = FILENAME_CLASS;
-      label.textContent = filename;
+      label.textContent = title;
       toolbar.append(label);
     }
     for (const tool of TOOLS) {

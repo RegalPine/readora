@@ -45,8 +45,7 @@ describe("Pele Adapter：引擎标识与能力识别", () => {
     const engine = newEngine();
     expect(engine.supports(FLOWCHART)).toBe(true);
     expect(engine.inspect(FLOWCHART)).toEqual({ detectedType: "flowchart", registered: true });
-    // journey 是 Pele 支持的类型，但不在本产品的 14 类注册集内。
-    expect(engine.inspect(JOURNEY)).toEqual({ detectedType: "journey", registered: false });
+    expect(engine.inspect(JOURNEY)).toEqual({ detectedType: "journey", registered: true });
     expect(engine.inspect("完全不是图表的一段话")).toEqual({
       detectedType: null,
       registered: false
@@ -80,17 +79,10 @@ describe("Pele Adapter：render", () => {
     });
   });
 
-  it("未注册类型给出 not-registered 而不是崩溃", async () => {
-    const engine = newEngine();
-    const error = await engine.render(JOURNEY, { measurer }).then(
-      () => null,
-      (raw: unknown) => raw
-    );
-    expect(error).toBeInstanceOf(DiagramRenderError);
-    const detail = (error as DiagramRenderError).detail;
-    expect(detail.kind).toBe("unsupported");
-    expect(detail.code).toBe(DIAGRAM_ERROR_CODES.NOT_REGISTERED);
-    expect(detail.message).toContain("journey");
+  it("Pele journey 类型正常渲染", async () => {
+    const result = await newEngine().render(JOURNEY, { measurer });
+    expect(result.type).toBe("journey");
+    expect(result.svg).toContain("<svg");
   });
 
   it("语法错误带行列位置", async () => {
@@ -160,16 +152,6 @@ describe("Pele Adapter：mount 生命周期", () => {
     zeroWidth.remove();
   });
 
-  it("未注册类型不进入引擎，直接 failed", () => {
-    const onError = vi.fn();
-    const engine = newEngine();
-    const container = mountContainer();
-    const diagram = engine.mount(container, JOURNEY, { measurer, onError });
-    expect(diagram.state).toBe("failed");
-    expect(diagram.error?.code).toBe(DIAGRAM_ERROR_CODES.NOT_REGISTERED);
-    expect(container.querySelector("svg")).toBeNull();
-    container.remove();
-  });
 
   it("语法错误经 onError 上报并落在 error 上", () => {
     const onError = vi.fn();

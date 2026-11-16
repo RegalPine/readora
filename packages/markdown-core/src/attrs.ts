@@ -27,13 +27,15 @@ import type { Token } from "./parser";
 /** 规则名（与 `readora.math_span` 同一前缀口径）。 */
 export const ATTR_RULE_NAME = "readora.attrs";
 
-/** 白名单键名：只有这六个键能被识别，其余一律整体拒绝。 */
+/** 白名单键名：只有显式登记的键能被识别，其余一律整体拒绝。 */
 export const ALIGN_ATTR = "align";
 export const WIDTH_ATTR = "width";
 export const HEIGHT_ATTR = "height";
 export const CODE_BLOCK_ATTR = "code_block";
 export const HEADER_ATTR = "header";
 export const FILENAME_ATTR = "filename";
+export const DIAGRAM_ID_ATTR = "diagram_id";
+export const DIAGRAM_TITLE_ATTR = "diagram_title";
 
 /** env 里的被拒记录键：管线据此产出 info 诊断（index.ts）。 */
 export const ATTR_ENV_KEY = "readoraAttrs";
@@ -76,7 +78,16 @@ const VALIDATORS: Record<string, (value: string) => boolean> = {
   [HEIGHT_ATTR]: isDelimitedSizeValue,
   [CODE_BLOCK_ATTR]: (value) => BOOLEAN_VALUES.has(value),
   [HEADER_ATTR]: (value) => BOOLEAN_VALUES.has(value),
-  [FILENAME_ATTR]: isAllowedFilenameValue
+  [FILENAME_ATTR]: isAllowedFilenameValue,
+  [DIAGRAM_ID_ATTR]: (value) => /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value),
+  [DIAGRAM_TITLE_ATTR]: (value) => {
+    if (value.length === 0 || value.length > 120 || /[<>]/.test(value)) return false;
+    for (let index = 0; index < value.length; index += 1) {
+      const code = value.charCodeAt(index);
+      if (code < 0x20 || code === 0x7f) return false;
+    }
+    return true;
+  }
 };
 
 /** 允许挂尾随属性的块级 token。 */

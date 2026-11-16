@@ -6,10 +6,22 @@
 /* ---------- 焦点环（ARC-006 §12 第 3 条） ----------
  * 用 :where() 把特异性压到 0，控件自己的 :hover / [aria-pressed] 样式不会被顶掉。 */
 
-:where(a, button, input, [tabindex]):focus-visible {
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
   outline: 2px solid var(--readora-color-focus);
   outline-offset: 2px;
   border-radius: var(--readora-radius-sm);
+}
+
+/* Maintain a visible keyboard position when a dialog or menu container itself receives focus. */
+:where([role="dialog"], [role="menu"]):focus-visible {
+  outline: 2px solid var(--readora-color-focus);
+  outline-offset: 2px;
+}
+
+@media (forced-colors: active) {
+  :where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+    outline-color: Highlight;
+  }
 }
 
 /* ---------- 图表容器、工具栏、错误卡与全屏（STORY-05-03） ---------- */
@@ -22,6 +34,10 @@
   border-radius: var(--readora-radius-lg);
   background: var(--readora-diagram-canvas);
   color: var(--readora-diagram-text);
+}
+
+.readora-diagram[id] {
+  scroll-margin-top: calc(var(--readora-topbar-height) + var(--readora-space-4));
 }
 
 .readora-diagram-note {

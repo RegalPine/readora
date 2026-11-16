@@ -32,9 +32,11 @@ const WEBVIEW_MAIN_CSS = "extension/dist/webview/assets/main.css";
  *   实测的 esbuild 估数（+465 kB）比真实增量小得多 —— 打包器不同（rolldown vs esbuild），
  *   所以登记的一律是打包后从 vsix 里量出来的数字。
  *
+ * 0.11.0 启用 Pele 1.13.0 全部 33 个图表入口：全量静态入口超过 2.2 MiB 护栏，
+ * 按已确认的全类型范围提到 2.4 MiB；不使用 CSP 下不可靠的 Pele lazy 运行时加载。
  * MAIN_JS_BASELINE_BYTES 让增量在输出里可见，不是悄悄放行。
  */
-const MAIN_JS_BUDGET_BYTES = 2.2 * 1024 * 1024;
+const MAIN_JS_BUDGET_BYTES = 2.4 * 1024 * 1024;
 /** M5 的实测基线，只用于把「本批 KaTeX 的真实代价」打印出来，不参与判定。 */
 const MAIN_JS_BASELINE_BYTES = 997_204;
 /**
