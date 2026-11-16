@@ -71,7 +71,6 @@ function decodeSegment(segment: string): string {
 
 export interface TopBarProps {
   outlineVisible: boolean;
-  focusMode: boolean;
   searchOpen: boolean;
   /** Reader Settings 弹层的开合，落到触发器的 `aria-expanded`。 */
   settingsOpen: boolean;
@@ -91,7 +90,6 @@ export interface TopBarProps {
 
 export function TopBar({
   outlineVisible,
-  focusMode,
   searchOpen,
   settingsOpen,
   exportOpen,
@@ -107,29 +105,9 @@ export function TopBar({
 }: TopBarProps) {
   const breadcrumb = breadcrumbOf(documentUri);
 
-  if (focusMode) {
-    // 专注模式：工具栏整体收起，只留退出入口（§11.2）。现在在哪一档由状态条右端的
-    // 模式标签说明，不占顶栏位置。
-    return (
-      <div
-        className={`${TOOLBAR_CLASS} ${TOOLBAR_CLASS}--focus`}
-        role="toolbar"
-        aria-label="Reading controls"
-      >
-        <button
-          type="button"
-          className="readora-toolbar-button"
-          aria-pressed="true"
-          aria-label="Exit focus mode"
-          title="Exit full screen reading mode"
-          onClick={onToggleFocusMode}
-        >
-          Exit focus mode
-        </button>
-      </div>
-    );
-  }
-
+  // 专注模式不在这里分支：那一段由 `ReaderShell` 整段不渲染，退出入口住在快速条
+  // 右侧。留一个 `focusMode` 在这里只会供出一个选不中的退出按钮（旧版就是这么
+  // 把退出入口藏到 4px 触发沿里的）。
   return (
     <div className={TOOLBAR_CLASS} role="toolbar" aria-label="Reading controls">
       <Breadcrumb segments={breadcrumb} documentUri={documentUri} />
@@ -178,8 +156,8 @@ export function TopBar({
             <ExportIcon />
             Export
           </button>
-          {/* 菜单只在非专注模式下可达：专注模式顶栏整体收起是现有口径（§11.2），
-              上面的早退分支不渲染这一段，导出也就随之不可达。 */}
+          {/* 菜单只在非专注模式下可达（§11.2，也是导出那轮的锁定口径：不新增第二条
+              入口）：专注模式下 `ReaderShell` 不渲染顶栏段，本段连同触发器一起不在 DOM。 */}
           <ExportMenu open={exportOpen} onSelect={onExport} onClose={onCloseExport} />
         </div>
         <button

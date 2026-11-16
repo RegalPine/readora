@@ -1,6 +1,6 @@
 {
   "name": "@readora/contracts",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "private": true,
   "type": "module",
   "description": "Host / Webview 通信契约（ARC-004 §8 权威协议的共享实现）",

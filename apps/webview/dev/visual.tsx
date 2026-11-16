@@ -253,7 +253,6 @@ function Fixture() {
           toolbar={
             <TopBar
               outlineVisible
-              focusMode={false}
               searchOpen={false}
               settingsOpen={false}
               exportOpen={false}
@@ -316,6 +315,7 @@ function Fixture() {
             focusMode={false}
             outlineExpanded={false}
             onToggleOutline={() => undefined}
+            onToggleFocusMode={() => undefined}
           />
         </ReaderShell>
       </ThemeProvider>

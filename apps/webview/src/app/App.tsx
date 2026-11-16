@@ -550,7 +550,6 @@ export function App({ bridge }: AppProps) {
         toolbar={
           <TopBar
             outlineVisible={shell.outlineVisible}
-            focusMode={shell.focusMode}
             searchOpen={searchOpen}
             settingsOpen={settingsOpen}
             exportOpen={exportOpen}
@@ -632,6 +631,7 @@ export function App({ bridge }: AppProps) {
           focusMode={shell.focusMode}
           outlineExpanded={focusOutline}
           onToggleOutline={toggleFocusOutline}
+          onToggleFocusMode={toggleFocusMode}
         />
         <ReadingCanvas
           payload={payload}

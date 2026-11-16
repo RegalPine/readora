@@ -268,42 +268,8 @@
   flex: 0 0 auto;
 }
 
-/* 专注模式只留退出入口（PRD-002 §11.2）。 */
-.readora-toolbar--focus {
-  justify-content: center;
-  gap: var(--readora-space-2);
-}
-
-/* 退出入口默认不显示，鼠标移到顶部才浮现（产品反馈：类浏览器全屏）。
- * 淡出只作用在工具栏内容上，段本身那 44px 不收：段一旦从流里拿掉，鼠标划过顶部
- * 就会把正文往下顶一下，“浮出即抖动”比留着一条空带更难接受；而浏览器的浮层
- * 覆盖正文需要把顶栏改 position: fixed 并给正文补等高的 padding，代价是四段栅格与
- * 基线的 rects 全要重采。
- * 触发区就是这条带自己（:hover 命中它）；淡出不摘 tabindex，所以键盘 Tab 到入口
- * 同样浮现（:focus-within），不会因为看不见而把焦点丢在空气里。 */
-.readora-topbar[data-readora-topbar-reveal="hover"] {
-  position: fixed;
-  inset: 0 0 auto;
-  z-index: 70;
-  transform: translateY(calc(4px - 100%));
-  margin-bottom: calc(0px - var(--readora-topbar-height) + 4px);
-  transition: transform var(--readora-motion-normal) ease;
-}
-
-.readora-topbar[data-readora-topbar-reveal="hover"]:hover,
-.readora-topbar[data-readora-topbar-reveal="hover"]:focus-within {
-  transform: translateY(0);
-}
-
-.readora-shell[data-readora-focus-mode="true"] .readora-quickbar {
-  top: 0;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .readora-topbar[data-readora-topbar-reveal="hover"] {
-    transition: none;
-  }
-}
+/* 专注模式不在这下面分支顶栏：那一段由 `ReaderShell` 整块不渲染，退出入口住在
+ * 快速条右侧（见本节后面的 `.readora-quickbar-exit`）。 */
 
 /* 缩放组的三枚沿用同一套外观，但类名分开：`.readora-toolbar-button` 说的是
  * 「顶栏动作」，缩放组是另一类控件（连排步进器），混在一个类里会让
@@ -487,8 +453,9 @@
 }
 
 /* ---------- 顶部章节条（§10.5） ----------
- * 不浮动、不卡片化：它是顶栏之下的第二条带，当前章节信息就在眼睛已经在的地方。
- * 贴顶量出让给顶栏高度，z-index 低于顶栏与搜索段，于是搜索面板展开时盖住它。 */
+ * 不浮动、不卡片化：常规档它是顶栏之下的第二条带，专注档顶栏不出现、它就是
+ * 唯一的那一条。当前章节信息就在眼睛已经在的地方。贴顶量出让给顶栏高度，
+ * z-index 低于顶栏与搜索段，于是搜索面板展开时盖住它。 */
 
 .readora-quickbar {
   position: sticky;
@@ -507,6 +474,15 @@
   /* 条高要算给定位预留：顶栏 45 + 本条 28 仍在 `--readora-navigation-offset`（5rem）
    * 以内，点目录后目标标题才不会藏在条子后头。 */
   line-height: 1.5;
+}
+
+/* 专注模式：顶栏段整块不渲染（见 `ReaderShell`），快速条因此贴顶，顶部不留空带。
+ * 上一版在这里留过一条 `top: 0` 的覆盖，叉出两个事故：它与 z-index 70 的顶栏浮层
+ * 叠在同一段里，把唯一的导航退路「Outline」的命中区盖掉了；而浮层改成不叠后，
+ * 这里不跟着贴顶就空出一条 44px 透明带，还把文档标题切掉半截。现在没有浮层，
+ * 贴顶就是安定的；定位预留也因此只剩本条这 28px。 */
+.readora-shell[data-readora-focus-mode="true"] .readora-quickbar {
+  top: 0;
 }
 
 /* 超长标题自动截断：`flex-basis: auto` + `min-width: 0` 才能真的缩，
@@ -554,6 +530,32 @@
 .readora-quickbar-button[aria-pressed="true"] {
   background: var(--readora-outline-active-bg);
   color: var(--readora-outline-active-color);
+}
+
+/* 退出入口默认不显示，鼠标移到本条（或键盘聚焦到本条）才浮现：产品反馈要「类
+ * 浏览器全屏」的观感，但触发区必须是本条这 33px。上一版把触发沿收成 4px，真实
+ * 面板里 `elementFromPoint` 在 y=8 就已是正文区，根本命中不到，用户退不出专注
+ * 模式。浮现后按钮原地不动，所以「想点它」与「触发它出现」是同一块区域。
+ *
+ * `pointer-events: none` 只摘这一枚按钮自己的命中：开关在它的祖先（快速条）上，
+ * 而按钮此刻不可见，留着命中区等于让人点到一枚隐形的退出。宽度不用 display
+ * 收放，于是浮现时这一行不跳位。 */
+.readora-quickbar-exit {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--readora-motion-normal) ease;
+}
+
+.readora-quickbar:hover .readora-quickbar-exit,
+.readora-quickbar:focus-within .readora-quickbar-exit {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .readora-quickbar-exit {
+    transition: none;
+  }
 }
 
 /* ---------- Reader Settings 弹层（§4.6 / §10.5） ---------- */

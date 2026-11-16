@@ -13,7 +13,13 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ZoomApi } from "../zoom";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_RESET } from "../zoom";
-import { BREADCRUMB_CLASS, BREADCRUMB_MAX_SEGMENTS, TopBar, breadcrumbOf } from "../TopBar";
+import {
+  BREADCRUMB_CLASS,
+  BREADCRUMB_MAX_SEGMENTS,
+  TOOLBAR_CLASS,
+  TopBar,
+  breadcrumbOf
+} from "../TopBar";
 
 afterEach(cleanup);
 
@@ -31,7 +37,6 @@ function zoomApi(overrides: Partial<ZoomApi> = {}): ZoomApi {
 }
 
 function bar(overrides: {
-  focusMode?: boolean;
   documentUri?: string;
   zoom?: ZoomApi;
 } = {}) {
@@ -47,7 +52,6 @@ function bar(overrides: {
   const view = render(
     <TopBar
       outlineVisible
-      focusMode={overrides.focusMode ?? false}
       searchOpen={false}
       settingsOpen={false}
       exportOpen={false}
@@ -128,17 +132,17 @@ describe("面包屑渲染", () => {
 });
 
 describe("顶栏不再有 pill（已迁到状态条右端）", () => {
-  test("常规档与专注档都不在顶栏输出 pill，专注档只剩退出入口一枚按钮", () => {
+  test("顶栏不输出 pill，也不再有专注档的退出入口", () => {
     expect(bar().view.container.querySelector("[data-readora-pill]")).toBeNull();
 
-    const focused = bar({ focusMode: true });
-    expect(focused.view.container.querySelectorAll("[data-readora-pill]")).toHaveLength(0);
-    // §11.2 收的是按钮：退出入口之外一个控件都不留。
-    // 走 container 不走 role 查询：同一条用例挂了两份顶栏，baseElement 是 document.body。
-    expect(focused.view.container.querySelectorAll("button")).toHaveLength(1);
-    expect(
-      focused.view.container.querySelector<HTMLButtonElement>(".readora-toolbar-button")?.textContent
-    ).toBe("Exit focus mode");
+    // 专注档不再走顶栏的分支（`TopBar` 已不接 `focusMode`）：那一段由 `ReaderShell`
+    // 整块不渲染，退出入口住在快速条，所以顶栏只该有常规形态这一套控件。
+    // 顶栏不供第二条退出入口，是“专注档只剩一枚退出按钮”这个旧口径能搬到
+    // 快速条的前提（§11.2 收的是入口数，不是它住在哪一段）。
+    const { view } = bar();
+    expect(view.container.querySelectorAll("[data-readora-pill]")).toHaveLength(0);
+    expect(view.container.querySelector('[aria-label="Exit focus mode"]')).toBeNull();
+    expect(view.container.querySelector(`.${TOOLBAR_CLASS}--focus`)).toBeNull();
   });
 });
 

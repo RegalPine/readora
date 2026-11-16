@@ -7,11 +7,14 @@ export default tseslint.config(
     // `test-results/` 是 `playwright.config.ts` 的 outputDir，与 `**/coverage/**` 同一性质：
     // 整目录都是跑出来的产物（trace / 截图 / JSON / 一次性取证脚本），不进任何人的评审面。
     // 不忽略它，任何一次 `pnpm test:e2e` 之后都可能多出一批与产品无关的 lint 报错。
+    // `.tmp-evidence/` 同一性质（已在 .gitignore 内）：门禁日志与临时取证脚本落在这里，
+    // 不忽略则每次出包都会因为几个 `require()` / `console` 报红。
     ignores: [
       "**/dist/**",
       "**/node_modules/**",
       "**/coverage/**",
       "**/test-results/**",
+      "**/.tmp-evidence/**",
       "docs/**",
       "*.vsix"
     ]

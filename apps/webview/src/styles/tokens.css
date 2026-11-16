@@ -99,23 +99,23 @@
 
   /* ---------- Primitive：图表系列色（ARC-003 §8.2 的 8 条通道） ---------- */
 
-  --readora-palette-light-series-1: #0969da;
-  --readora-palette-light-series-2: #8250df;
-  --readora-palette-light-series-3: #bf3989;
-  --readora-palette-light-series-4: #d1242f;
-  --readora-palette-light-series-5: #bc4c00;
-  --readora-palette-light-series-6: #9a6700;
-  --readora-palette-light-series-7: #1a7f37;
-  --readora-palette-light-series-8: #6639ba;
+  --readora-palette-light-series-1: #5b5bd6;
+  --readora-palette-light-series-2: #087e8b;
+  --readora-palette-light-series-3: #9a59c7;
+  --readora-palette-light-series-4: #b4535c;
+  --readora-palette-light-series-5: #b46b1d;
+  --readora-palette-light-series-6: #3977a8;
+  --readora-palette-light-series-7: #43805c;
+  --readora-palette-light-series-8: #8c6391;
 
-  --readora-palette-dark-series-1: #4493f8;
-  --readora-palette-dark-series-2: #d2a8ff;
-  --readora-palette-dark-series-3: #ff7b72;
-  --readora-palette-dark-series-4: #ffa657;
-  --readora-palette-dark-series-5: #7ee787;
-  --readora-palette-dark-series-6: #a5d6ff;
-  --readora-palette-dark-series-7: #f2cc60;
-  --readora-palette-dark-series-8: #ff9bce;
+  --readora-palette-dark-series-1: #a5a5ff;
+  --readora-palette-dark-series-2: #62c7cb;
+  --readora-palette-dark-series-3: #d5a0f2;
+  --readora-palette-dark-series-4: #ff9da5;
+  --readora-palette-dark-series-5: #f0b76b;
+  --readora-palette-dark-series-6: #83bde8;
+  --readora-palette-dark-series-7: #8bd3a1;
+  --readora-palette-dark-series-8: #d1a8d8;
 }
 
 /* ---------- 非颜色 Primitive（PRD-003 §5、§6、§7、§12） ---------- */
@@ -280,9 +280,11 @@
    * PELE_TOKEN_MAP 的清单里，于是暗色主题下连线仍是近黑色，贴在 `#10141a` 的画布上
    * 几乎看不见（实测两套主题 stroke 都是 rgb(31, 31, 31)）。取色走正文主色。 */
   --readora-diagram-line: var(--readora-color-text-primary);
-  --readora-diagram-surface: var(--readora-color-surface);
+  /* Pele 的时序图参与者框和普通节点都读 --pele-surface；这里用中性 raised surface，
+   * 避免强调色铺满每个节点。Accent 只用于图中明确的高亮元素。 */
+  --readora-diagram-surface: var(--readora-color-surface-raised);
   --readora-diagram-surface-subtle: var(--readora-color-surface-subtle);
-  --readora-diagram-accent: var(--readora-color-accent-text);
+  --readora-diagram-accent: var(--readora-color-accent-soft);
   --readora-diagram-font: var(--readora-font-family-body);
   /* 连线宽度：引擎不写 stroke-width，全部落在 SVG 初始的 1px（实测），在 HiDPI 屏上
    * 几乎看不出是条线。1.5px 与内置图标描边同口径（Icon.tsx 的 ICON_STROKE_WIDTH）。 */

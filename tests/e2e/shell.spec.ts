@@ -133,52 +133,71 @@ test.describe("外壳与状态条", () => {
     expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
   });
 
-  test("专注模式收掉大纲，退出入口默认淡出、鼠标移到顶部才浮现，快速条补上「展开大纲」这条导航退路", async ({ page }) => {
+  test("专注模式整段不输出顶栏：快速条贴顶不留空带，退出入口移到快速条上 hover 浮现且必可点", async ({ page }) => {
     await openReader(page);
     await expect(page.getByRole("button", { name: "Expand outline" })).toHaveCount(0);
+    const topbar = page.locator(".readora-topbar");
+    await expect(topbar).toHaveCount(1);
 
     await page.getByRole("button", { name: "Enter focus mode" }).click();
 
     await expect(page.locator(".readora-shell")).toHaveAttribute("data-readora-focus-mode", "true");
-    // 顶栏收成只剩退出入口（pill 在状态条那一段）：工具按钮一个都不留（§11.2）。
+    // 顶栏段不在 DOM：既没有第二条入口，也不给顶部留一条抬出视口的带子（§11.2）。
+    await expect(topbar).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Search in document" })).toHaveCount(0);
     await expect(page.locator('[data-readora-pill="mode"]')).toHaveText("Focus");
 
-    // 退出入口默认不显示，鼠标移到顶部才浮现（产品反馈：类浏览器全屏）。
-    // 断言量的是几何位置而不是 opacity：隐藏手段已从「淡出」换成整条带子
-    // `translateY` 抬出视口，opacity 在这条路径上恒为 "1"，拿它断言只会假绿。
-    // 量工具栏内容自己的矩形，选择器里带上门控属性，这样「属性没挂上」与
-    // 「挂了但不收起」两种跑偏都能红。
+    // 「透明占位」的直接反证：顶部那段命中的就是快速条本身，不是空的正文容器。
+    // 上一版这里 4~44px 是 `.readora-shell-main`，文档标题被切掉半截。
+    await expect(
+      page.evaluate(() => document.elementFromPoint(640, 20)?.closest(".readora-quickbar") !== null)
+    ).resolves.toBeTruthy();
+
+    // 退出入口默认不显示，鼠标移到快速条这一整条才浮现。这里断言量 opacity：
+    // 浮现手段就是淡入淡出本身，按钮原地不动（不靠位移），所以 opacity 是真结论；
+    // 但必须 poll 到稳态，过渡插值帧里的中间值不能作为结论。
     const exit = page.getByRole("button", { name: "Exit focus mode" });
     await expect(exit).toHaveCount(1);
-    const focusToolbar = page.locator(
-      '.readora-topbar[data-readora-topbar-reveal="hover"] .readora-toolbar--focus'
-    );
-    // transform 走 --readora-motion-normal 过渡，插值帧里的中间值不能作为结论：poll 到稳态。
-    // 两道稳态以视口上沿为分界：静默态整条带子被抬到 `4px - 100%`，内容矩形 top 取负值；
-    // 浮现态回到 translateY(0)，内容矩形 top 落在带子里而非负。
-    const toolbarTop = () =>
-      focusToolbar.evaluate((node) => Math.round(node.getBoundingClientRect().top));
-    // 上面那枚 Enter focus mode 就按在顶栏里，指针还停在带上：先移开再断言静默态。
+    const exitOpacity = () => exit.evaluate((node) => getComputedStyle(node).opacity);
     await page.mouse.move(640, 400);
-    await expect.poll(toolbarTop).toBeLessThan(0);
-    // 触发沿就是那 4px：被抬走的带子只有 0~4 这一段还在视口里，指针落在 8px 就命中不到它。
-    await page.mouse.move(640, 2);
-    await expect.poll(toolbarTop).toBeGreaterThanOrEqual(0);
-    // 键盘路径不能因为收起变成死胡同：聚焦到入口自己就滑回。
+    await expect.poll(exitOpacity).toBe("0");
+    // 触发区是快速条自己：33px 高、整屏宽，指针落在条子中间就该浮现。
+    // 旧版的触发沿只有 4px，停在 y=8 就命中不到，用户根本退不出专注模式。
+    await page.mouse.move(640, 20);
+    await expect.poll(exitOpacity).toBe("1");
+    // 键盘路径不能因为收起变成死胡同：聚焦到入口（祖先 :focus-within）同样浮现。
     await page.mouse.move(640, 400);
-    await expect.poll(toolbarTop).toBeLessThan(0);
+    await expect.poll(exitOpacity).toBe("0");
     await exit.focus();
-    await expect.poll(toolbarTop).toBeGreaterThanOrEqual(0);
+    await expect.poll(exitOpacity).toBe("1");
+
+    // 浮现后入口原地可点：click 会把指针带到按钮中心，那里仍在快速条内，
+    // hover 不会在点击前收回 —— 触发区与命中区同域是这版设计的核心。
+    await exit.click();
+    await expect(page.locator(".readora-shell")).not.toHaveAttribute(
+      "data-readora-focus-mode",
+      "true"
+    );
+    await expect(topbar).toHaveCount(1);
+  });
+
+  test("专注模式的「展开大纲」不被任何浮层遮挡，退出后目录按偏好回来", async ({ page }) => {
+    await openReader(page);
+    await page.getByRole("button", { name: "Enter focus mode" }).click();
 
     const outline = page.getByRole("navigation", { name: "Document outline" });
     await expect(outline).toBeHidden();
 
+    // 指针停在顶部那一条上（退出入口此刻正浮现）去按 Outline：上一版这里会被
+    // z-index 70 的顶栏浮层吃掉命中，30s 超时停在 subtree intercepts pointer events。
+    await page.mouse.move(640, 20);
     await page.getByRole("button", { name: "Expand outline" }).click();
     await expect(outline).toBeVisible();
 
-    await exit.click();
+    // 收起态是临时态：退出专注后回到「大纲按偏好显示」，不改写用户偏好。
+    await page.getByRole("button", { name: "Exit focus mode" }).click();
     await expect(outline).toBeVisible();
+    await expect(page.getByRole("button", { name: "Expand outline" })).toHaveCount(0);
   });
 
   test("Reader Settings 触发器如实报告弹层开合（aria-haspopup + aria-expanded）", async ({ page }) => {

@@ -1679,6 +1679,227 @@ PRD-003 → 1.3.0，另 AUD-001 补 §13.7）。按 0.x 顺延口径抬到 **0.1
 - 沿用 M6 / M7 / M8 / M9 / M10 的未闭合项：侧栏宽度拖拽、真实 publisher 与 `repository` 字段、
   CI 工作流、Git Tag 与 commit（本批同样**不 commit、不 tag、不 push**）
 
+### M12 · v0.12.0（图表标识与标题锚点、图表级 SVG / PNG 导出，并归档 v0.11.0 覆盖重打后的未发布变更）
+
+能力来源两条：一是 MPE 对比里挂着许久的「图表单块导出」（M3 那行 F04-038 / F04-039，M11 的整篇
+三级导出并没有兑现它，本轮才补上），二是用户实测反馈「正文要能跳到某张图、图要有个名字」。
+六条口径先锁再动手：**属性走既有 `readora.attrs` 白名单**（不新增规则名、不新开 `{}` 语法面）、
+**`diagram_id` 只做片段锚点**（不做跨块唯一性校验，重复 id 落 DOM 第一个，是浏览器原生行为）、
+**导出是图表级而不是文档级**（与 M11 那三条 `showSaveDialog` 通道互不相干，两条管线共用不了实现）、
+**文件名取 `diagram_title`，缺席回退 `filename`，再回退 `readora-diagram`**、**导出走浏览器下载**
+（`<a download>` + `URL.createObjectURL`），不进 Host 保存面板、不新开任何 CSP 面、**外观与屏上
+一致**（导出前把 computed style 逐元素内联，脱离阅读器样式表也是同一个观感）。落点
+`packages/markdown-core`（白名单两键 + 校验器 + 围栏渲染）、`apps/webview`（工具栏两枚 + 样式 +
+无障碍）、`packages/diagram-core`（Pele 全类型，见归档一）、`tests`；docs 五份一字未改，缺口登记在
+下方偏差。按 0.x 顺延口径抬到 **0.12.0**（8 处 `package.json`）。
+
+已实现：
+
+- **白名单两键与校验器**（`packages/markdown-core/src/attrs.ts`）：`diagram_id` 走
+  `^[A-Za-z][A-Za-z0-9_-]{0,63}$`（字母开头，只容字母 / 数字 / 下划线 / 连字符，总长 ≤ 64）；
+  `diagram_title` 需非空且 ≤ 120 字符，含 `<` `>` 或任一 C0 控制字符（`< 0x20` 与 `0x7f`）即判不合格。
+  两者都沿用该规则既有那一条「任一键不合格 ⇒ 整串不认，正文一个字都不少 + 一条 `ATTRS_REJECTED`
+  info 诊断」，不做逐键忽略（「一半生效」是最难排查的那类失效）。挂载点是围栏 info 尾部，与 M10
+  那六键同一个入口；`attrs.spec.ts` 现 **20 条**
+- **渲染落在围栏块容器本身**（`renderers/html.ts` 的 `diagramBlockRenderer`）：`id="…"` 与
+  `data-readora-diagram-title="…"` 都走既有 `escapeHtml` + `attr()` 双重出口，不新增属性写入面；
+  `.readora-diagram[id]` 补 `scroll-margin-top: calc(var(--readora-topbar-height) + var(--readora-space-4))`，
+  锚点跳转后目标不会被贴顶的快速条盖住；工具栏那枚名字标签现在优先取标题、无标题才回退 `filename`
+- **正文片段链接**：`[查看系统图](#system-map)` 复用既有 link policy（不新增协议、不改 `href` 形态），
+  e2e 钉住点击后图表容器成为焦点且 `location.hash` 不变
+- **图表级 SVG / PNG 导出**（`apps/webview/src/content/diagram-layer.ts`）：`TOOLS` 新增
+  `export-svg` / `export-png` 两枚，工具栏内 `button` 实测由 **5 枚增至 7 枚**。SVG 路径：克隆节点 →
+  逐元素把 13 条绘制属性（`color` / `fill` / `fill-opacity` / `stroke*` / `font-*` / `text-anchor`）的
+  computed 值写进 `style=` → `XMLSerializer` 序列化 → `image/svg+xml;charset=utf-8` 的 `Blob`；
+  PNG 路径把同一串序列化结果以 `data:image/svg+xml` 喂给 `Image`（面板 CSP 的 `img-src` 允许 `data:`
+  而刻意禁 `blob:`，所以光栅化走 `data:`，只有下载那一份才 `createObjectURL`）→ canvas `drawImage` →
+  `toBlob`；两条都不为新功能放宽任何一条 CSP
+- **导出失败不伪装成功**：光栅化失败或 canvas 拿不到时只把按钮文字改成 `Export failed`，
+  `COPY_RESET_MS` 后按 `data-readora-diagram-action` 复位，不弹通知、不改图表状态属性；文件名走
+  `exportBaseName`：NFKC 归一 + `\/:*?"<>|` 与空白转 `-` + 连字符折叠 + 去首尾 `-.` + 截 80 字符，
+  净化后为空则落回 `readora-diagram`。`diagram-layer.spec.ts` 现 **30 条**；e2e 那条真读下载文件：
+  SVG 含 `<svg` 与 `style=`，PNG 头 8 字节等于 `89 50 4E 47 0D 0A 1A 0A`，文件名分别是
+  `System-map.svg` / `System-map.png`
+- **无障碍与焦点可见性收口**：`:focus-visible` 环的选择器从 `a, button, input, [tabindex]` 扩到
+  `select, textarea, summary, [role="button"]`，并补 `[role="dialog"], [role="menu"]` 容器级一环；
+  删掉 `.readora-settings-dialog:focus{outline:none}` 与 `.readora-export-menu:focus{outline:none}`
+  这两处「拿到焦点就把环关掉」的写法；`@media (forced-colors: active)` 下描边改 `Highlight`；
+  快速条进度补 `role="progressbar"` 与 `aria-valuemin` / `max` / `now` / `text` 四件；专注模式退出钮
+  补 `aria-label="Exit focus mode"` 与 `title`；目录链接补 `aria-label`
+- **专注模式顶栏改「整条抬出视口」**（本轮做法已被下一节「补丁」推翻，这里留下过
+  程与当时取证）：旧写法是工具栏内容 `opacity: 0`（带子留在流里当触发区），代价是顶部
+  永挂一条 44px 空横带；本轮把段本身改成 `position: fixed` + `translateY(calc(4px - 100%))`，
+  `:hover` / `:focus-within` 滑回 0，`prefers-reduced-motion` 关过渡，触发区就是那 4px 余量。
+  **同时它带出一处真 bug**：那批改动顺手把快速条的 `top` 覆盖成 0，于是它与 z-index 70 的
+  浮层落在同一段 0~44px，专注模式里唯一的导航退路「Outline」在浮层浮现态被自己的触发区
+  挡住 —— `locator.click()` 停在「subtree intercepts pointer events」直到 30 s 超时。当时的修法
+  是不覆盖 `top`（快速条继续钉在 `--readora-topbar-height` 下方）；e2e 侧把断言从 computed
+  `opacity` 换成工具栏矩形，并在退出前先把指针移到顶部沿唤出浮层。这条用例是在改 CSS
+  之前就是红的，不是测试噪声 —— 但「不覆盖 `top`」这一半把遮挡换成了空带，用户实测
+  两个问题都还在，见下一节
+- **长文行宽**：`.readora-canvas > .readora-document-header` 与正文 `p / heading / list / blockquote`
+  统一 `max-width: 72ch` + `margin-inline: auto`，宽窗口下不再拉成整屏一行
+
+#### 归档一 · Pele 全类型覆盖与主包预算（随 v0.11.0 覆盖重打出产物，从未进过发布文档）
+
+- 注册 Pele 1.13.0 的全部 **33** 个内置图表入口（原 14 类），逐类型静态 import，不用 lazy 入口的
+  运行时动态加载（那在面板 CSP 下不可靠）；统一夹具 `tests/fixtures/diagrams.md` 逐类型验证识别、
+  SVG 渲染与安全清洗，`pele-compat.spec.ts` 的清单与 `REGISTERED_DIAGRAM_TYPES` 逐项对应。
+- 静态注册后 `main.js` 到 2 343 242 B，越过原 2.2 MiB（2 306 867 B）护栏：`verify-vsix.mjs` 的
+  `MAIN_JS_BUDGET_BYTES` 按已确认的覆盖范围提到 2.4 MiB（2 516 582 B），实测字节与 M5 基线差值
+  仍由验证器打印，不做静默放行。
+- CSP、安全限额与 SVG Sanitizer 一字未动。
+- 这一批连同上面两条（无障碍收口、72ch 行宽）是在 0.11.0 那枚**覆盖重打**的产物里发出去的：
+  磁盘现存那枚 `readora-0.11.0.vsix`（1 525 589 B）的 `main.js` 已含 `wardley`、
+  `Document reading progress`，`main.css` 已含 `forced-colors` 与 `72ch`（解包 `indexOf` 取证），
+  而这些在 README M11 那一节一个数字都没有。本节把它们转成有记录的内容。
+
+门禁与产物（数字均来自本机当次实跑，跑在含遮挡修复的最终树上）：
+
+- 门禁链八项逐项 EXIT=0：`lint` / `typecheck` / `test` / `visual:check` / `test:e2e` / `perf` /
+  `package` / `verify`。遮挡修复之后 `test` 与 `test:e2e` 各自重跑过一遍，两遍均 EXIT=0
+- 单元与组件测试 **1587 条 / 86 文件** 0 失败（M11 记 1561 / 86：**+26 条 / 文件数持平**）。
+  分档实测：webview **729 / 36**、extension **326 / 20**、markdown-core **309 / 19**、
+  diagram-core **119 / 7**、contracts **41 / 1**、design-tokens **63 / 3**。+26 条里 diagram-core 的
+  **+18** 来自 Pele 全类型夹具、markdown-core 的 **+2** 来自属性白名单、webview 的 **+2** 来自图表
+  工具栏导出；extension 的 **+4** 与 M11 记的 322 对不上，而本轮该包源码一字未动
+  （`git diff --name-only HEAD -- apps/extension` 为空）—— 差额同属上面那条归档，
+  覆盖重打那一轮只重打了产物，没补记任何数字
+- Playwright **119 条 / 18 文件** 0 失败（e2e **75** / security **30** / integration **14**；M11 是
+  118 / 18，+1 条就是 `tests/e2e/media.spec.ts` 那条锚点 + SVG/PNG 下载用例）。计数取自
+  `test-results/playwright.json` 的逐文件读数，不用会把 `test.describe(` 算进去的行首正则
+- `pnpm visual:check` **10 档全等**，每档 209 个 Token；基线**未重采**，理由实测：本批改动落在
+  只随专注模式出现的顶栏浮层支路、`.readora-diagram[id]` 与 `forced-colors` /
+  `prefers-reduced-motion` 支路，而基线采的是非专注档的四段栅格
+- `pnpm perf`：首屏 small 4 482 B P50 27 / P95 38 ms，medium 123 338 B P50 339 / P95 347 ms，
+  large 410 304 B P50 1002 / P95 1127 ms（主口径阈值 300 / 800，large 无产品门槛，三档均达标）；
+  主题切换 P95 101.9 ms（≤ 150）、目录定位 P95 44.3 ms（≤ 100）、普通文档刷新 P95 15 ms（≤ 300）、
+  中型文档刷新 P95 383 ms（参考值）；生命周期探针 DOM 节点 **27 967 → 27 967**，堆 195.5 MB → 195.5 MB
+- `pnpm package` → `apps/extension/readora-0.12.0.vsix` **39 files / 1 526 501 B**，`main.js`
+  **2 343 242 B**（verify 打 2288.3 kB，预算 2458 kB —— 那是 KiB 口径，余量 173 340 B；M5 基线
+  997 204 B，差 +1 346 038 B）、`main.css` **81 059 B**（预算 160 KiB）、`extension.js` 1.64 MB；
+  27 个 woff2（此中 KaTeX 20）、无 woff/ttf、`main.css` 的 27 条 `url()` 全部在归档内解析；
+  `pnpm verify` 十项 marker 全 OK、激活冒烟 **9/9**。旧的 `readora-0.11.0.vsix` **未被覆盖**
+  （verify 开头打 `NOTE ignoring stale artifacts: readora-0.11.0.vsix`），两枚并存可对照：与 0.11.0
+  相比 `main.js` **+2 849 B**、`main.css` **−31 B**（遮挡修复删了两条规则）、vsix **+912 B**
+- **产物内容实证**（解包后按字面 `indexOf` 计数，不把待测串塞进 `new RegExp`）：`main.js` 命中
+  `export-svg` 2、`export-png` 2、`Export diagram as SVG` 1、`Export diagram as PNG` 1、
+  `data-readora-diagram-title` 3、`diagram_title` 2、`SVG rasterization failed` 1；`main.css` 命中
+  `translateY(calc(4px - 100%))` 1、`.readora-diagram[id]` 1、`forced-colors` 2、`72ch` 1；反向断言
+  `[data-readora-focus-mode="true"] .readora-quickbar` **0 命中**（遮挡那行确实被移出产物）；
+  包内 `extension/package.json` 版本回读 **0.12.0**
+- 面向用户的说明写在本文「常用命令」之后的《Mermaid 标题、引用与导出》一节（属性名、取值约束
+  与省略时的行为都在这里）
+
+偏差登记（M12）：
+
+- **文档落后实现两轮**：无障碍收口、72ch 行宽、Pele 全类型三批是在 0.11.0 那枚覆盖重打的产物里
+  发出的，README 直到本节才补记。因此 M11 那节的 1 412 657 B / 1561 条 / 1984.0 kB 已不对应任何一枚
+  现存产物；「同一版本号对应两种产物内容」在 0.11.0 上已经发生，而 `.gitignore` 含 `*.vsix`，
+  首打那枚不可从 git 找回（只能回到当时源码重打复现）
+- **docs 五份一字未改**：图表级导出（F04-038 / F04-039）在 ARC-003 / ARC-008 里仍写着未纳入，
+  块属性两把新键也没进 PRD-001 的属性表；AUD-001 的状态行按该报告自己的口径不回改，也不为它
+  开新章节 —— 那需要一次独立的 docs 修订轮，本节只把它登记为缺口而不是顺手改
+- **图表导出的落点由下载行为决定**：走 `<a download>` + `URL.createObjectURL`，不进 M11 那条
+  `showSaveDialog` 通道，因此没有覆盖确认、没有 `outputDir`、也不参与「每次都要用户选路径」那条授权
+  口径；`playwright.config.ts` 为此新增一项 `acceptDownloads: true`。真实 VS Code 面板里的下载观感
+  **未目视确认**
+- **`diagram_id` 不做唯一性校验**：重复 id 时锚点落在 DOM 里第一个（浏览器原生行为），不报错也不
+  给诊断；跳文档引用不在本批范围，只支持同一文档内的 `#id`
+- **PNG 尺寸取当前渲染像素**（`naturalWidth` → `width` 属性 → `getBoundingClientRect()` → `viewBox`
+  四级回退），没有 DPI / 倍率 / 自定义宽高选项；主题样式靠逐元素内联而不是附带一份 CSS，
+  导出件因此是「快照」而不是「可再样式化的文件」
+- **遮挡回归是在门禁里发现而不是在设计评审里**：那枚被推走的 0.11.0 产物并没跑过 e2e 全链，
+  所以 M11 记录的「八项 EXIT=0」与磁盘上现存那枚 0.11.0 产物不是同一次动作的产物
+- **本批未新开护栏也未收紧任何一条**；`MAIN_JS_BUDGET_BYTES` 从 2.2 MiB 到 2.4 MiB 是上一批
+  （Pele 全类型）动过的，本节只是把它如实记下
+- **本批的 git 事实与 M11 不同**：工作副本在本轮进行中被提交并推送过（`87a2ad3`，含 8 处版本号与
+  图表属性 / 导出那批源码），但**遮挡回归的两处修复（`shell.css` + `shell.spec.ts`）与本节 README**
+  并未进入那枚 commit —— 已推的那棵树同时带着「浮层挡住 Outline」与「顶部空带」两个缺陷，而
+  0.12.0 那枚 vsix 是从只修了前者的树上打的。v0.12.1 出包时，包后的全部源码（含专注模式
+  重做与 `eslint.config.js` 那一行 ignore）**仍未进入任何 commit**，HEAD 与实际交付物不同源。
+  仓库仍无 tag
+
+未纳入（不得对外宣称）：
+
+- 图表级导出在真实宿主里的观感与落点（下载条、覆盖确认、Windows / Linux 差异）；
+  图表导出到剪贴板、DPI / 倍率选项、多图表批量导出、写进 SVG 的 `<title>` / `<desc>` 元数据
+- `diagram_id` 的唯一性检查与跳文档锚点；`{: …}` 独占行与 `.class` / `#id` 简写两类挂载点（承 M10）
+- 专注模式只做到「指针进入快速条这一整条即浮现」，没有自动隐藏计时器与「离开多少像素才收」
+  的调参；浮现也只走 opacity，没做位移或缩放动画（上一版把顶栏整段抬出视口带出的问题见「补丁」
+  一节，那版已被推翻）
+- 沿用 M6 / M7 / M8 / M9 / M10 / M11 的未闭合项：侧栏宽度拖拽、真实 publisher、CI 工作流、
+  Git tag、`WebviewPanelSerializer`、`@import` 文件包含、`customCssFile`、远程图片逐次授权、
+  数学公式配置面、PDF 版面可配
+
+#### 补丁 · 专注模式顶部区域重做，出为 v0.12.1
+
+用户实测反馈「专注模式 topbar 隐藏了，但透明占位还在，没法退出专注模式」。两条都在真实
+Chromium 里逐 y 取证（`elementFromPoint` + 矩形读数）后坐实：
+
+- **触发区只有 4px**：段被抬到 `top = -41 / bottom = 4`，指针停在 y = 8 / 16 / 24 / 30 命中的
+  都是 `.readora-shell-main`，`:hover` 不成立 → 退出入口无法经「移到顶部」唤出，用户被
+  困在专注模式里。4px 不是可用人因目标，而上一轮把断言改成矩形后仍全绿，因为用例
+  直接把指针放在 `page.mouse.move(640, 2)` —— 测试与产品验证了同一件事，不等于可用
+- **透明占位是真的**：段从流里拿走后快速条仍钉 `top: 44`，于是 4~44px 是一段空带（截图
+  可直接看到），且快速条压在 `.readora-document-header`（57~138）上把文档标题切掉半截
+
+两者在结构上互相冲突：同一段顶部区域不能既给浮层当触发、又给快速条当点击。用户选定
+「只留一条贴顶快速条」：
+
+- `ReaderShell` 在专注模式下**不输出顶栏段**；`TopBar` 因此不再接 `focusMode`，专注分支与
+  `.readora-toolbar--focus` 规则一并删除 —— 隐藏的东西不留占位，也不留选不到的控件
+- 退出入口搬到 `QuickBar` 右侧动作组，排在「展开大纲」之后（`data-readora-quickbar="exit"`，
+  `aria-label="Exit focus mode"` 与 `title` 沿用旧值，e2e 与无障碍口径不变）
+- 浮现由快速条自己的 `:hover` / `:focus-within` 驱动，作用在这枚按钮的 `opacity` +
+  `pointer-events` 上：触发区因此是快速条整条（实测 33px 高、整屏宽），按钮原地不动，
+  「想点它」与「触发它出现」同域，不存在上一版那种抢命中。宽度不用 `display` 收放，
+  浮现时这一行不跳位；`prefers-reduced-motion` 关过渡
+- 快速条在专注档 `top: 0` 贴顶（实测 `top = 0 / bottom = 33`），顶部无空带、标题不再被切
+
+门禁与产物（数字均为本机当次实跑；修的是已出产物里的回归、无新能力，按 0.x 口径走 patch
+位：8 处 `package.json` 0.12.0 → **0.12.1**，不覆盖重打旧包）：
+
+- 门禁链八项逐项 EXIT=0：`lint` / `typecheck` / `test` / `visual:check` / `test:e2e` / `perf` /
+  `package` / `verify`。单元 **1588 条 / 86 文件**（webview **730 / 36**，比上面 M12 记的 729 多
+  一条 = 新增的退出入口用例）；Playwright **120 条 / 18 文件**（e2e **76** / security **30** /
+  integration **14**；`shell.spec.ts` 8→9：原专注用例拆成「顶部区域与浮现」与「Outline 不被
+  遮挡」两条）；`visual:check` **10 档全等** 209 Token，基线**未重采**（本批只动专注档支路，
+  非专注档的顶栏与快速条渲染一字未改）
+- `pnpm perf`：small 4 482 B P50 38 / P95 45 ms，medium 123 338 B P50 371 / P95 425 ms，
+  large 410 304 B P50 1 060 / P95 1 112 ms（主口径阈值 300 / 800，三档均达标）；主题切换
+  P95 106.1 ms（≤ 150）、目录定位 P95 51.3 ms（≤ 100）、普通文档刷新 P95 15 ms（≤ 300）、
+  中型文档刷新 P95 442 ms（参考）；生命周期探针 DOM 节点 **27 967 → 27 967**，堆 195.5 MB →
+  195.5 MB。与 M12 那行读数相比三档首屏 P50/P95 均有 10~20% 波动（同一台机器、同一
+  样本数 25，本轮代码只删不增），不归因于本批改动也不当作已排除
+- `pnpm package` → `apps/extension/readora-0.12.1.vsix` **39 files / 1 526 447 B**；`main.js`
+  **2 343 127 B**（verify 打 2288.2 kB，那是 KiB；预算 2 516 582 B，余量 173 455 B）、`main.css`
+  **80 936 B**；与 0.12.0 相比 `main.js` **−115 B**、`main.css` **−123 B**、vsix **−54 B**（删掉
+  浮层与专注分支那几条规则与控件）。旧的 `readora-0.11.0.vsix` 与 `readora-0.12.0.vsix`
+  **均未被覆盖**（verify 开头打 `NOTE ignoring stale artifacts: readora-0.11.0.vsix,
+  readora-0.12.0.vsix`），三枚并存可对照
+- **产物内容实证**（解包后按字面 `indexOf` 计数，不把待测串塞进 `new RegExp`）：`main.js` 命中
+  `readora-quickbar-button readora-quickbar-exit` 1、`"data-readora-quickbar":`＋反引号 `exit` 1、
+  `"aria-label":`＋反引号 `Exit focus mode` 1、`Exit full screen reading mode` 1；反向断言
+  `topbar-reveal` **0**、`readora-toolbar--focus` **0**。`main.css` 命中 `.readora-quickbar-exit` 4、
+  `quickbar:focus-within` 1；反向断言 `translateY(calc(4px - 100%))` **0**、
+  `data-readora-topbar-reveal` **0**、`.readora-toolbar--focus` **0**；包内 `extension/package.json`
+  版本回读 **0.12.1**。**两个引号坑本轮实测到**：属性选择器的值被压缩器去引号（源码
+  `[data-readora-focus-mode="true"]` 在产物里是 `[data-readora-focus-mode=true] .readora-quickbar{top:0}`），
+  而 JSX 属性值是反引号模板字面量（`"data-readora-quickbar":\`exit\``）—— 按源码字面串 grep
+  会假阴性，锚点必须按产物形态写
+- e2e 不是旁证而是同一份产物：`pnpm test:e2e` 开头先跑 `build:webview`，那 120 条里的
+  `.readora-topbar` `toHaveCount(0)` 与 `elementFromPoint(640, 20)` 命中的就是入包的那份 bundle
+- 首跑 `pnpm test:e2e`（本批修复后、出包前）曾报 3 条失败（`search.spec.ts` 2 条、
+  `semantics.spec.ts` 1 条），形态都是「整篇文档没渲染出来」（`.readora-document` /
+  `.readora-search-count` 元素不存在），与本批改动的专注档支路无关；单跑 15/15 通过，随后
+  三次全链重跑均 120/120 —— 记为并行 worker 下的首跑冷启动抖动，成因未排除
+- `eslint.config.js` 的 `ignores` 新增一项 `**/.tmp-evidence/**`：该目录已在 `.gitignore` 内，
+  性质与已忽略的 `**/test-results/**` 一致（跑出来的日志与一次性取证脚本）；不加则出包时
+  放在那里的 `.cjs` 脚本会让 `lint` 报 10 条 `no-undef` / `no-require-imports`（本轮首跑就
+  是这样红的）。这不是新护栏，是把已有类别补全
+- 未做：真实 VS Code 面板内的观感复核（本轮结论全部来自 Chromium 生产构建页）
+
 ## 环境偏差登记（IMP-001 §3.3）
 
 规范参考版本为 Node 26.x / pnpm 12.x；本仓库当前按实际开发环境推进：
@@ -1708,10 +1929,3 @@ PRD-003 → 1.3.0，另 AUD-001 补 §13.7）。按 0.x 顺延口径抬到 **0.1
 - 第三方许可证清单由 `pnpm notices` 生成为 `apps/extension/resources/NOTICES.md`
   （M8 起 **60 个包**，新增的是 `@codemirror/*` / `@lezer/*` 一族）；新增运行时依赖时要
   重跑，`pnpm verify` 断言它在包内
-
-#### Pele 全类型覆盖更新（0.11.0）
-
-- 注册 Pele 1.13.0 的全部 33 个内置图表入口；统一夹具逐类型验证识别、SVG 渲染和安全清洗。
-- 静态注册后的主包约 2.34 MB，超过原 2.2 MiB 护栏；按全类型覆盖范围将 `pnpm verify`
-  的主包上限调整至 2.4 MiB，实际字节数和基线差值仍由验证器输出。
-- 保留 CSP、安全限额和 SVG Sanitizer；不使用 Pele lazy 入口的运行时动态加载。

@@ -13,14 +13,20 @@
  * 完整文本走 `title` 属性（与目录行同一口径），否则一条长标题就能把进度
  * 顶出窗口。
  *
- * 专注模式下多一枚「展开大纲」：§11.2 把顶栏收成只剩退出入口，此时大纲是唯一
- * 的导航手段，不能让用户为了跳一节先退出专注模式。它翻的是 `App` 里那份专注模式
- * 临时展开，不是用户的 `outlineVisible` —— 写后者会让退出专注后目录回不来；
- * 而 `outlineExpanded` 传的是**当前真的展开了没有**，否则 `aria-pressed` 就成了
- * 一个自说自话的状态（§4.6 的诚实性同样适用于属性）。
+ * 专注模式下多两枚按钮，且这一条就是全部的 chrome：顶栏整段不出现（产品反馈：
+ * 隐藏后不许留透明占位），退出入口搬到本条右侧。§11.2 把顶栏收成只剩退出入口，
+ * 此时大纲是唯一的导航手段，不能让用户为了跳一节先退出专注模式。展开大纲翻的是
+ * `App` 里那份专注模式临时展开，不是用户的 `outlineVisible` —— 写后者会让退出专注
+ * 后目录回不来；而 `outlineExpanded` 传的是**当前真的展开了没有**，否则
+ * `aria-pressed` 就成了一个自说自话的状态（§4.6 的诚实性同样适用于属性）。
+ *
+ * 退出入口默认不显示，鼠标移到本条或键盘聚焦到本条才浮现。触发区是快速条自己
+ * （33px 高、整屏宽），浮现后按钮原地不动，于是「想点它」和「触发它出现」落在
+ * 同一块区域，不存在两者抢命中的问题 —— 顶栏整条浮层那版就是栽在这里：4px
+ * 触发沿按不到，44px 空带还压着唯一的导航退路。
  */
 import { useCompactLayout } from "./ReaderShell";
-import { OutlineIcon } from "./Icon";
+import { FocusIcon, OutlineIcon } from "./Icon";
 import { formatProgress } from "./use-reading-progress";
 
 export const QUICKBAR_CLASS = "readora-quickbar";
@@ -33,6 +39,8 @@ export interface QuickBarProps {
   /** 大纲此刻是否真的可见（决定 `aria-pressed`）。 */
   outlineExpanded: boolean;
   onToggleOutline(): void;
+  /** 退出专注模式。只在专注档渲染，因此常规档不会为它传值也不会有入口。 */
+  onToggleFocusMode(): void;
 }
 
 export function QuickBar({
@@ -40,7 +48,8 @@ export function QuickBar({
   progress,
   focusMode,
   outlineExpanded,
-  onToggleOutline
+  onToggleOutline,
+  onToggleFocusMode
 }: QuickBarProps) {
   /* 窄窗口塞不下两列，`ReaderShell` 会连这份临时展开一起收掉。此时把按钮禁用并
    * 说明原因，比让它按下去没反应诚实（§4.6：不给做不到的 affordance）。 */
@@ -54,6 +63,19 @@ export function QuickBar({
       >
         {activeHeadingTitle ?? ""}
       </span>
+      {focusMode ? (
+        <button
+          type="button"
+          className="readora-quickbar-button readora-quickbar-exit"
+          data-readora-quickbar="exit"
+          aria-label="Exit focus mode"
+          title="Exit full screen reading mode"
+          onClick={onToggleFocusMode}
+        >
+          <FocusIcon />
+          Exit focus mode
+        </button>
+      ) : null}
       <span
         className="readora-quickbar-progress"
         data-readora-quickbar="progress"

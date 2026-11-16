@@ -2,12 +2,12 @@
  * Reader Shell 与工具栏测试（ARC-005 §5.1~§5.3、PRD-002 §4.3 / §11.2，STORY-09-01）。
  *
  * 三件事必须钉住：目录或专注模式退成单栏、窄窗口自动收栏但不改写用户偏好、
- * 专注模式下工具栏只留退出入口。右栏本批不输出 DOM，也顺手断言。
+ * 专注模式下顶栏整段不输出（退出入口住在快速条，归 status-quick-bars.spec）。右栏本批不输出 DOM，也顺手断言。
  */
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render } from "@testing-library/react";
 import type { ZoomApi } from "../zoom";
-import { ReaderShell, COMPACT_LAYOUT_QUERY, TOPBAR_REVEAL_ATTR, TOPBAR_REVEAL_HOVER } from "../ReaderShell";
+import { ReaderShell, COMPACT_LAYOUT_QUERY } from "../ReaderShell";
 import { TopBar, TOOLBAR_CLASS } from "../TopBar";
 
 type MediaListener = (list: { matches: boolean }) => void;
@@ -138,18 +138,30 @@ describe("ReaderShell 布局", () => {
     expect(view.container.querySelector(".readora-body .readora-shell-main")).not.toBeNull();
   });
 
-  test("专注模式给顶栏段挂上浮层门控，常规档不挂（退出入口默认淡出）", () => {
-    // jsdom 不算 CSS，这里只能钉住属性这一半；opacity 真的变了归 e2e 证。
-    // 门控挂在段而不是工具栏：浮现靠段的 :hover，工具栏只占带内一行。
+  test("专注模式整段不输出顶栏，常规档输出（隐藏了就不许留透明占位）", () => {
+    // jsdom 不算 CSS，这里只能钉住 DOM 这一半；快速条贴顶与退出入口浮现归 e2e 证。
+    // 旧版是「输出顶栏段 + 挂浮层门控」，结果 4px 触发沿命中不到、44px 空带还在，
+    // 所以下面断言的正是那两条不能回来：段不在 DOM，连它的内容也不在。
     const focused = shell(true, true);
+    expect(focused.container.querySelector(".readora-topbar")).toBeNull();
+    expect(focused.container.querySelector('[data-readora-band="topbar"]')).toBeNull();
+    expect(focused.queryByTestId("toolbar")).toBeNull();
+    // 外壳仍要留下专注档自己的门控属性，CSS 靠它把快速条按到 0。
     expect(
-      focused.container.querySelector<HTMLElement>(".readora-topbar")?.getAttribute(TOPBAR_REVEAL_ATTR)
-    ).toBe(TOPBAR_REVEAL_HOVER);
+      focused.container.querySelector<HTMLElement>(".readora-shell")?.getAttribute(
+        "data-readora-focus-mode"
+      )
+    ).toBe("true");
     focused.unmount();
 
     const plain = shell(true, false);
     expect(
-      plain.container.querySelector<HTMLElement>(".readora-topbar")?.hasAttribute(TOPBAR_REVEAL_ATTR)
+      plain.container.querySelector('[data-readora-band="topbar"]')?.textContent
+    ).toBe("Toolbar");
+    expect(
+      plain.container.querySelector<HTMLElement>(".readora-shell")?.hasAttribute(
+        "data-readora-focus-mode"
+      )
     ).toBe(false);
   });
 
@@ -207,7 +219,6 @@ describe("TopBar 工具栏", () => {
   }
 
   function bar(
-    focusMode = false,
     outlineVisible = true,
     searchOpen = false,
     options: {
@@ -221,7 +232,6 @@ describe("TopBar 工具栏", () => {
     const view = render(
       <TopBar
         outlineVisible={outlineVisible}
-        focusMode={focusMode}
         searchOpen={searchOpen}
         settingsOpen={options.settingsOpen ?? false}
         exportOpen={options.exportOpen ?? false}
@@ -270,14 +280,14 @@ describe("TopBar 工具栏", () => {
     expect(trigger.hasAttribute("aria-pressed")).toBe(false);
     closed.view.unmount();
 
-    const open = bar(false, true, false, { settingsOpen: true });
+    const open = bar(true, false, { settingsOpen: true });
     expect(
       open.view.getByRole("button", { name: "Reader settings" }).getAttribute("aria-expanded")
     ).toBe("true");
   });
 
   test("搜索面板打开时 Search 按钮按下（状态可见性）", () => {
-    const { view } = bar(false, true, true);
+    const { view } = bar(true, true);
     expect(pressed(view.container, "Search in document")).toBe("true");
   });
 
@@ -304,7 +314,7 @@ describe("TopBar 工具栏", () => {
     expect(trigger.hasAttribute("aria-pressed")).toBe(false);
     closed.view.unmount();
 
-    const open = bar(false, true, false, { exportOpen: true });
+    const open = bar(true, false, { exportOpen: true });
     expect(
       open.view.getByRole("button", { name: "Export document" }).getAttribute("aria-expanded")
     ).toBe("true");
@@ -316,16 +326,20 @@ describe("TopBar 工具栏", () => {
     ).toEqual(["Export as HTML", "Export as PDF", "Export as PNG"]);
   });
 
-  test("专注模式下只留退出入口，其它按钮不出现（§11.2）", () => {
-    const { view, next } = bar(true, true, false, { exportOpen: true });
-    const buttons = view.container.querySelectorAll<HTMLButtonElement>("button");
-    expect(buttons).toHaveLength(1);
-    expect(view.container.querySelector("[role='menuitem']")).toBeNull();
-    expect(buttons[0]?.textContent).toBe("Exit focus mode");
-    fireEvent.click(buttons[0] as HTMLButtonElement);
-    expect(next.onToggleFocusMode).toHaveBeenCalledTimes(1);
-    expect(next.onToggleOutline).not.toHaveBeenCalled();
-    expect(view.container.querySelector(`.${TOOLBAR_CLASS}--focus`)).not.toBeNull();
+  test("顶栏不再有专注分支：动作清单与模式无关（§11.2 的收法改到段一级）", () => {
+    // 旧版在这里早退成「只剩退出入口一枚按钮」，但那枚按钮住在 4px 触发沿里，
+    // 实际上选不到。现在专注档的收法由 `ReaderShell` 不渲染顶栏段完成，顶栏自己
+    // 回到单一形态；退出入口归快速条（status-quick-bars.spec）。
+    const { view } = bar(true, false, { exportOpen: true });
+    expect(actions(view.container)).toEqual([
+      "Toggle outline",
+      "Enter focus mode",
+      "Search in document",
+      "Export document",
+      "Reader settings"
+    ]);
+    expect(view.container.querySelector(`.${TOOLBAR_CLASS}--focus`)).toBeNull();
+    expect(view.container.querySelector('[aria-label="Exit focus mode"]')).toBeNull();
   });
 
   test("工具栏是 role=toolbar 且有可读名称", () => {

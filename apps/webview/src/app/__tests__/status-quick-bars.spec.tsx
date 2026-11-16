@@ -201,7 +201,7 @@ function quickBar(overrides: {
   focusMode?: boolean;
   outlineExpanded?: boolean;
 } = {}) {
-  const handlers = { onToggleOutline: vi.fn() };
+  const handlers = { onToggleOutline: vi.fn(), onToggleFocusMode: vi.fn() };
   const view = render(
     <QuickBar
       activeHeadingTitle={overrides.activeHeadingTitle ?? null}
@@ -248,6 +248,32 @@ describe("QuickBar", () => {
     }
     fireEvent.click(button);
     expect(focused.handlers.onToggleOutline).toHaveBeenCalledTimes(1);
+  });
+
+  test("退出入口带图标并排在进度前，常规档不出现", () => {
+    stubMatchMedia(false);
+    // 顶栏段在专注档整块不渲染；退出入口位于进度前并带专注模式图标。
+    const plain = quickBar({ focusMode: false });
+    expect(plain.view.container.querySelector('[aria-label="Exit focus mode"]')).toBeNull();
+
+    const focused = quickBar({ focusMode: true });
+    const buttons = [...focused.view.container.querySelectorAll<HTMLButtonElement>("button")];
+    expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
+      "Exit focus mode",
+      "Expand outline"
+    ]);
+    const exit = buttons[0] as HTMLButtonElement;
+    expect(exit.compareDocumentPosition(
+      focused.view.container.querySelector('[data-readora-quickbar="progress"]') as Node
+    ) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(exit.className).toContain("readora-quickbar-exit");
+    expect(exit.querySelector("svg.readora-icon")).not.toBeNull();
+    expect(exit.getAttribute("data-readora-quickbar")).toBe("exit");
+    expect(exit.getAttribute("title")).toBe("Exit full screen reading mode");
+    expect(exit.disabled).toBe(false);
+    fireEvent.click(exit);
+    expect(focused.handlers.onToggleFocusMode).toHaveBeenCalledTimes(1);
+    expect(focused.handlers.onToggleOutline).not.toHaveBeenCalled();
   });
 
   test("aria-pressed 说的是「大纲此刻真的展开了没有」", () => {

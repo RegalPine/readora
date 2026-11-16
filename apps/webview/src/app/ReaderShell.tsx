@@ -33,18 +33,6 @@ export const SEARCHBAR_CLASS = "readora-searchbar";
 export const BODY_CLASS = "readora-body";
 export const STATUSBAR_CLASS = "readora-statusbar";
 
-/**
- * 顶栏浮层门控（产品反馈：类浏览器全屏）。
- *
- * 专注模式下退出入口默认淡出，鼠标移到顶栏这条带或键盘聚焦到它才浮现。门控只能
- * 挂在外壳而不是 `TopBar`：浮现靠的是 `.readora-topbar` 这条带自己的 `:hover`，
- * 而带的尺寸归外壳（工具栏只占带内一行），写在 `TopBar` 里选不到那个祖先。
- * 属性名 `data-readora-topbar-reveal`（即 `TOPBAR_REVEAL_ATTR`）是 CSS 与 e2e
- * 共同的锚点，改名等于改契约。
- */
-export const TOPBAR_REVEAL_ATTR = "data-readora-topbar-reveal";
-export const TOPBAR_REVEAL_HOVER = "hover";
-
 export function useCompactLayout(query: string = COMPACT_LAYOUT_QUERY): boolean {
   const [compact, setCompact] = useState(false);
   useEffect(() => {
@@ -88,6 +76,16 @@ export interface ReaderShellProps {
   children: ReactNode;
 }
 
+/**
+ * 专注模式不输出顶栏段（产品反馈：隐藏了就不许留透明占位）。
+ *
+ * 曾经是「整段抬出视口、只留 4px 触发沿」的浮层，两个后果都是实的：4px 在真实
+ * 面板里根本命中不到（用户报告“没法退出专注模式”），而段从栅格里拿出去后顶部
+ * 空出一条 44px 的透明带，还把文档标题切掉半截。退出入口现在住在 `QuickBar`
+ * 右侧，靠快速条自己的 hover 浮现；顶栏在专注模式下没有其余内容，就不渲染，
+ * 而不是渲染一条选不到的 toolbar。四段栅格的几何只在常规档约束（e2e
+ * 「四段栅格」与视觉基线都采常规档），这里少一段不越界。
+ */
 export function ReaderShell({
   outlineVisible,
   focusMode,
@@ -112,15 +110,13 @@ export function ReaderShell({
       data-readora-compact={compact ? "true" : undefined}
       data-readora-focus-mode={focusMode ? "true" : undefined}
     >
-      {/* 常规档不输出这个属性（`undefined` 让 React 直接不写）：顶栏该一直看得见，
-          淡出只属于专注模式。 */}
-      <div
-        className={TOPBAR_CLASS}
-        data-readora-band="topbar"
-        data-readora-topbar-reveal={focusMode ? TOPBAR_REVEAL_HOVER : undefined}
-      >
-        {toolbar}
-      </div>
+      {/* 专注模式下整段不输出：顶栏只剩退出入口，而它已搬到快速条右侧，留下一个
+          空段就是那条被投诉的透明占位。常规档不写多余属性，行为与旧版一致。 */}
+      {focusMode ? null : (
+        <div className={TOPBAR_CLASS} data-readora-band="topbar">
+          {toolbar}
+        </div>
+      )}
       {searchbar ? (
         <div className={SEARCHBAR_CLASS} data-readora-band="searchbar">
           {searchbar}

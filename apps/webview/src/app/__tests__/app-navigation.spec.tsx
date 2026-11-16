@@ -308,14 +308,21 @@ describe("工具栏与视图状态权威（ARC-004 §4.1 / §6.2）", () => {
     expect(columns()).toBe("two");
   });
 
-  test("专注模式按钮收左栏并只留退出入口，退出恢复正常布局", () => {
+  test("专注模式按钮收左栏并拿掉顶栏段，退出入口在快速条里可用", () => {
     setup();
     fireEvent.click(screen.getByRole("button", { name: "Enter focus mode" }));
     expect(columns()).toBe("one");
     expect(canvasMain()?.classList.contains("readora-canvas--focus")).toBe(true);
-    expect(toolbarActions()).toEqual(["Exit focus mode"]);
+    // 顶栏段整块不渲染（不是“渲染了但藏起来”），动作清单因此为空；
+    // 退出入口只剩快速条这一枚，而它必须在 DOM 里——浮现只动 opacity。
+    expect(toolbarActions()).toEqual([]);
+    expect(document.querySelector(".readora-topbar")).toBeNull();
+    expect(
+      document.querySelector('[data-readora-quickbar="exit"][aria-label="Exit focus mode"]')
+    ).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Exit focus mode" }));
     expect(columns()).toBe("two");
+    expect(document.querySelector(".readora-topbar")).not.toBeNull();
     expect(toolbarActions()).toEqual(ACTION_BUTTONS);
   });
 
@@ -330,7 +337,10 @@ describe("工具栏与视图状态权威（ARC-004 §4.1 / §6.2）", () => {
     act(() => {
       host.emit("reader.viewState", viewState({ focusMode: true }));
     });
-    expect(toolbarActions()).toEqual(["Exit focus mode"]);
+    expect(toolbarActions()).toEqual([]);
+    expect(
+      document.querySelector('[data-readora-quickbar="exit"][aria-label="Exit focus mode"]')
+    ).not.toBeNull();
   });
 });
 
@@ -747,7 +757,7 @@ describe("顶栏 / 弹层 / 状态条装配（M6）", () => {
     expect(document.querySelector(".readora-statusbar")).toBeNull();
   });
 
-  test("专注模式：顶栏收成退出入口，快速条的展开大纲真的把左栏带回来", () => {
+  test("专注模式：顶栏段不渲染，快速条的展开大纲真的把左栏带回来", () => {
     setup();
     fireEvent.click(screen.getByRole("button", { name: "Enter focus mode" }));
     expect(columns()).toBe("one");
