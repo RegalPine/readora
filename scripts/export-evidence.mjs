@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "no
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import zlib from "node:zlib";
+import { killToolTree, spawnTool } from "./lib/run-tool.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT_DIR = join(ROOT, "test-results", "export-evidence");
@@ -101,7 +102,7 @@ async function ensureServer() {
   if (await reachable()) {
     return { stop() {} };
   }
-  const child = spawn(
+  const child = spawnTool(
     "pnpm",
     ["--filter", "@readora/webview", "dev", "--port", String(PORT), "--strictPort", "--host", "127.0.0.1"],
     { cwd: ROOT, stdio: "ignore", detached: true }
@@ -110,16 +111,14 @@ async function ensureServer() {
     if (await reachable()) {
       return {
         stop() {
-          try {
-            process.kill(-child.pid, "SIGTERM");
-          } catch {
-            /* 已经自己退了 */
-          }
+          killToolTree(child);
         }
       };
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
+  // 超时就先把刚起的树收掉再报错：不然取证失败一次就漏一个 vite 在后台占端口。
+  killToolTree(child);
   throw new Error(`dev server 起来了但 ${BASE_URL} 始终不可达`);
 }
 

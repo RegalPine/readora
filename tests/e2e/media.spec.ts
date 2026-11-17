@@ -8,7 +8,7 @@
  */
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
-import { nextFrame, openReader } from "../helpers/reader";
+import { nextFrame, openReader, scrollTo } from "../helpers/reader";
 
 /** 1×1 PNG：够让 `<img>` 真的走一遍解码，`naturalWidth` 为 1。 */
 const PNG_1X1 =
@@ -38,6 +38,28 @@ const DIAGRAM_DOC = [
   "  B -->|yes| C[Ship]",
   "```",
   ""
+].join("\n");
+
+/** 图之后接一段高正文，让页面可滚。 */
+function filler(section: number): string[] {
+  return [
+    `## Section ${section}`,
+    "",
+    "Filler text keeps the block tall enough to scroll. ".repeat(8),
+    ""
+  ];
+}
+
+/**
+ * `DIAGRAM_DOC` + 一条长正文尾巴（专给「全屏锁正文滚动」那条用例用）。
+ *
+ * 图必须留在首屏：懒挂载只接管进视口（含 300px 余量）的那几张，埋在长正文里的图
+ * 在这里根本不会 `rendered`。图已经在顶部，滚动基线就取 0；「不是空话」的保证来自
+ * 退出之后那一步 —— 同一个滚轮在那个位置确实把正文翻走了（见用例末尾）。
+ */
+const DIAGRAM_DOC_WITH_TAIL = [
+  DIAGRAM_DOC,
+  ...Array.from({ length: 12 }, (_unused, index) => filler(index + 1)).flat()
 ].join("\n");
 
 /**
@@ -361,6 +383,57 @@ test.describe("图表", () => {
     await expect(block).not.toHaveClass(/readora-diagram--fullscreen/);
     const back = await geometryOf(container);
     expect(Math.abs(back.box.width - inline.box.width)).toBeLessThan(2);
+  });
+
+  /**
+   * 全屏期间正文不许翻页（用户报「mermaid 全屏后滚动滑轮正文会翻动」）。
+   *
+   * 这一层是 CSS 全屏层而不是原生 Fullscreen 层，文档仍是唯一的滚动主体，而引擎的
+   * 滚轮缩放只在按住 Ctrl/Cmd 时动手 —— 普通滚轮会一路冒泡到视口，正文就在毛玻璃
+   * 背后翻页。锁落在 `components.css` 的 `html:has(.readora-diagram--fullscreen)`，
+   * jsdom 不出计算样式，只有真实浏览器能证，所以钉在 e2e 而不是单测。
+   */
+  test("全屏锁住正文滚动：滚轮与翻页键都不动正文，退出后恢复", async ({ page }) => {
+    await openReader(page, { text: DIAGRAM_DOC_WITH_TAIL });
+
+    const block = page.locator(".readora-diagram");
+    await expect(block).toHaveAttribute("data-readora-diagram-state", "rendered", {
+      timeout: 30_000
+    });
+
+    const scrollYOf = (): Promise<number> => page.evaluate(() => window.scrollY);
+    const rootOverflowOf = (): Promise<string> =>
+      page.evaluate(() => getComputedStyle(document.documentElement).overflow);
+    const scrollableRoom = (): Promise<number> =>
+      page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight);
+
+    // 前置条件：正文真的有可滚距离。锁住与没得滚是同一个读数，不钉住就会假绿。
+    expect(await scrollableRoom()).toBeGreaterThan(800);
+    const pinned = await scrollTo(page, 0);
+
+    await block.locator('[data-readora-diagram-action="fullscreen"]').click();
+    await expect(block).toHaveClass(/readora-diagram--fullscreen/);
+    // 锁的落点是根元素：视口滚动归根管，写在 body 上拦不住滚轮。
+    await expect.poll(rootOverflowOf).toBe("hidden");
+    // 图离开文档流会抽掉一段高度，进入全屏那一下本身不许把正文弹走。
+    expect(await scrollYOf()).toBe(pinned);
+
+    const container = block.locator(".readora-diagram-container");
+    await container.hover();
+    await page.mouse.wheel(0, 600);
+    await expect.poll(scrollYOf).toBe(pinned);
+    // 键盘翻页同一条：锁的是滚动主体，不是只堵住滚轮事件。
+    await page.keyboard.press("PageDown");
+    await expect.poll(scrollYOf).toBe(pinned);
+
+    // 退出后同一动作必须又能翻正文：它同时是「锁上了」、「没把页面锁死」与
+    // 「上面那两次滚轮本来真会翻走正文」三件事的反证。
+    await block.locator('[data-readora-diagram-action="fullscreen"]').click();
+    await expect(block).not.toHaveClass(/readora-diagram--fullscreen/);
+    await expect.poll(rootOverflowOf).toBe("visible");
+    await container.hover();
+    await page.mouse.wheel(0, 600);
+    await expect.poll(scrollYOf).toBeGreaterThan(pinned + 100);
   });
 
   /**

@@ -7,6 +7,10 @@
  *
  * 于是这些结论只在真机上成立：扩展名大小写、百分号编码能否落到同一个 inode、
  * 缓存版本是否真的跟着 mtime 走、符号链接能不能骗过 boundary。
+ *
+ * 期望值一律在各自该在的空间里造：落磁盘的用 `node:path` 的原生路径，
+ * 说 URI 的用 URI 形态（`StubUri.file(...).path`）—— Windows 上两者不同形，
+ * 拿原生路径去拼一条期望 URI 会把测试写成「只在 macOS 上绿」。
  */
 import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { readFile as fsReadFile, realpath, stat as fsStat } from "node:fs/promises";
@@ -18,6 +22,7 @@ vi.mock("vscode", async () => await import("../__stubs__/vscode"));
 import type * as vscode from "vscode";
 import { READORA_ERROR_CODES, type ResourceKind, type ResourceResolveResult } from "@readora/contracts";
 import { Uri as StubUri } from "../__stubs__/vscode";
+import { normalizeDirectory } from "../resources/boundary";
 import { createResourcePolicy, type ResourcePolicy } from "../resources/resource-policy";
 import {
   computeResourceId,
@@ -49,6 +54,11 @@ function isSymlinkAt(path: string): boolean {
 /** 文档放进 assets/ 时，outside/ 才真的落在授权根之外（boundary 的语义）。 */
 const DOC_AT_FIXTURES = StubUri.file(join(ROOT, "images.md")).toString();
 const DOC_INSIDE_ASSETS = StubUri.file(join(ASSETS, "doc.md")).toString();
+/**
+ * assets/ 的 URI 形态路径：Windows 上是 `/F:/…/assets`，与原生路径只差在
+ * 分隔符与前导斜杠。asWebviewUri 拿到的是 `uri.path`，所以断言 URI 就得用它。
+ */
+const ASSETS_URI_PATH = StubUri.file(ASSETS).path;
 
 function bytesOf(path: string): number {
   return readFileSync(path).byteLength;
@@ -174,7 +184,9 @@ describe("真机解析：MIME 与字节", () => {
   it("百分号编码的中文文件名落到同一个 inode：resourceId 与真名一致", async () => {
     const harness = rootHarness();
     const encoded = await harness.ok("assets/%E4%B8%AD%E6%96%87%20%E6%A0%87%E5%BF%97.png");
-    const canonical = await realpath(join(ASSETS, "中文 标志.png"));
+    // resourceId 比的是 boundary 放行时用的那份规范路径（分隔符已归一），
+    // 不是 node 回给的文件系统原始字符串 —— Windows 上两者差一个分隔符形状。
+    const canonical = normalizeDirectory(await realpath(join(ASSETS, "中文 标志.png")));
     expect(encoded.resourceId).toBe(computeResourceId(canonical));
     expect(encoded.byteSize).toBe(bytesOf(join(ASSETS, "中文 标志.png")));
   });
@@ -185,7 +197,7 @@ describe("真机解析：MIME 与字节", () => {
     const version = contentVersion({ mtimeMs: info.mtimeMs, size: info.size });
     const result = await harness.ok("assets/logo.png");
     expect(result.version).toBe(version);
-    expect(result.webviewUri).toBe(`https://webview.invalid${ASSETS}/logo.png?${version}`);
+    expect(result.webviewUri).toBe(`https://webview.invalid${ASSETS_URI_PATH}/logo.png?${version}`);
   });
 
   it("跳出文档目录但仍在 workspace 内的写法可以解析（ARC-008 §5.1）", async () => {

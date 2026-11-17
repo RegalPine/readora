@@ -178,6 +178,18 @@
   }
 }
 
+/* 全屏期间锁住正文滚动：上面那层是 `position: fixed` 覆盖层，不是原生全屏层，
+ * 文档仍是唯一的滚动主体 —— 引擎的滚轮缩放只在按住 Ctrl/Cmd 时动手（见
+ * `diagram-layer` 的 `zoom: true` 那条），普通滚轮一路冒泡到视口，正文就在毛玻璃
+ * 背后翻页，看起来像图根本没盖住页面。锁根元素而不是锁 body：视口滚动条归根元素
+ * 管，`body { overflow: hidden }` 拦不住（本机实测：`overflow: hidden` 保住
+ * scrollY 不动，`window.scrollTo` 仍可用，阅读位置恢复那条路径不受影响）。
+ * 用 `:has()` 从 DOM 现取现算而不是在 JS 里记状态：换文档时 `destroy()` 连 wrapper
+ * 一起丢掉，记在 `<html>` 上的锁就没人解了。 */
+html:has(.readora-diagram--fullscreen) {
+  overflow: hidden;
+}
+
 /* 全屏自动缩放：把图交给整块可用画面。
  * 72px = 上下 padding（两档 16px）+ 工具栏一行，与旧那行 svg `max-height` 同口径。
  * 这里改用 flex：定高盒里要的是两个方向都居中，而 `width: 100%` 已把图铺满栏宽，

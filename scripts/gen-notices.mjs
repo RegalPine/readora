@@ -25,10 +25,10 @@
  * 输出是确定性的：同一棵 node_modules 树重复执行字节相同（不写时间戳、按包名排序），
  * 因此可以入库，也让 `pnpm verify` 能对「清单有没有跟着依赖变」较真。
  */
-import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { describeToolFailure, runTool } from "./lib/run-tool.mjs";
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const OUTPUT = path.join(ROOT, "apps/extension/resources/NOTICES.md");
@@ -71,15 +71,20 @@ function fail(message) {
 
 // ---------------------------------------------------------------- 依赖图采集
 
-/** 跑 `pnpm ls --prod -r --depth 10 --json`；深度给足，否则只有一层就是假闭包。 */
+/**
+ * 跑 `pnpm ls --prod -r --depth 10 --json`；深度给足，否则只有一层就是假闭包。
+ *
+ * 走 `runTool` 而不是直接 `spawnSync("pnpm", ...)`：Windows 上 pnpm 是 `.cmd` 垫片，
+ * 不经 shell 根起不来，于是这里只能看到一句「退出码 null」。
+ */
 function productionGraph() {
-  const result = spawnSync(
+  const result = runTool(
     "pnpm",
     ["ls", "--prod", "-r", "--depth", "10", "--json"],
     { cwd: ROOT, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 }
   );
   if (result.status !== 0) {
-    fail(`pnpm ls 退出码 ${result.status}：${(result.stderr || "").slice(0, 400)}`);
+    fail(`pnpm ls ${describeToolFailure(result)}`);
   }
   let importers;
   try {

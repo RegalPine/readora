@@ -17,6 +17,7 @@ import {
   isInsideAny,
   normalizeDirectory,
   pathSegments,
+  toSystemPath,
   verifyBoundary
 } from "../resources/boundary";
 import {
@@ -209,5 +210,118 @@ describe("boundary 授权根", () => {
     expect(parsed.with({ path: "/docs/assets/logo.png" }).toString()).toBe(
       "file:///docs/assets/logo.png"
     );
+  });
+});
+
+/**
+ * 跨平台回归锁（初始版本在 macOS 上开发，这一组是欠下的那张账）。
+ *
+ * 全部用**字符串**造 Windows 形状的路径，不读 `process.platform`、也不碰磁盘，
+ * 因此在 macOS / Linux 的 CI 上同样成立。夹具测试只能在 Windows 机器上
+ * 跑到盘符分支，那一条盖不住「有人在 POSIX 机器上把转换删掉」这种回退。
+ */
+describe("boundary 跨平台：Windows 盘符", () => {
+  test("toSystemPath 只在盘符形态下剥前导斜杠", () => {
+    // POSIX：`/x` 本来就是真路径，动一下就变成相对当前目录的另一条路径。
+    expect(toSystemPath("/docs/src/a.png", false)).toBe("/docs/src/a.png");
+    expect(toSystemPath("/C:/docs/a.png", false)).toBe("/C:/docs/a.png");
+    // Windows：URI 语法多出来的前导斜杠不是路径的一部分。
+    expect(toSystemPath("/C:/docs/a.png", true)).toBe("C:/docs/a.png");
+    expect(toSystemPath("/c:/docs/a.png", true)).toBe("c:/docs/a.png");
+    // 不是盘符开头的串（POSIX 风格、UNC、相对形态）一律原样交出。
+    expect(toSystemPath("/docs/a.png", true)).toBe("/docs/a.png");
+    expect(toSystemPath("//server/share/a.png", true)).toBe("//server/share/a.png");
+    expect(toSystemPath("/", true)).toBe("/");
+  });
+
+  test("realpath 收到的是操作系统路径，不是 URI 路径", async () => {
+    // 这条是 Windows 上「本地图片全灭」的直接回归锁：`/C:/…` 递给 node:fs
+    // 会被当成当前盘根下的 `C:` 目录，ENOENT → boundary 按未验证路径拒绝。
+    const asked: string[] = [];
+    const outcome = await verifyBoundary(
+      "/C:/docs/src/a.png",
+      "file:///C%3A/docs/src/read.md",
+      ["/C:/docs"],
+      {
+        realpath: async (path) => {
+          asked.push(path);
+          return path;
+        }
+      }
+    );
+    expect(asked).toEqual(["C:/docs/src/a.png"]);
+    expect(outcome.ok).toBe(true);
+  });
+
+  test("盘符大小写不一致不算越界，也不放进别的卷", async () => {
+    // 宿主给的文档 URI 常是小写盘符，文件系统给的 realpath 回执常是大写：
+    // 两道校验吃的是同一个串，只不过来自两侧。
+    const seen: string[] = [];
+    const outcome = await verifyBoundary(
+      "/F:/GitHub/docs/assets/logo.png",
+      "file:///f%3A/GitHub/docs/read.md",
+      ["/f:/GitHub"],
+      {
+        realpath: async (path) => {
+          seen.push(path);
+          return "F:\\GitHub\\docs\\assets\\logo.png";
+        }
+      }
+    );
+    expect(seen).toEqual(["F:/GitHub/docs/assets/logo.png"]);
+    expect(outcome.ok && outcome.canonicalPath).toBe("F:/GitHub/docs/assets/logo.png");
+
+    // 放宽只到「同一个卷」这一层：换了盘符、或换了目录，仍然照旧拒绝。
+    const otherDrive = await verifyBoundary(
+      "/F:/GitHub/docs/a.png",
+      "file:///d%3A/GitHub/docs/read.md",
+      ["/d:/GitHub"],
+      { realpath: async (path) => path }
+    );
+    expect(!otherDrive.ok && otherDrive.reason).toBe("outside-roots");
+
+    const otherDir = await verifyBoundary(
+      "/F:/GitHub/other/a.png",
+      "file:///f%3A/GitHub/docs/read.md",
+      ["/f:/GitHub/docs"],
+      { realpath: async (path) => path }
+    );
+    expect(!otherDir.ok && otherDir.reason).toBe("outside-roots");
+  });
+
+  test("符号链接跳到根外：带盘符也拦得住", async () => {
+    const outcome = await verifyBoundary(
+      "/F:/GitHub/docs/escape.png",
+      "file:///f%3A/GitHub/docs/read.md",
+      ["/f:/GitHub"],
+      { realpath: async () => "D:\\elsewhere\\secret.png" }
+    );
+    expect(!outcome.ok && outcome.reason).toBe("symlink-escape");
+  });
+
+  test("除盘符外仍按大小写敏感比较", () => {
+    expect(isInside("/F:/docs/a.png", "/f:/docs")).toBe(true);
+    expect(isInside("/docs/Secret/a.png", "/docs/secret")).toBe(false);
+    expect(pathSegments("/C:/docs/src/a.png")).toEqual(["c:", "docs", "src", "a.png"]);
+    expect(pathSegments("/docs/C:/a.png")).toEqual(["docs", "C:", "a.png"]);
+  });
+
+  test("盘符文档的目录不会被算成根目录", () => {
+    // `posix.dirname('/C:\\x\\a.md')` 会把整个带反斜杠的串当一个文件名、返回目录 `/`，
+    // 于是每条引用都到根目录去找 —— 真机夹具在 Windows 上报 notFound 就是这条路。
+    const driveDoc = "file:///f%3A/GitHub/docs/read.md";
+    expect(documentDirectory(driveDoc)?.path).toBe("/f:/GitHub/docs");
+    expect(resolved("assets/logo.png", driveDoc)).toBe(
+      "file:///f%3A/GitHub/docs/assets/logo.png"
+    );
+    expect(resolved("../other/a.png", driveDoc)).toBe("file:///f%3A/GitHub/other/a.png");
+  });
+
+  test("uri.file 与 parse 在盘符上往返一致", () => {
+    // parse 不依赖运行平台，这条在任何机器上都能锁住「盘符不被当成文件名的一部分」。
+    const parsed = Uri.parse("file:///f%3A/GitHub/docs/read.md");
+    expect(parsed.path).toBe("/f:/GitHub/docs/read.md");
+    expect(parsed.toString()).toBe("file:///f%3A/GitHub/docs/read.md");
+    expect(Uri.parse(parsed.toString()).path).toBe(parsed.path);
   });
 });

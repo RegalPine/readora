@@ -24,10 +24,10 @@
  *
  * 审计端点完全不可达时退出码 1：宁可不出结论，也不出「0 漏洞」这种没来由的安慰。
  */
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runTool } from "./lib/run-tool.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const REPORT = join(ROOT, "reports/dependency-audit.md");
@@ -50,10 +50,13 @@ const NEW_RUNTIME_DEPENDENCIES = [
 const SEVERITY_ORDER = ["critical", "high", "moderate", "low", "info"];
 
 function run(command, args) {
-  const result = spawnSync(command, args, { cwd: ROOT, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 });
+  const result = runTool(command, args, { cwd: ROOT, encoding: "utf-8", maxBuffer: 64 * 1024 * 1024 });
   return {
     command: [command, ...args].join(" "),
+    // 启动失败（Windows 上不经过 shell 调 pnpm 就是这一类）也要进报告，
+    // 不然一栏「null」会被读成审计本身报了错，而不是本机跑不了。
     status: result.status,
+    error: result.error ? String(result.error.message ?? result.error) : null,
     stdout: result.stdout ?? "",
     stderr: result.stderr ?? ""
   };
@@ -72,7 +75,10 @@ function audit(scope) {
   if (first.status === 0 && firstPayload && !firstPayload.error) {
     return { ok: true, registry: configuredRegistry(), payload: firstPayload, note: "配置的 registry 直接应答" };
   }
-  const reason = firstPayload?.error?.message ?? (first.stderr || first.stdout).split("\n")[0] ?? "无输出";
+  const firstIssue = (first.stderr || first.stdout).split("\n")[0]?.trim() ?? "";
+  // 命令根本没启动（`error`）与启动了但报错（stderr）是两回事，前者优先：
+  // 只拿到空字符串会让报告写成「两次都取不到数：」而看不出原因。
+  const reason = firstPayload?.error?.message ?? first.error ?? (firstIssue || "无输出");
   const second = run("pnpm", [...args, `--registry=${FALLBACK_REGISTRY}`]);
   const secondPayload = parseJson(second.stdout);
   if (secondPayload && (secondPayload.error || !secondPayload.advisories)) {

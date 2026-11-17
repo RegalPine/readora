@@ -19,7 +19,15 @@
  * 用法：`node scripts/gen-fixture-assets.mjs`（或 `pnpm fixtures`）。
  */
 import { deflateSync } from "node:zlib";
-import { existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readlinkSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -345,17 +353,54 @@ for (const [tier, target] of Object.entries(PERF_TARGETS)) {
 /**
  * 符号链接逃逸样本：POSIX 上必然可建；Windows 无权限时降级为「不产出」，
  * 对应 spec 探测 lstat 后整条跳过（skip），而不是让整个测试链变红。
+ *
+ * 删旧链接之前必须先确认它**真是**符号链接：macOS 上建好的 `escape-link.png` 是受版本
+ * 管理的文件，Windows 关掉符号链接检出时，它就是一个内容为 `../outside/secret.png` 的
+ * 普通文件。无条件 `rmSync` 会把这份检出内容删掉，于是每跑一次 `pnpm test` 都在工作区
+ * 留一条 `D tests/fixtures/assets/escape-link.png`（实测 0.12.1 在 Windows 上就是这样）。
  */
+const LINK_TARGET = relative(ASSETS, join(OUTSIDE, "secret.png"));
 const link = join(ASSETS, "escape-link.png");
-rmSync(link, { force: true });
-let symlinked;
-try {
-  symlinkSync(relative(ASSETS, join(OUTSIDE, "secret.png")), link);
-  symlinked = existsSync(link);
-} catch {
-  symlinked = false;
+/** 分隔符两边不同口径（Windows 的 readlink 给反斜杠），比之前先归一。 */
+const sameTarget = (actual) =>
+  actual.replace(/\\/gu, "/") === LINK_TARGET.replace(/\\/gu, "/");
+
+function createLink() {
+  try {
+    symlinkSync(LINK_TARGET, link);
+    return existsSync(link);
+  } catch {
+    return false;
+  }
+}
+
+const current = lstatSync(link, { throwIfNoEntry: false });
+let symlinked = false;
+let linkNote = "";
+if (current?.isSymbolicLink()) {
+  // 已是指向正确目标的链接就留着（重建一次只是多一次无权限的失败机会）。
+  symlinked = sameTarget(readlinkSync(link));
+  if (!symlinked) {
+    rmSync(link, { force: true });
+    symlinked = createLink();
+    if (!symlinked) {
+      linkNote = "链接指向错且重建失败（本机缺符号链接权限）";
+    }
+  }
+} else if (current) {
+  // 普通文件占着这个名字：不动它，只承认本机产不出这个样本。
+  linkNote = "同名普通文件已在版本库里（git 未启用符号链接检出）";
+} else {
+  symlinked = createLink();
+  if (!symlinked) {
+    linkNote = "本机缺符号链接权限（Windows 需开发者模式或管理员）";
+  }
 }
 
 process.stdout.write(
-  `${report.join("\n")}\n${symlinked ? "tests/fixtures/assets/escape-link.png -> ../outside/secret.png\n" : "tests/fixtures/assets/escape-link.png SKIPPED (需要 POSIX 符号链接权限)\n"}`
+  `${report.join("\n")}\n${
+    symlinked
+      ? "tests/fixtures/assets/escape-link.png -> ../outside/secret.png\n"
+      : `tests/fixtures/assets/escape-link.png SKIPPED（${linkNote || "原因未知"}）\n`
+  }`
 );

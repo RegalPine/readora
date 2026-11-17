@@ -7,10 +7,11 @@
  * main.js 与 main.css 各自不超过预算。
  * 任一缺失即失败退出，不做"看起来没问题"的宽松判断。
  */
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { openArchive } from "./lib/zip-read.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const extensionDir = path.join(root, "apps/extension");
@@ -82,12 +83,37 @@ function pickCurrentVsix() {
 }
 
 const vsixPath = path.join(extensionDir, vsixName);
-// 逐行拿条目名而不是 `unzip -l` 的表格：子串匹配会让 "extension/src/" 这类前缀检查
-// 与体积列一起命中，也会让「要求的入口」漏掉路径拼错的情况。
-const entries = execFileSync("unzip", ["-Z1", vsixPath], { encoding: "utf-8" })
-  .split("\n")
-  .map((line) => line.trim())
-  .filter((line) => line.length > 0);
+/**
+ * 直接读包内的 ZIP 中央目录，而不是 `execFileSync("unzip", ...)`。
+ *
+ * `unzip` 在 macOS 上自带、多数 Linux 上装着，所以这条门禁在开发机上从来都是绿的；
+ * Windows 没有它（自带的是 `tar`，参数形状完全不同），于是 verify 在第一行就
+ * ENOENT —— 而它回答的恰好是「这个包能不能发」，最该在目标平台上跑的一步。
+ * 换成 node:zlib 读归档，三个平台拿到的就是同一份事实，不再看机器上装了什么工具。
+ *
+ * 逐条拿条目名而不是 `unzip -l` 的表格：子串匹配会让 "extension/src/" 这类前缀检查
+ * 与体积列一起命中，也会让「要求的入口」漏掉路径拼错的情况。
+ */
+let archive;
+try {
+  archive = openArchive(vsixPath);
+} catch (error) {
+  console.error(`[verify] FAIL ${vsixName} 读不出 ZIP 结构：${error.message}`);
+  process.exit(1);
+}
+const entries = archive.names();
+
+/** 取条目正文。缺件就是缺件，不当成「读到了空内容」继续往下判。 */
+function readEntry(name) {
+  const bytes = archive.read(name);
+  if (bytes === null) {
+    console.error(`[verify] MISS ${name} (条目不在包里，无法继续判定)`);
+    process.exit(1);
+  }
+  return bytes;
+}
+
+const readText = (name) => readEntry(name).toString("utf8");
 
 const requiredEntries = [
   "extension/package.json",
@@ -122,12 +148,10 @@ if (licenseEntries.length === 0) {
   console.error("[verify] MISS no LICENSE in the package (root LICENSE must be shipped, IMP-003 §7.4)");
   failed = true;
 } else {
-  const licenseText = execFileSync("unzip", ["-p", vsixPath, licenseEntries[0]], { encoding: "utf-8" });
+  const licenseText = readText(licenseEntries[0]);
   // 判 MIT 而不是判文件存在：manifest 的 `license` 字段与实际文本对不上，
   // Marketplace 展示的是字段值，用户装到的是另一套条款。
-  const declared = JSON.parse(
-    execFileSync("unzip", ["-p", vsixPath, "extension/package.json"], { encoding: "utf-8" })
-  ).license;
+  const declared = JSON.parse(readText("extension/package.json")).license;
   const textMatched = /\bMIT License\b/iu.test(licenseText);
   if (declared === "MIT" && textMatched) {
     console.log(`[verify] OK   ${licenseEntries[0]} (${declared})`);
@@ -145,7 +169,7 @@ if (!entries.includes(ICON_ENTRY)) {
   console.error(`[verify] MISS ${ICON_ENTRY} (manifest icon must resolve inside the package)`);
   failed = true;
 } else {
-  const icon = execFileSync("unzip", ["-p", vsixPath, ICON_ENTRY], { encoding: "buffer" });
+  const icon = readEntry(ICON_ENTRY);
   const width = icon.readUInt32BE(16);
   const height = icon.readUInt32BE(20);
   if (icon.subarray(0, 8).toString("hex") === "89504e470d0a1a0a" && width >= 128 && height >= 128) {
@@ -167,10 +191,7 @@ if (entries.includes(NOTICES_ENTRY)) {
 }
 
 // M3：图文渲染必须真的进到 Webview 产物里——只看文件名会漏掉「构建静默产出旧包」。
-const mainJs = execFileSync("unzip", ["-p", vsixPath, WEBVIEW_MAIN_JS], {
-  encoding: "buffer",
-  maxBuffer: 64 * 1024 * 1024
-});
+const mainJs = readEntry(WEBVIEW_MAIN_JS);
 
 for (const marker of [
   "readora-diagram-container",
@@ -218,10 +239,7 @@ if (mainJs.byteLength > MAIN_JS_BUDGET_BYTES) {
 
 // M5：主题 Token 与字体必须真的进到 CSS 产物里。只查文件名会放过「Tailwind 插件没生效、
 // tokens.css 未被 import」这类静默降级——两端的 Primitive 名同时出现才算三层结构进了包。
-const mainCss = execFileSync("unzip", ["-p", vsixPath, WEBVIEW_MAIN_CSS], {
-  encoding: "buffer",
-  maxBuffer: 16 * 1024 * 1024
-});
+const mainCss = readEntry(WEBVIEW_MAIN_CSS);
 
 for (const marker of ["--readora-palette-light-canvas", "--readora-palette-dark-accent"]) {
   if (mainCss.includes(marker)) {
@@ -342,10 +360,7 @@ if (entries.some((entry) => entry.startsWith("extension/dist/webview/dev/"))) {
  * 用字面 indexOf 而不是 RegExp：这些串里有 `=` 与 `-`，正则化只会让断言本身出错；
  * 而它们在源码里是模板字符串的静态部分，打包器不会改写字符串内容。
  */
-const extensionJs = execFileSync("unzip", ["-p", vsixPath, "extension/dist/extension.js"], {
-  encoding: "buffer",
-  maxBuffer: 64 * 1024 * 1024
-});
+const extensionJs = readEntry("extension/dist/extension.js");
 for (const flag of ["--print-to-pdf", "--headless=new", "--screenshot"]) {
   if (extensionJs.indexOf(flag, "utf8") !== -1) {
     console.log(`[verify] OK   extension.js contains ${flag}`);
@@ -374,7 +389,7 @@ if (!failed) {
   );
   writeFileSync(
     path.join(smokePkgDir, "package.json"),
-    execFileSync("unzip", ["-p", vsixPath, "extension/package.json"], { encoding: "buffer" })
+    readEntry("extension/package.json")
   );
   const smoke = spawnSync(
     process.execPath,
@@ -403,9 +418,7 @@ console.log(
 );
 // repository 写错地址照样能通过打包，Marketplace 却会把「源码地址」指到别处去，
 // 所以这里回读包内实际产物而不是源码 manifest，缺件才继续提醒。
-const shippedManifest = JSON.parse(
-  execFileSync("unzip", ["-p", vsixPath, "extension/package.json"], { encoding: "utf-8" })
-);
+const shippedManifest = JSON.parse(readText("extension/package.json"));
 if (shippedManifest.repository?.url && shippedManifest.repository?.directory) {
   console.log(
     `[verify] OK   repository metadata: ${shippedManifest.repository.url} ` +

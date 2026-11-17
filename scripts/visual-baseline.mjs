@@ -15,11 +15,11 @@
  * - 关键 rect：内容宽度、目录宽、工具栏高、grid 列轨道，含 ≤900px 的单栏形态；
  * - 每个 palette 一张 PNG（`tests/visual/artifacts/`，gitignore）与其 sha256。
  */
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { runTool } from "./lib/run-tool.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const webviewDir = path.join(root, "apps/webview");
@@ -156,11 +156,17 @@ async function loadPlaywright() {
   }
   let globalRoot;
   try {
-    globalRoot = execFileSync("npm", ["root", "-g"], {
+    // 走 runTool：Windows 上 `npm` 是 `.cmd` 垫片，不经 shell 直接 spawn 报 ENOENT，
+    // 这里会被 `catch` 吞成「拿不到全局 root」，看起来像没装 npm，而不是调不起来。
+    const probe = runTool("npm", ["root", "-g"], {
       encoding: "utf-8",
       // npm 的版本告警不该混进取证输出。
       stdio: ["ignore", "pipe", "ignore"]
-    }).trim();
+    });
+    if (probe.status !== 0 || !probe.stdout) {
+      return null;
+    }
+    globalRoot = probe.stdout.trim();
   } catch {
     return null;
   }

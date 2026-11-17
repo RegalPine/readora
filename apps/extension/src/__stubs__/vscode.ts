@@ -8,8 +8,21 @@
  * M3 起补齐 URI 的段语义：path 为解码形态、toString 重新百分号编码，
  * 带 query / fragment / with()，否则资源解析与 webview URI 版本号
  * 这两类断言无从表达（fsPath 单字段模型区分不了「编码」与「越界」）。
+ *
+ * 盘符差异也在建模范围内：初始版本在 macOS 上开发，那时 path 与 fsPath 同形，
+ * 「不建模 Windows 盘符」还不算撒谎。但真机夹具测试（resource-fixture.spec.ts）
+ * 要在三平台上都真的落到同一个 inode，替身就必须像宿主一样把 `C:\x` 记成
+ * `/C:/x`、把 fsPath 还给操作系统能用的形状 —— 否则 `posix.dirname('/C:\x\a.md')`
+ * 会把整个带反斜杠的串当成一个文件名，目录算成 `/`，夹具在 Windows 上全变成假路径。
  */
 import { posix } from "node:path";
+
+/** 与 vscode-uri 同口径：同一个 URI 字符串的 fsPath 形状随**运行平台**变。 */
+const IS_WINDOWS = process.platform === "win32";
+/** 操作系统形态的盘符绝对路径：`C:\x` 或 `C:/x`。 */
+const OS_DRIVE_PATH = /^[A-Za-z]:[\\/]/u;
+/** URI path 形态的盘符绝对路径：`/C:/x`（前导斜杠是 URI 语法，不属于文件系统）。 */
+const URI_DRIVE_PATH = /^\/([A-Za-z]:)(\/.*)?$/u;
 
 function percentEncodePath(path: string): string {
   return path.split("/").map((segment) => encodeURIComponent(segment)).join("/");
@@ -33,7 +46,13 @@ export class Uri {
   ) {}
 
   static file(path: string): Uri {
-    const normalized = path.startsWith("/") ? path : `/${path}`;
+    // Windows 上宿主把盘符路径写成 `/C:/x` 并统一用正斜杠；POSIX 上反斜杠是
+    // 合法文件名字符，绝不能替用户改写 —— 那会让夹具与真实宿主各说各话。
+    const slashed = IS_WINDOWS ? path.replace(/\\/g, "/") : path;
+    const withDriveSlash = IS_WINDOWS && OS_DRIVE_PATH.test(slashed) ? `/${slashed}` : slashed;
+    const normalized = withDriveSlash.startsWith("/")
+      ? withDriveSlash
+      : `/${withDriveSlash}`;
     return new Uri("file", "", normalized, "", "");
   }
 
@@ -59,9 +78,16 @@ export class Uri {
     return new Uri(base.scheme, base.authority, path, "", "");
   }
 
-  /** POSIX 主机上 fsPath 即解码后的 path；stub 不建模 Windows 盘符差异。 */
+  /**
+   * 操作系统能直接用的路径：POSIX 上就是解码后的 path，
+   * Windows 上剥掉 URI 语法的前导斜杠并把分隔符还给反斜杠。
+   */
   get fsPath(): string {
-    return this.path;
+    if (!IS_WINDOWS) {
+      return this.path;
+    }
+    const drive = URI_DRIVE_PATH.exec(this.path);
+    return drive ? `${drive[1]}${drive[2] ?? ""}`.replace(/\//g, "\\") : this.path;
   }
 
   with(change: {
