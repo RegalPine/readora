@@ -21,6 +21,20 @@ import {
   type ThemeState
 } from "@readora/contracts";
 
+/**
+ * 接续 Host 写入 HTML 的首帧主题，避免 React 挂载时用默认亮色覆盖暗色。
+ * HTML 仅含 palette/scheme；auto 与产品主题同用产品色板，来源元数据稍后由
+ * theme.update 补齐。宿主色板必须保留 vscode 来源，否则明暗相同也会换色。
+ */
+export function readInitialTheme(root: HTMLElement): ThemeState {
+  const palette = root.dataset.readoraTheme;
+  const scheme = root.dataset.readoraScheme;
+  return {
+    mode: scheme === "dark" || scheme === "light" ? scheme : palette === "dark" ? "dark" : "light",
+    source: palette === "vscode" ? "vscode" : "product"
+  };
+}
+
 /** 正文字号区间：与 `ReaderPreferencesSchema.fontSize` 同边界（护栏测试逐值锁定）。 */
 export const FONT_SIZE_MIN = 8;
 export const FONT_SIZE_MAX = 32;

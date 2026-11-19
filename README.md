@@ -1900,6 +1900,250 @@ Chromium 里逐 y 取证（`elementFromPoint` + 矩形读数）后坐实：
   是这样红的）。这不是新护栏，是把已有类别补全
 - 未做：真实 VS Code 面板内的观感复核（本轮结论全部来自 Chromium 生产构建页）
 
+### M13 · 品牌色 OKLCH 精化（accent 阶梯换档 + 焦点环解耦；版本随下一次发布顺延）
+
+以 CUS Designer（OKLCH 感知色彩工作台）对现有品牌紫做阶梯化精化：锚点 `#6d28d9` 归一化到
+`oklch(0.49 0.24 292.6°)`（色相 301.9° → 292.6°，品红紫 → 电光蓝紫），偏好 = 平衡色度 / 高对比 /
+品牌调中性 / 强区分语义，生成 11 档阶梯后按 `contrast.spec.ts` 的义务矩阵选档，映射核算全部用
+WCAG 2.2 标准口径自算（工具的交叉矩阵页数值与自算吻合，阶梯页对比度标签口径不明不采信）：
+
+- **换档**（`apps/webview/src/styles/tokens.css`）：`light-accent` `#6d28d9` → `#7642de`（600 档，白字
+  5.83:1、canvas 5.48:1）；`light-accent-text` / `light-link` `#5300b7` → `#592dac`（700 档，canvas
+  8.25:1、soft 7.01:1）；`dark-accent` `#7c3aed` → `#7642de`（与 light 同档消除双主题漂移，on 字
+  4.64:1 —— 旧值 4.53 压线）；`dark-accent-text` `#d2bbff` → `#ddd6ff`（200 档，canvas 13.31:1、
+  soft 10.45:1）；`dark-accent-soft` 跟随为 `rgb(118 66 222 / 0.2)`；HC 两档 `#440096`/`#e0d0ff` →
+  `#3f2279`/`#eeebff`（四表面 min 9.77/12.32，≥7 达标且 dark 侧余量提升）。语义四色
+  info/success/warning/danger 保持原值不动
+- **焦点环解耦**：`--readora-color-focus` 的无宿主 fallback 原来直接引用 accent，换档门禁实测
+  翻车 —— 新 600 档对 dark surface 只有 2.94:1（旧 `#7c3aed` 约 3.05 压线）。修复：Primitive 层新增
+  `--readora-palette-light-focus`（600 档）与 `--readora-palette-dark-focus`（500 档 `#9265ff`，
+  dark surface 4.50 / raised 3.79），语义层 fallback 改引专属档。教训：换 accent 必须同步核算
+  focus 对 canvas/surface/raised 三面 ≥3:1，暗底焦点环应比按钮底亮一档
+- **门禁**：`contrast.spec.ts` **164/164**（换档后首跑曾抓出上述 focus 回归，修复后全绿）；
+  webview 全量 **730/730**、design-tokens **63/63**；`pnpm visual:update` 报 10 档取值变化，git diff
+  逐项核对全部可归因于本批令牌与新增 focus 档（host 中转、`outline-active-color` 与 computed
+  rgb 值为派生跟随，无历史积压）；`pnpm visual:check` **10 档全等**（每档 211 token）收尾
+- **文档同步**：PRD-003 §4.2 / §4.3 权威色板表与附录 A、ARC-006 §4.2 示例与 §4.3 说明改至新值；
+  README M5 的浏览器取证记录属历史证据不改写
+
+### 归档 · 状态条口径与设置宽度收口（用户实测反馈，版本随下一次发布顺延）
+
+三条都在真实宿主里用出来，落在阅读面两处口径与一条消息链路：
+
+- **设置宽度即时生效**（`apps/extension`）：宽度走 `config.update`（偏好权威）与
+  `reader.viewState`（会话视图状态权威）两条通道，Webview 的 `--readora-content-width`
+  以视图状态优先，于是设置弹层改宽度只写进了偏好、不回灌会话，已开面板不跟着变、重开才生效。
+  修复以「配置值本身是否变化」为唯一信号：`application.ts` 记 `lastConfiguredWidth` 基准，
+  `broadcastConfig` 增 `syncContentWidth` 选项，只有配置宽度真的变了才同步进 `viewState`
+  并下发 —— 保留 `adjustContentWidth` 命令「只改会话不写配置」的语义不被回滚。`view-state.spec.ts`
+  补 4 条护栏，`dev/e2e.tsx` 夹具同形。
+- **状态条节数区分层级**（`apps/webview`）：`sections` 原取 `outline.length`（h1~h6 扁平计数），
+  与目录顶层看到的分节对不上。改取 `buildOutlineTree(outline).length`（大纲树根级分节数），
+  并复用同一棵 `outlineTree` 给祖先展开 effect；单复数跟值走（`1 section`）。口径登记于
+  PRD-003 §4.6；大纲底部 `N Sections/Depth` 统计早已下线，不在此加回（§10.7）。
+- **删除 `Bridge: Connected` 字段**：状态条随外壳只在第一份快照落地后渲染，该字段恒为
+  Connected、零信息量，且 "Bridge" 是内部术语。删 `StatusBar.tsx` 第六项与 `App.tsx` 的
+  `bridgeConnected` 状态、`shell.css` 的 `.readora-status-indicator`；单测/e2e 六项改五项，
+  「收到过快照」改由状态条本身存在来证明。PRD-003 §4.6 记理由。
+- **顶栏开合 toggle 按下态去紫**（`apps/webview`）：大纲默认可见使 Outline 按钮常驻
+  `aria-pressed="true"`，旧样式给它加了 accent 紫描边 + 紫字，一圈紫边与 `:focus-visible`
+  焦点环同色，看着像被聚焦/选中、鼠标移开也不消失，抢正文阅读注意力（用户实测反馈）。
+  `shell.css` 的 `.readora-toolbar-button[aria-pressed="true"]` 移除 `border-color`/`color`
+  两行，按下态只留淡底（`--readora-outline-active-bg`）+ 加粗；焦点环仍由 `components.css`
+  独占，未改任何 Token 取值。口径登记于 PRD-003 §10.5（1.4.1）。
+- **门禁**：webview 全量 vitest 通过、`tsc --noEmit` 无错；`tests/e2e/{shell,outline,theme}.spec.ts`
+  相应字段断言改到五项 / 新口径后通过；`playwright-cli` 浏览器实测宽度即时生效与节数分层通过；
+  toggle 去紫后 `visual:update` 重采 10 档（`.readora-toolbar-button` computed 紫→中性 + 像素）
+  再 `visual:check` 全等，浏览器实测按下态 `borderTopColor` 已回中性、Tab 焦点环仍 2px
+
+### 归档 · 面包屑改用 VS Code 原生（撤销自绘可点目录段；版本随下一次发布顺延）
+
+**本段取代并撤销上一次的「面包屑切换文档（点目录段 → 列同目录 Markdown → 切换）」自绘方案。**
+用户决策「readora 也用 VS Code 的，不用自己实现」：文档面板从 `createWebviewPanel` 迁移为
+自定义编辑器 `registerCustomEditorProvider`（只读 `CustomReadonlyEditorProvider`，`priority: option`
+——文本编辑器仍是 `.md` 默认打开方式，readora 只是「打开方式」候选）。宿主据此在编辑器上方
+原生画出面包屑与同级文件切换，Webview 顶栏不再自绘可点目录段。
+
+- **extension**（`apps/extension`）：新增 `webview/custom-editor-provider.ts`；`openCustomDocument`
+  认领 URI 并管 dispose，`resolveCustomEditor` 先 `readSnapshot`（读失败即抛、宿主丢弃这次打开不留面板），
+  再写 `panel.webview.options = { enableScripts, localResourceRoots: webviews.panelResourceRoots(...) }`
+  并交 `webviews.configure(...)` 装配。注册在 `application.ts` 的激活监听里，带
+  `webviewOptions: { retainContextWhenHidden: true }`、`supportsMultipleEditorsPerDocument: false`。
+  `openReader` / `openToSide` / `document.navigate` 绝对通道统一改走 `vscode.openWith(uri, viewType, { viewColumn })`。
+  manifest 新增 `contributes.customEditors`（viewType `readora`、selector `*.md`/`*.markdown`、priority `option`）。
+- **删除自绘通道与能力**：`packages/contracts` 删 `document.list` 的类型/schema/方向/注册表/响应
+  schema（消息 18→17）；`handlers.ts` 删 `document.list` 注册；`resource-service.ts` 删 `listMarkdown`、
+  `DocumentListOutcome`、`DOCUMENT_LIST_LIMIT`、`isMarkdownName` 与 `ports.readDirectory`；`vscode-port.ts`
+  删 `readDirectory` 实现。安全面缩小——资源侧只剩 `resource.resolve` 单篇解析，不再有枚举目录入口。
+- **webview**（`apps/webview`）：先删 `app/BreadcrumbMenu.tsx`，再把顶栏面包屑**整条删除**——实测迁移后
+  宿主原生面包屑与 Webview 自绘那条叠成**两层冗余导航**，故 `TopBar.tsx` 删 `Breadcrumb`/`breadcrumbOf`/
+  `BREADCRUMB_*` 常量与 `documentUri` prop、`shell.css` 删面包屑样式、`App.tsx`/`dev/visual.tsx` 去掉
+  `documentUri` 透传。文档路径链与同级文件切换全部交给宿主原生面包屑，顶栏不再自绘任何面包屑节点。
+- **夹具/测试**：`dev/e2e.tsx` 删 `document.list` 假通道与 `setDirectoryListing`/目录表辅助；`tests/helpers/reader.ts`
+  删 `DirectoryEntry`/`directoryListing`；删 `breadcrumb-switch.spec.tsx`、`breadcrumb-menu.spec.tsx`、
+  `tests/e2e/breadcrumb-switch.spec.ts`；`topbar-fields.spec.tsx`/`reader-shell.spec.tsx`/`resource-wiring.spec.ts`/
+  `document-delivery.spec.ts` 等断言迁到「顶栏无面包屑」护栏与 provider 装配（`localResourceRoots` 读 `webview.options`）；
+  `manifest.spec.ts` 加 `customEditors` 护栏；`__stubs__/vscode.ts` 建模 `registerCustomEditorProvider` +
+  `vscode.openWith`（失败撤销面板）。
+- **门禁**：`pnpm -r typecheck` 全绿；contracts/design-tokens/diagram-core/markdown-core/extension/webview vitest
+  全通过；PRD-003 §10.5/§4.6（再更正）、ARC-004 §4.4/§7.2/§8.3、ARC-008 §6 同步登记撤销。视觉基线因
+  顶栏面包屑整段删除（连带 `visual-baseline.mjs` SELECTORS 去掉 `.readora-breadcrumb-segment--file`）需
+  `visual:update` 重采后 `visual:check`（diff 只落在面包屑选择器删除 + 截图像素）。
+
+### 归档 · 大纲通顶、顶栏让位（面包屑删除后的顺势收尾；版本随下一次发布顺延）
+
+**承上一段：面包屑整条删除后，顶栏左侧空了出来。** 用户据此要求「大纲栏通顶、Outline 按钮放到 topbar 左侧」。
+外壳从「纵向四段」改为**大纲通顶的侧栏布局**（对齐 ARC-005 §5.1 抽象骨架——ReadingToolbar 本就属于 MAIN）：
+
+- **extension/webview 结构**：`ReaderShell` 把 `.readora-topbar` 与 `.readora-searchbar` 从外壳第一段**移进右列
+  `.readora-shell-main`**；`.readora-body` 仍是「大纲列 | 内容列」两列 grid（**保留 grid** 以守住 `visual-baseline.mjs`
+  靠 `gridTemplateColumns` 判收单列的护栏）。props 与 `data-readora-band` 名不变，只重排 DOM 层级。
+- **shell.css**：`.readora-shell-nav` 由 `sticky top: var(--readora-topbar-height)` 改 `sticky top: 0` 通顶，高度去掉
+  topbar 项（`calc(100vh − statusbar − hairline)`）；`.readora-shell-main` 加 `display:flex; flex-direction:column`。
+  滚动模型不变（window + sticky），状态条仍横贯整窗；单列形态（目录收起 / 专注 / ≤900px）顶栏铺满整窗回到旧观。
+- **TopBar.tsx**：Outline 按钮从靠右的 `.readora-toolbar-actions` 移到工具栏**首节点（左侧）**，与它控制的大纲列同侧；
+  动作组仍 `margin-left: auto` 靠右。按钮顺序不变（Outline 仍最前），只换父节点。
+- **测试**：`reader-shell.spec.tsx` band 顺序改 `["body","topbar",…,"statusbar"]` 并加「Outline 不在动作组里」护栏；
+  `tests/e2e/shell.spec.ts` 新增「大纲通顶 + 顶栏让位」几何断言（nav.y≈0、顶到状态条上沿；topbar.x ≥ 大纲右缘、宽 < 整窗）。
+- **门禁**：typecheck / lint / vitest / e2e 全绿；视觉基线因 topbar 变窄、nav/body/main 变高需 `visual:update` 重采后
+  `visual:check`；PRD-003 §10.5 + 变更记录 1.7.1、ARC-005 §5.3 实现注记同步登记。
+
+### 归档 · 暗色中性档去紫（用户实测反馈「左侧大纲视图字体白里透紫、雾茫茫的」；版本随下一次发布顺延）
+
+用户反馈的是**观感**，根因量出来是**色相**：大纲条目走组件层 `--readora-outline-link-color →
+--readora-color-text-secondary`，而暗色板的三档「中性」文字与两档边界的彩度是正文档的 **2.4 倍**、
+色相比正文偏紫 **30~34°**。对比度不是问题（secondary 对 canvas 10.88:1，远超 AA），所以这不是
+可读性缺陷而是配色系统性偏色 —— 13px / 400 字重的亮紫字压在 `#10141A` 上即呈「白里透紫 + 边缘发雾」。
+
+- **量化口径**（一次性脚本，跑完删除）：把 tokens.css 的暗色中性档转 OKLCH 逐项列出 ——
+  `text-primary #dfe2eb` L=0.913/C=0.013/H=271°，`text-secondary #ccc3d8` L=0.831/**C=0.031/H=305°**，
+  `text-muted #958da1` L=0.657/**C=0.031/H=304°**，`border-strong #4a4455` L=0.399/C=0.029/H=301°，
+  `hc-text-muted #b8b3c0` H=303°，`hc-border-strong #807c88` H=301°。亮色 1.4.0 只中性化了面族/边界/柔光，
+  **文字档是漏网的**（`#4a4455`/`#6b6478` 同为 301°），本轮按用户决策只处理暗色
+- **取档规则**：同 OKLCH L（亮度不动，可读性不作为代价）、彩度砍半、色相拉回正文同族 263°。落地
+  `text-secondary #ccc3d8→#c2c8d2`、`text-muted #958da1→#8e949f`、`border rgb(74 68 85/.6)→rgb(67 72 80/.6)`、
+  `border-strong #4a4455→#434850`，高对比预设暗色同两档 `#b8b3c0→#b1b6c0`、`#807c88→#7a7f88`
+- **活动项紫色**（产品决策「压淡一档」而非「保留」）：`accent-text #ddd6ff→#d2ccf0`，L 0.895→0.861、
+  C 0.056→0.050、**色相 293° 不动** —— 品牌紫仍是点睛位，只是不再在暗底上发光。`accent` / `accent-soft` /
+  `accent-on` / `focus` 全部未动（1.4.0 定的「底/边/影中性化、品牌色相保留」切分继续成立）
+- **改前预核**（镜像 `contrast.spec.ts` 的全部断言形式，含 alpha 合成）：新值四表面最低对比度逐项
+  **不低于**旧值 —— secondary 8.56（旧 8.48）、muted 4.72（旧 4.53）、hc-muted 7.08（旧 7.03）、
+  border-strong 1.56（旧 1.54，下限 1.5）、hc-border-strong 3.58（旧 3.54，门槛 3）；`border` 默认档
+  合成后 1.30~1.46 仍 <3，HC 覆写仍然「有意义且严格更好」这两条探针都不退化
+- **门禁**：`contrast.spec.ts` **164/164**（两条 Primitive 字面值固化断言 `#ccc3d8`/`#958da1` 同步换新值，
+  `border-strong` 注释里的 `#4a4455` 一并改）；`pnpm -r test` 全绿（contracts 41 / design-tokens 63 /
+  diagram-core 119 / markdown-core 309 / extension 349+1 skip / webview 744）；`pnpm -r typecheck` 与
+  `pnpm lint` 全绿
+- **基线**：`visual:update` 报「取值变化 10 档」是粗粒度清单 —— 逐行核对 diff 得 **22 个 token 名 / 133 处
+  取值**，全部可归因于这 7 个 Primitive（语义层、host 中转兜底、`outline-link-color`/`outline-active-color`/
+  `diagram-muted`/`button-border`/`panel-border`/`toolbar-border`/`code-border` 为派生跟随）；亮色档之所以
+  也上榜，是因为暗色 Primitive 声明在同一个 `:root` 块里、每档都记录全 211 token。`visual:check` **10 档全等**
+- **浏览器实测**（规则 4，`playwright-cli`）：computed 值确认新令牌从文件生效（`--readora-outline-link-color:
+  #c2c8d2`、`--readora-outline-active-color: #d2ccf0`）。对元素截图的字形像素做同口径统计（各 749 个像素、
+  排除背景与焦点环）：平均彩度 **C 0.0269→0.0149（-45%）**、平均色相 **H 302.2°→260.3°**、平均亮度
+  **L 0.721 完全不变** —— 「白里透紫」被消掉而字号层级与对比度没有位移。截图
+  `test-results/outline-dark-current.png` / `outline-dark-after.png`
+- **文档同步**：PRD-003 §4.3 表 6 行 + 新增去紫说明段 + 附录 A 映射 5 行 + 附录 B 登记 **1.6.0**（1.4.1 已被
+  顶栏 toggle 去紫占用，本轮顺延到 1.6.0 而非改号）；ARC-006 §4.2 示例与 §4.3 说明换新值，**顺带修掉一处
+  历史漂移** —— 该示例的亮色面族四档仍写着 1.4.0 之前的 `#f8f9ff/#eff4ff/#e5eeff/#dce9ff`
+- **残留扫描**：`#4a4455` 在 tokens.css / PRD-003 / ARC-006 各剩一处，都是**亮色** `text-secondary`
+  （与旧暗色 `border-strong` 同值纯属巧合，未改）；README M13 的 `#ddd6ff` 属历史取证记录不改写
+
+### 归档 · 外壳细节四处收敛（产品反馈「只要图标 / 换个图标 / 高亮改背景 / 去掉节数」；版本随下一次发布顺延）
+
+**四处都是「按产品反馈收细节」，没有一处改 Token 取值。** 上一段（大纲通顶）把壳的骨架定下来之后，
+用户针对四个具体观感点提了要求：三枚控件只要图标、Outline 图标换一个更合适的、大纲活动条目改用
+背景色高亮、状态条去掉 section 统计。
+
+- **三枚控件纯图标**：顶栏 `Outline` 开合、大纲面板头部的「展开全部 / 过滤」去掉文字，只留 `<Icon>`。
+  去文字不等于去名称 —— 可读名称仍由 `aria-label` 承担（图标本身 `aria-hidden`，是装饰），
+  `title` 补回悬停解释；`aria-pressed` / `aria-expanded` 的开合语义不变，「过滤中：命中项始终展开」
+  这类原本写在文字按钮里的说明挪进了 `title`。内边距由两个新修饰类
+  `.readora-toolbar-button--icon` / `.readora-outline-action--icon`（`OutlinePanel.tsx` 导出常量
+  `OUTLINE_ACTION_ICON_CLASS`）收成与图标等宽的定量：点击区随文字一起收窄（顶栏 82×29 → 34×24，
+  面板头部 91×24 → 22×18），与 VS Code 侧栏图标按钮同量级 —— 这里不假装「宽度被补回来了」。
+- **`OutlineIcon` 换图形**：旧图形是「三个项目点 + 三条右对齐横线」的无序列表，和正文里的 `ul`
+  同形 —— 大纲的辨识特征是**缩进层级**而不是列表符。改为层级树：根标题在上，一条竖线引出两个
+  缩进一级的子行（四段 `path`，仍走 `Icon` 的 `currentColor` / `strokeWidth`，不引入新 token）。
+- **活动条目高亮改背景**：`.readora-outline-link[aria-current="location"]` 去掉 `box-shadow: inset 2px`
+  左侧指示条 —— 它跟着条目缩进，一级标题时停在空档里、深处时又贴到文字下，两头都不准。
+  改用既有的 `--readora-outline-active-bg` 淡底（该令牌本就存在，取值未动），accent 文字色与
+  `font-weight: 600` 保留。背景落在 **link** 而不是 row 上，是为了让 `visual-baseline.mjs` 的
+  `SELECTORS × STYLE_PROPS`（含 `backgroundColor`）真正捕获这一档变化。
+- **状态条 `N sections` 字段删除**（§4.6 区块渲染诚实性）：节数目录那一栏直接数得出来，摆在这儿是
+  重复播报。`StatusField` 联合类型去 `"sections"`、`StatusBar` 去 `sectionCount` prop，
+  `App.tsx` 与 `dev/visual.tsx` 不再透传；`outlineTree` memo 保留（祖先展开仍要用）。
+- **测试同步**：`status-quick-bars.spec.tsx` 五项断言改四项并新增「节数不回头」反向断言；
+  `app-navigation.spec.tsx` 状态条断言随之收敛；`tests/e2e/shell.spec.ts` 的 `FIELDS` 去 `sections`、
+  改测换文档后 `words` 跟随快照；`tests/e2e/outline.spec.ts`「底部不摆统计」用例改为断言
+  `[data-readora-status="sections"]` 数量为 0。图标按钮的既有单测用 `getByRole(..., { name })` 定位，
+  即走 `aria-label`，因此名称口径不改就仍能命中。
+- **门禁**：`pnpm lint` 与 `pnpm -r typecheck` 全绿；webview vitest **36 files / 744 tests** 全绿
+  （744 = 本轮结束时计数，其中 21 条属于并发的行内代码轮次）；
+  `pnpm test:e2e` 全量 122 项中偶发失败 —— 首轮 3 个（2 个 `Test timeout while setting up page`、
+  `theme.spec.ts` 一处 351 vs 350 的一像素滚动位）、复跑另见 `integration/session` 一个首帧未挂载，
+  **逐个单独重跑全部通过**，判定为并发 worker 抢 chromium 启动资源而非本轮引入的失败模式（三处
+  失败都不落在本轮改动的语义断言上）。
+- **基线**：`visual:update` 重采后 `visual:check` **10 档全等**。逐行核对 diff（对照 index 快照）确认
+  本轮的非截图差异**只有** `.readora-outline-link[aria-current="location"].backgroundColor`（透明 → 淡底）；
+  基线里其余变化（`--readora-inline-code-background` 改 `color-mix`、面包屑选择器删除、
+  topbar/body 的 rect）都来自工作区尚未提交的其他轮次，与这四处收敛无关 —— Token 取值本轮零改动。
+- **浏览器实测**（规则 4，`playwright-cli`）：夹具页载入一篇四标题文档、滚到末节之后取 DOM 证据 ——
+  状态条字段恰为 `[words, version, zoom, theme]` 且 `[data-readora-status="sections"]` 为 0；顶栏
+  Outline 按钮 `textContent` 为空串、`title="Outline"`、`aria-pressed="true"`、`svg[aria-hidden]` 内含
+  层级树四段 `path`；头部两枚动作 `textContent` 为空串且 `aria-label`/`title` 为 `Collapse all` / `Filter`；
+  活动条目 computed `backgroundColor` 为 `rgba(11, 28, 48, 0.06)`（非活动项 `rgba(0, 0, 0, 0)`）、
+  `box-shadow: none`、`font-weight: 600` —— inset 指示条确实已从样式链上退场。两枚按钮与旧「图标+文字」
+  的尺寸对照也在页内量得（探针复制一个不带 `--icon` 的同名按钮量完即删）。
+- **文档同步**：PRD-003 §10.5（顶栏纯图标 + 名称口径 + 实测点击区尺寸）、§10.6（图标置换与层级树）、
+  §10.7（活动条目背景高亮，替换 inset 指示条说明）、§4.6（状态条四字段）与附录 B 变更记录 **1.7.2**。
+
+### 归档 · 行内代码色块改三重线索（用户反馈「` 包裹内容在亮色模式下对比度不够」；版本随下一次发布顺延）
+
+用户说的是**对比度**，量出来缺陷不在对比度上：亮色下 `.readora-inline-code` 的文字对色块底是
+**14.59:1**（远超 AA）。真正不够的是**色块与它落进的容器之间的区分度** —— 旧写法
+`--readora-inline-code-background: var(--readora-color-surface-subtle)` 在正文画布上只有
+1.11:1，而 `surface-subtle` 同时是引用块的底，所以进了引用块就是 **1.00:1 逐字节同色**
+（浏览器 computed 实测两面完全相等），色块直接消失。这类缺陷当时没有任何门禁覆盖。
+
+- **量化口径**（一次性脚本，跑完删除）：先把 tokens.css 的字面值展开后按 WCAG 相对亮度算
+  旧值在五档容器上的区分度（canvas 1.11 / surface 1.06 / subtle 1.00 / raised 1.06 /
+  sunken 1.18），再拿改后的合成值逐项复算 —— 半透明层一律先叠到实际容器底再算
+  （`contrastRatio(fg, bg, base)` 的三参路径），不拿原色直接比
+- **为什么不能只调底色**：候选值凡是复用五档表面阶梯的，迟早与取了同档背景的容器撞色
+  （本例就是引用块）。因此底色改为「前景掺 12% 透明」的派生柔光（不属于表面阶梯，与五档
+  天然拉开，且宿主模式下跟着编辑器前景/背景走，同 §8.6 代码块口径），同时补上两条**不依赖
+  底色**的线索：1px `border-strong` 描边 + 前景取 `--readora-syntax-attr`（与代码块里的
+  变量/属性同色，行内与块级读成同一套语汇，挂在 scheme 轴上自动换档）
+- **未新增 Token 名**：描边复用 `--readora-color-border-strong`、前景复用 `--readora-syntax-attr`
+  （均在 `SYNTAX_TOKEN_NAMES` / 语义层清单里），不动 `token-registry.ts` 的组件层名单；
+  `design-tokens.spec.ts` 「组件层取值必须含 `var(--readora-color-`」与 `no-hardcoded-color.spec.ts`
+  「组件层不许字面色值」两条护栏在新写法下均继续成立（掺色走 var 引用，不落字面）
+- **门禁**：`contrast.spec.ts` 新增「行内代码色块与它的落点」describe，两 scheme × 五落点各两条
+  （① 色块 vs 容器 ≥ 1.15；② 色块内文字叠到落点上后过 AA 4.5:1）加一条结构断言（声明里不得
+  出现 `color-surface`）。着色 token 与掺量从组件层声明现读（正则反解 `color-mix`），不在测试里
+  抄第二份；**取值写在 `it` 里而不是 describe 体里** —— 声明被改坏时反解会抛，在 describe 体里
+  抛会让整个 spec 文件收集失败，把无关门禁一起带走。变异探针（把声明改回 `surface-subtle`）
+  恰好红 21 条、其余 164 条不动；恢复后 webview 样式护栏 **216/216**、design-tokens **63/63**、
+  `pnpm -r typecheck` 与 `pnpm lint` 全绿
+- **基线**：取值变化只应落在 `--readora-inline-code-background` 与 `.readora-inline-code` 的
+  computed `color`/`backgroundColor`/`borderTopColor`/`borderLeftColor`（后两档旧值是 `rgb(11, 28, 48)`
+  —— 没有边框时 `border-*-color` 就是 `currentColor`，加了描边才真变成 `border-strong` 的
+  `rgb(194, 199, 207)`；字号与行高逐字不变）。本轮未单独重采 —— 同一工作区里 1.7.2 那轮的
+  `visual:update` 已经把这两项新取值一并采进基线（其登记文字里点名了「`--readora-inline-code-background`
+  改 `color-mix` 属于其他轮次」），`visual:check` **10 档全等** 即为本轮取值已被基线覆盖的证明
+- **浏览器实测**（规则 4，`playwright-cli`）：`dev/visual.html?palette=light` 上 computed 确认
+  `color(srgb 0.0431373 0.109804 0.188235 / 0.12)` / `rgb(149, 56, 0)` / `rgb(194, 199, 207)`
+  三项均从文件生效；改前色块与引用底完全同色（`相同: true`），改后向引用块里注入行内码
+  色块依旧可见。截图 `test-results/inline-code-light-{before,after}.png` /
+  `inline-code-dark-in-quote.png`
+- **文档同步**：PRD-003 新增 **§8.6.1 行内代码**（该元素此前在规范里没有小节，grep
+  「行内代码」 0 命中——所以「不够」没有验收口径可引用）+ §14.1 补一条色块类元素的验收要求
+  + 附录 B 登记 **1.7.3**；ARC-006 §9.1 的 `Inline Code` 行由「行内代码背景」扩为背景/描边/
+  文字色并补上为何占三项
+- **教训**：只测「文字 vs 背景」的 AA 矩阵会漏掉整类缺陷 —— 色块类元素的义务有两维（自身
+  文字要可读、它自己要与容器分得开），后者不在 WCAG 1.4.3 的字面范围内，得单独设下限门禁
+
 ## 环境偏差登记（IMP-001 §3.3）
 
 规范参考版本为 Node 26.x / pnpm 12.x；本仓库当前按实际开发环境推进：

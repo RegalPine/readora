@@ -47,6 +47,7 @@ function fail(message, cause) {
 
 /** 与 `__stubs__/vscode.ts` 同样的口径：只建模 activate 路径真的会用到的 API。 */
 const registeredCommands = new Map();
+const registeredCustomEditors = [];
 const errorMessages = [];
 const warningMessages = [];
 const infoMessages = [];
@@ -143,6 +144,13 @@ const vscodeStub = {
     },
     createWebviewPanel: () => {
       throw new Error("activate() must not create a webview panel");
+    },
+    // 自定义编辑器形态：注册 provider 本身不建面板，冒烟阶段允许；真正的面板创建
+    // 只会发生在用户以 readora「打开方式」选中某文档时，而冒烟里没有这一步。
+    // provider / options 形参在冒烟里用不到，按 JS 允许的实现签名省略（多实参会被忽略）。
+    registerCustomEditorProvider: (viewType) => {
+      registeredCustomEditors.push(viewType);
+      return disposable();
     }
   },
   workspace: {
@@ -257,6 +265,17 @@ if (missing.length > 0) {
 }
 // deactivate() 会注销命令，计数必须在这之前取，否则末行日志会报 0/N。
 const registeredCount = registeredCommands.size;
+
+// 自定义编辑器（原生面包屑的载体）必须随 activate 注册：漏了它，manifest 里的
+// customEditors 声明指向一个不存在的 viewType，用户「打开方式」列表里根本没有 readora。
+const declaredEditors = (manifest.contributes.customEditors ?? []).map((e) => e.viewType);
+const missingEditors = declaredEditors.filter((vt) => !registeredCustomEditors.includes(vt));
+if (missingEditors.length > 0) {
+  fail(
+    `activate() registered ${declaredEditors.length - missingEditors.length}/${declaredEditors.length} ` +
+      `custom editors; missing: ${missingEditors.join(", ")}`
+  );
+}
 
 // 命令体也要真的可调用：注册成功但一进函数就炸（契约 schema、依赖装配）是同一类事故。
 // 清单故意取自 manifest 而不是手写：手写那份在新加命令时会静默少调几条，

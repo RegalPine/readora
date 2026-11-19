@@ -202,8 +202,8 @@ export function createErrorResponse(
 }
 
 /**
- * 响应载荷注册表：请求方向的消息里只有 resource.resolve 带结构化成功载荷，
- * Host 发送前必须过一遍（ARC-008 §16.1 第 10 条：Webview 侧还要再复判一次）。
+ * 响应载荷注册表：请求方向的消息里只有 resource.resolve 带结构化
+ * 成功载荷，Host 发送前必须过一遍（ARC-008 §16.1 第 10 条：Webview 侧还要再复判一次）。
  */
 export const RESPONSE_PAYLOAD_SCHEMAS: Partial<
   Record<MessageType, z.ZodType>

@@ -7,7 +7,7 @@
  * 两套护栏打回（§13.4）。
  */
 
-/* ---------- 四段栅格（PRD-003 §10.5） ---------- */
+/* ---------- 外壳栅格（PRD-003 §10.5） ---------- */
 
 .readora-shell {
   display: flex;
@@ -37,12 +37,14 @@
   display: grid;
   grid-template-columns: var(--readora-outline-width) minmax(0, 1fr);
   align-items: start;
-  /* flex 列里的主体段要吃掉剩余高度，但仍按内容增长（正文比视口长时以内容为准）。 */
+  /* flex 列里的主体段要吃掉剩余高度，但仍按内容增长（正文比视口长时以内容为准）。
+   * 现在主体段是外壳第一段（顶栏移进它内部的右列），左列大纲因此能一直贯到顶。 */
   flex: 1 1 auto;
   width: 100%;
 }
 
-/* 目录收起、专注模式、窄窗口三种情形都退成单列（ARC-005 §5.3 左右栏独立显隐）。 */
+/* 目录收起、专注模式、窄窗口三种情形都退成单列（ARC-005 §5.3 左右栏独立显隐）。
+ * 单列时没有左栏可让位，顶栏随右列铺满整窗；两列时顶栏 left 落在大纲右缘。 */
 .readora-shell--columns-one .readora-body {
   grid-template-columns: minmax(0, 1fr);
 }
@@ -56,15 +58,15 @@
 
 .readora-shell-nav {
   position: sticky;
-  /* 顶栏是粘住的，左栏的贴顶必须让出它的高度，否则第一条目录被压在后头。 */
-  top: var(--readora-topbar-height);
+  /* 大纲通顶：顶栏已经让进右列，不再压住左栏顶部，所以这里贴到视口顶 `top: 0`。 */
+  top: 0;
   /* 本仓无全局 border-box（同 .readora-canvas 的写法）：不给的话下面那个 height
    * 只算内容盒，左右 padding 会向外撑出滚动条。 */
   box-sizing: border-box;
-  /* 左栏恒占主体段的可用高度：文档只写两行时也不许跟着内容缩短（对齐右侧分栏线、
-   * 让目录区自己滚）。用 height 而不是 max-height，短内容才会「撑满」而非「封顶」；
-   * 多减一根 hairline 是因为状态条的高也含它自己的上分隔线，否则末行会渗到条下 1px。 */
-  height: calc(100vh - var(--readora-topbar-height) - var(--readora-statusbar-height) - var(--readora-hairline));
+  /* 左栏恒占「视口顶到状态条上沿」的可用高度：文档只写两行时也不许跟着内容缩短
+   * （对齐右侧分栏线、让目录区自己滚）。用 height 而不是 max-height，短内容才会
+   * 「撑满」而非「封顶」；多减一根 hairline 是因为状态条的高也含它自己的上分隔线。 */
+  height: calc(100vh - var(--readora-statusbar-height) - var(--readora-hairline));
   /* 滚动下沉到 `.readora-outline-list`：整栏不滚，头部动作才不会跟着滚走。 */
   display: flex;
   flex-direction: column;
@@ -75,6 +77,10 @@
 
 .readora-shell-main {
   min-width: 0;
+  /* 右列内容栈：顶栏 → 搜索行 → 快速条 + 画布，自上而下排。这里刻意用普通块级流
+   * 而不是 flex column——画布靠 `margin: 0 auto` 居中，一旦本列成了 flex 列，交叉轴
+   * 的 auto 边距会让 `align-items: stretch` 失效、画布退化成 fit-content 宽度把正文列
+   * 挤窄（连带图表容器变窄）。块级流下 sticky 带子照常贴顶，无需 flex。 */
 }
 
 /* 标题定位预留顶部空间（ARC-007 §5.4）：预留量本身仍是 `--readora-navigation-offset`，
@@ -103,6 +109,35 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--readora-color-border-strong) transparent;
+}
+
+/* Chromium / VS Code 使用 3px 极细滚动条；其他引擎沿用标准 thin 回退。 */
+@supports selector(::-webkit-scrollbar) {
+  .readora-outline-list {
+    /* 标准属性的非 auto 值会覆盖 Chromium 的伪元素尺寸与配色。 */
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
+  .readora-outline-list::-webkit-scrollbar {
+    width: 3px;
+    height: 3px;
+  }
+
+  .readora-outline-list::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .readora-outline-list::-webkit-scrollbar-thumb {
+    border-radius: var(--readora-radius-full);
+    background: var(--readora-color-border-strong);
+  }
+
+  .readora-outline-list::-webkit-scrollbar-thumb:hover {
+    background: var(--readora-color-text-muted);
+  }
 }
 
 .readora-outline-item {
@@ -156,11 +191,14 @@
   transition: background-color var(--readora-motion-fast) ease;
 }
 
-/* Active：强调色 + 左侧指示条（PRD-002 §5.1）。 */
+/* Active：整块淡底 + 强调色（PRD-002 §5.1，产品反馈改背景色）。
+ * 旧实现是一根 `inset 2px` 的左侧指示条，它跟着 `.readora-outline-link` 的
+ * padding 走，而条目按层级缩进，于是那根条停在标题左侧的空档里，看着像上一行
+ * 漏下的分隔线；背景铺在标题那一块上，「哪一条是当前的」就不用再猜。 */
 .readora-outline-link[aria-current="location"] {
   font-weight: 600;
   color: var(--readora-outline-active-color);
-  box-shadow: inset 2px 0 0 var(--readora-outline-active-color);
+  background: var(--readora-outline-active-bg);
 }
 
 .readora-outline-empty {
@@ -177,6 +215,7 @@
  * 头部常驻（见 `.readora-shell-nav` 与 `.readora-outline-panel`）。 */
 
 .readora-outline-header {
+  justify-content: flex-end;
   align-items: center;
   gap: var(--readora-space-1);
   margin: 0 var(--readora-space-1) var(--readora-space-2);
@@ -202,6 +241,13 @@
 .readora-outline-action:hover:not(:disabled) {
   background: var(--readora-color-surface-raised);
   color: var(--readora-color-text-primary);
+}
+
+/* 纯图标动作（产品反馈：头部两枚只给图标）：左右内边距收到与图标等宽的定量。
+ * 实测点击区从「文字撑开的 91×24」收窄成 22×18 —— 与 VS Code 侧栏图标按钮同量级；
+ * 读屏名称与悬停解释已在 `aria-label` / `title` 上，这里不需要为文字留位。 */
+.readora-outline-action--icon {
+  padding: 2px var(--readora-space-1);
 }
 
 /* 过滤中「展开全部」没有可见效果（折叠态不参与过滤视图），禁用而不是空转。 */
@@ -247,8 +293,9 @@
 
 /* ---------- 顶栏（PRD-003 §10.5） ----------
  * 段本身（.readora-topbar）负责粘顶与底色，工具栏只负责一行内的排布：
- * 面包屑靠左、控件组靠右。pill（阅读时长 + 模式标签）已按产品反馈迁到状态条
- * 右端，顶栏不再挤第三段；窄窗口先挤面包屑的中间目录段（省略号），控件组永不让位。 */
+ * 大纲开合靠左、其余控件组靠右（`.readora-toolbar-actions` 的 `margin-left: auto`
+ * 撑起这段空白）。面包屑已整条删除、改由宿主原生提供；pill（阅读时长 + 模式标签）
+ * 也已迁到状态条右端。顶栏现在只占右侧内容列宽（大纲通顶，左列不再被它压住）。 */
 
 .readora-toolbar {
   display: flex;
@@ -259,7 +306,7 @@
   font-size: var(--readora-font-sm);
 }
 
-/* 没有 pill 那一段占位后，靠右全靠这一枚 auto 左边距。 */
+/* 大纲开合靠左、动作组靠右之间的分隔全靠这一枚 auto 左边距。 */
 .readora-toolbar-actions {
   display: flex;
   align-items: center;
@@ -296,11 +343,22 @@
   background: var(--readora-button-hover-bg);
 }
 
-.readora-toolbar-button[aria-pressed="true"] {
+/* 大纲开合是纯图标（产品反馈）：那枚按钮紧贴在它控制的那一栏旁边，
+ * 不需要文字自证；其余四个动作仍是图标 + 文字。
+ * 去文字后点击区 34×24（旧「图标 + 文字」为 82×29），仍在同一量级。 */
+.readora-toolbar-button--icon {
+  padding: 3px var(--readora-space-2);
+}
+
+/* Outline 使用双态图标，不参与常驻按下态底色；悬停与焦点样式仍共用。 */
+.readora-toolbar-button[aria-pressed="true"]:not(.readora-toolbar-outline) {
+  /* 开合状态只靠淡底 + 加粗表达，不再上紫色描边/紫字：一枚「反映面板开着」的
+   * toggle 常驻 accent 紫边，会和键盘焦点环（components.css 的 :focus-visible）
+   * 撞成同一种视觉语言，让顶栏按钮看着像被选中/被聚焦，抢走正文的阅读注意力
+   * （用户实测反馈：默认加载即如此，鼠标移开也不消失）。焦点指示改由焦点环
+   * 独占，这里只保留「比平时重一点」的开合痕迹。 */
   font-weight: 600;
   background: var(--readora-outline-active-bg);
-  color: var(--readora-outline-active-color);
-  border-color: var(--readora-color-accent);
 }
 
 .readora-toolbar-button:disabled,
@@ -310,35 +368,7 @@
   cursor: default;
 }
 
-/* ---------- 面包屑（§10.5：纯文本不可点） ---------- */
-
-.readora-breadcrumb {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: var(--readora-font-xs);
-}
-
-.readora-breadcrumb-segment {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* 目录段 muted、文件名 primary：不给假 affordance，也就不给 hover 反馈。 */
-.readora-breadcrumb-segment--directory {
-  color: var(--readora-color-text-muted);
-}
-
-.readora-breadcrumb-segment--file {
-  color: var(--readora-color-text-primary);
-  font-weight: 600;
-  flex: 0 0 auto;
-}
-
-/* ---------- pill（§10.5：radius-full + shadow-pill + font-xs + tracking-label） ----------
+/* ---------- pill（§10.5：radius-full + shadow-pill + font-xs + tracking-label）
  * 外观归这里，位置归状态条右端（`.readora-status-pills`）。 */
 
 .readora-pill {
@@ -437,19 +467,6 @@
   gap: var(--readora-space-1);
   margin-left: auto;
   flex: 0 0 auto;
-}
-
-.readora-status-indicator {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: var(--readora-radius-full);
-  margin-right: 4px;
-  background: var(--readora-color-success);
-}
-
-.readora-status-indicator[data-readora-bridge-state="disconnected"] {
-  background: var(--readora-color-text-muted);
 }
 
 /* ---------- 顶部章节条（§10.5） ----------

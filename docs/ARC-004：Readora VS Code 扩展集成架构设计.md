@@ -292,11 +292,11 @@ when 口径与 manifest 回归护栏：
 3. when 条件必须覆盖扩展支持的文件类型表（.md / .markdown）。
 4. 以上三条由 manifest 回归测试固化，manifest 变更必须复跑。
 
-F10-004（Markdown 文件关联，P1）决策：
+F10-004（Markdown 文件关联，P1）决策（M6 复核后更新）：
 
-1. 首版不贡献 `customEditors`，双击 `.md` 仍由文本编辑器打开；`workbench.editorAssociations` 只认 custom editor 的 viewType，单独配置无效。
-2. 右键菜单（F10-002）是当前的替代工作流。
-3. 如后续实现默认打开方式，须采用 `CustomTextEditorProvider` 形态，并先补充生命周期、脏态与保存、多标签、CSP 与 `localResourceRoots` 迁移设计（AUD-001 §13.2）。
+1. 贡献 `customEditors`，`priority` 取 **option**：文本编辑器仍是 `.md` / `.markdown` 的默认打开方式，readora 只是「打开方式」候选，最保守、不改变既有双击行为。
+2. 采用 `CustomReadonlyEditorProvider`（只读）而非 `CustomTextEditorProvider`：readora 是阅读器不承担编辑/脏态/保存，只读形态免掉那一整套生命周期设计。宿主据此在编辑器上方给出**原生面包屑**与同级文件切换，顶栏自绘面包屑整条与 `document.list` 通道因此删除（避免两层冗余导航，见 §8.3 更正）。
+3. 右键菜单（F10-002）与命令面板的 `openReader` / `openToSide` 继续保留，内部改走 `vscode.openWith`（见 §7）。
 
 ### 4.5 快捷键与冲突规避
 
@@ -493,6 +493,18 @@ const panel = vscode.window.createWebviewPanel(
 - `retainContextWhenHidden` 启用（1.1.0 修订，见 ADR-004-004）：配合 `state.save` / `state.restore` 保证会话内阅读状态保持，避免隐藏面板重新显示时的重建成本与状态丢失。
 - 跨会话状态记忆不属于该配置的职责（见 §12）。
 
+> **1.7.0 修订（M6 迁移到自定义编辑器）**：上面的 `createWebviewPanel` 直接建面板的写法
+> 已被 `registerCustomEditorProvider`（`CustomReadonlyEditorProvider`）取代——面板由宿主在
+> 用户以 readora「打开方式」选中某文档时创建，交给 `resolveCustomEditor(document, panel, token)`。
+> 装配职责不变，只是入口搬进 provider：`openCustomDocument` 认领 URI 并管 dispose，
+> `resolveCustomEditor` 先读快照（读失败即抛，宿主丢弃这次打开、不留面板），再把
+> `panel.webview.options = { enableScripts: true, localResourceRoots }` 与 HTML 交 WebviewManager，
+> 其中 `localResourceRoots` 取自 `panelResourceRoots(documentUri)`（在原有 dist/webview、resources
+> 之外增补文档目录与所属 workspace folder）。`retainContextWhenHidden` 改由注册项的
+> `webviewOptions` 提供；`openReader` / `openToSide` / `document.navigate` 绝对通道统一走
+> `vscode.openWith(uri, viewType, { viewColumn })`。切换为编辑器形态后，宿主原生面包屑接管
+> 文档路径链与同级切换；顶栏再留一条即两层冗余导航，故 Webview 顶栏面包屑**整条删除**（PRD-003 §10.5）。
+
 ### 7.3 Webview HTML
 
 Webview 页面由 Host 注入。
@@ -583,7 +595,7 @@ interface MessageResponse<T = unknown> {
 | export.data | View → Host | 正文序列化结果，交 Host 组装与写盘 |
 
 本表原列 11 条，与实现的消息注册表（`packages/contracts` 的 `MESSAGE_TYPES`）
-已不一致，本次补齐到 17 条。补设的六条各有推导依据，它们不是实现自行发明的通道：
+已不一致，本次补齐到 17 条。补设的各条各有推导依据，它们不是实现自行发明的通道：
 
 1. `reader.viewState`（M4）：§6.2 把 focusMode / leftPanelVisible / rightPanelVisible
    归入 ReaderSessionState，§4.1 又要求 focusMode / toggleOutline 两条 P0 命令，而原表
@@ -595,6 +607,12 @@ interface MessageResponse<T = unknown> {
    API 没有脚本求值入口），因此导出必然是一来一回。方向刻意为 request/data 进、capture
    出：保存对话框是唯一授权边界，Host 只有在用户选定路径之后才向 View 取帧 —— 取消对话框
    时整条链路不产生任何 View 侧开销，也不写任何一个字节。
+
+> **面包屑口径更正（M6 复核）**：曾计划补设 `document.list` 通道，让自绘面包屑的目录段
+> 变成可点按钮以切换同目录文档。该方案已放弃——readora 改为自定义编辑器
+> （`registerCustomEditorProvider`，见 §4.2），文档路径链与同级文件切换由 **VS Code 原生
+> 面包屑**提供，无需自建列目录通道，也就无需承担「枚举目录」的安全面。原生那条出现后顶栏
+> 再留任何一段都是两层冗余导航，故 **Webview 顶栏面包屑整条删除**（PRD-003 §10.5），消息总数回到 17 条。
 
 ### 8.4 消息路由
 

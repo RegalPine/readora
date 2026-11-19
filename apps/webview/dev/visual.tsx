@@ -107,7 +107,7 @@ const DOCUMENT = [
   "",
   "| Token | Light | Dark |",
   "| --- | --- | --- |",
-  "| canvas | #f8f9ff | #10141a |",
+  "| canvas | #f7f8fa | #10141a |",
   "| text-primary | #0b1c30 | #dfe2eb |",
   "",
   "## Math and wikilink",
@@ -256,7 +256,6 @@ function Fixture() {
               searchOpen={false}
               settingsOpen={false}
               exportOpen={false}
-              documentUri={payload.documentUri}
               zoom={BASE_ZOOM}
               onToggleOutline={() => undefined}
               onToggleFocusMode={() => undefined}
@@ -293,17 +292,12 @@ function Fixture() {
             />
           }
           statusbar={
-            /* 夹具里没有 Host，但这一段量的是「文档已载入时的状态条形态」：
-             * 有正文可看就意味着 document.load 到过，于是 bridge 记已连接。 */
             <StatusBar
-              sectionCount={outline.length}
               wordCount={metrics.units}
               metrics={metrics}
               focusMode={false}
-              documentVersion={payload.version}
               zoom={BASE_ZOOM.zoom}
               theme={state.mode}
-              bridgeConnected
             />
           }
         >

@@ -123,16 +123,16 @@ Primitive Token 只表达设计值，不直接表达业务含义。
 
 ```css
 :root {
-  --readora-palette-light-canvas: #f8f9ff;
-  --readora-palette-light-surface: #eff4ff;
-  --readora-palette-light-surface-subtle: #e5eeff;
-  --readora-palette-light-surface-raised: #dce9ff;
+  --readora-palette-light-canvas: #f7f8fa;
+  --readora-palette-light-surface: #f1f3f6;
+  --readora-palette-light-surface-subtle: #e9edf1;
+  --readora-palette-light-surface-raised: #e2e6ec;
   --readora-palette-light-surface-sunken: #ffffff;
   --readora-palette-light-text-primary: #0b1c30;
   --readora-palette-light-text-secondary: #4a4455;
   --readora-palette-light-text-muted: #6b6478;
-  --readora-palette-light-accent: #6d28d9;
-  --readora-palette-light-accent-text: #5300b7;
+  --readora-palette-light-accent: #7642de;
+  --readora-palette-light-accent-text: #592dac;
 }
 
 [data-readora-theme="dark"] {
@@ -142,10 +142,10 @@ Primitive Token 只表达设计值，不直接表达业务含义。
   --readora-palette-dark-surface-raised: #262a31;
   --readora-palette-dark-surface-sunken: #0a0e14;
   --readora-palette-dark-text-primary: #dfe2eb;
-  --readora-palette-dark-text-secondary: #ccc3d8;
-  --readora-palette-dark-text-muted: #958da1;
-  --readora-palette-dark-accent: #7c3aed;
-  --readora-palette-dark-accent-text: #d2bbff;
+  --readora-palette-dark-text-secondary: #c2c8d2;
+  --readora-palette-dark-text-muted: #8e949f;
+  --readora-palette-dark-accent: #7642de;
+  --readora-palette-dark-accent-text: #d2ccf0;
 }
 ```
 
@@ -200,7 +200,7 @@ Semantic Token 是组件样式的主要消费接口。
 }
 ```
 
-`accent` 与 `accent-text` 必须是两个 token：前者是填充（暗色 `#7c3aed`），后者是文字（暗色 `#d2bbff`）。合并成一个值必然导致某一侧不过对比度——`#7c3aed` 作文字色落在 `#10141a` 上约 3.1:1。
+`accent` 与 `accent-text` 必须是两个 token：前者是填充（暗色 `#7642de`），后者是文字（暗色 `#d2ccf0`）。合并成一个值必然导致某一侧不过对比度——`#7642de` 作文字色落在 `#10141a` 上约 3.2:1。
 
 ### 4.4 Component Tokens
 
@@ -459,10 +459,12 @@ function applyTheme(
 | Blockquote | 引用背景和边框 |
 | Table | 表头、分隔线和斑马纹 |
 | Code | 代码块背景和文本 |
-| Inline Code | 行内代码背景 |
+| Inline Code | 行内代码的背景、描边与文字色 |
 | Math | 数学公式文本 |
 | Image | 图片边框和背景 |
 | Diagram | 图表主题 |
+
+行内代码为何占三项：它是一枚叠在正文行里的**色块**，而色块会落进多种容器（正文 / 面板 / 引用底 / 表头）。底色单独承重时，只要某个容器取了同一档背景就会逐字节撞色（实测取 `surface-subtle` 时在引用块内为 1.00:1），所以背景、描边、文字色三条线索必须同时在，且背景不得复用表面阶梯的任何一档（PRD-003 §8.6.1）。
 
 ### 9.2 Mermaid / Pele 联动
 

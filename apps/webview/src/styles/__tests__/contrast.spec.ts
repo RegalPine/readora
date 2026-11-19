@@ -61,7 +61,7 @@ const TEXT_PAIRS: Array<readonly [string, string]> = [
 /**
  * 承担 1.4.11 非文本义务的边界：焦点环与控件状态色。
  *
- * `border-strong` 不在这一组里：它按 PRD-003 §4.2/§4.3 固定为 #ccc3d7 / #4a4455，
+ * `border-strong` 不在这一组里：它按 PRD-003 §4.2/§4.3 固定为 #c2c7cf / #434850，
  * 用于引用左轨、代码块与表格分隔线这类「有文字或色块在旁边才成立」的容器边界，
  * 本身不是识别控件的唯一线索；把它拉到 3:1 会同时改掉四篇文档的色板表。
  * 这里仍给它一条下限断言（见下），保证它在两套色板下都不会淡到看不见。
@@ -112,8 +112,8 @@ describe("弱文字与容器边界的固化断言", () => {
 
   it("dark 的三档文字与浅字色板逐项固化（PRD-003 §4.3 / 附录 A）", () => {
     expect(color("text-primary", "dark")).toBe("#dfe2eb");
-    expect(color("text-secondary", "dark")).toBe("#ccc3d8");
-    expect(color("text-muted", "dark")).toBe("#958da1");
+    expect(color("text-secondary", "dark")).toBe("#c2c8d2");
+    expect(color("text-muted", "dark")).toBe("#8e949f");
     expect(color("canvas", "dark")).toBe("#10141a");
   });
 
@@ -162,6 +162,91 @@ describe("语法色落在代码块底上", () => {
   });
 });
 
+/* ---------- 行内代码色块（PRD-003 §8.6.1） ----------
+ *
+ * 这一组不在 §4.2 的语义配对表里：色块不是「文字压在一个固定 token 上」，而是
+ * 「一层柔光叠在它实际落进的容器上」，所以必须按落点逐个合成再算。旧写法
+ * （色块 = `surface-subtle`）在这套断言下会同时红两类：落进引用块（同取
+ * `surface-subtle`）是 1.00 逐字节撞色，落在正文画布上只有 1.11 —— 用户报的
+ * 「亮色下 `code` 对比度不够」量的就是这两项，而它当时的文字对比度是 14.59，
+ * 完全合格。于是门禁必须测「色块 vs 容器」这一维，只测文字会漏掉整类缺陷。 */
+
+/** 色块实际会落进的容器：正文、面板、引用底、抬起态、表头。 */
+const CHIP_BASES = [
+  "canvas",
+  "surface",
+  "surface-subtle",
+  "surface-raised",
+  "surface-sunken"
+] as const;
+
+/** 色块与容器的区分度下限：低于这个值就量不出「这里有个物件」。 */
+const CHIP_FLOOR = 1.15;
+
+const CHIP_DECL_RE =
+  /^color-mix\(in srgb, var\(--readora-color-([\w-]+)\) ([\d.]+)%, transparent\)$/u;
+
+/** 从组件层声明里读出色块的着色 token 与掺量，不在测试里抄第二份。 */
+function chipDeclaration(): { tint: string; percent: number } {
+  const value = ROOT.get("--readora-inline-code-background") ?? "";
+  const mix = CHIP_DECL_RE.exec(value);
+  if (!mix) {
+    throw new Error(`--readora-inline-code-background 不是「语义色掺透明」的写法：${value}`);
+  }
+  const [, tint = "", percent = "0"] = mix;
+  return { tint, percent: Number(percent) };
+}
+
+/** 带 alpha 的色块层（八位十六进制），交给 contrastRatio 现场合成到各落点上。 */
+function chipLayer(scheme: Scheme): string {
+  const { tint, percent } = chipDeclaration();
+  const alpha = Math.round((percent / 100) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${color(tint, scheme)}${alpha}`;
+}
+
+/** 色块内前景：与代码块里的变量/属性同一路（挂在 scheme 轴上）。 */
+function chipForeground(scheme: Scheme): string {
+  const scopes =
+    scheme === "dark"
+      ? [declarationsFor('[data-readora-scheme="dark"]'), ROOT]
+      : [ROOT];
+  return resolveLiteral("--readora-syntax-attr", scopes);
+}
+
+describe("行内代码色块与它的落点", () => {
+  // 取值放在 `it` 里而不是 describe 体里：声明写错时 `chipLayer` 会抛，
+  // 在 describe 体里抛会让整个 spec 文件收集失败，把无关的门禁一起带走。
+  for (const scheme of SCHEMES) {
+    for (const base of CHIP_BASES) {
+      it(`${scheme}：色块在 ${base} 上拉得开`, () => {
+        const layer = chipLayer(scheme);
+        const surface = color(base, scheme);
+        const value = Number(contrastRatio(layer, surface).toFixed(2));
+        expect(
+          value,
+          `${scheme} 色块(${layer}) on ${base}(${surface}) = ${value}:1`
+        ).toBeGreaterThanOrEqual(CHIP_FLOOR);
+      });
+
+      it(`${scheme}：色块内文字在 ${base} 上过 AA`, () => {
+        const layer = chipLayer(scheme);
+        const foreground = chipForeground(scheme);
+        const value = Number(contrastRatio(foreground, layer, color(base, scheme)).toFixed(2));
+        expect(
+          meetsTextAA(value),
+          `${foreground} on 色块（叠在 ${base} 上）= ${value}:1`
+        ).toBe(true);
+      });
+    }
+  }
+
+  it("色块不复用任何一档 surface：复用就必然与同档容器逐字节撞色", () => {
+    expect(ROOT.get("--readora-inline-code-background")).not.toMatch(/color-surface/u);
+  });
+});
+
 describe("色板与文档同源", () => {
   it("tokens.css 里没有第二份色值来源（Primitive 全部是字面值）", () => {
     const tokens = styleFile("tokens.css")[1];
@@ -173,7 +258,7 @@ describe("色板与文档同源", () => {
       }
       expect(value, `${name} 在 vscode 块里写了字面色值`).toContain("var(");
     }
-    expect(tokens).toContain("--readora-palette-light-canvas: #f8f9ff");
+    expect(tokens).toContain("--readora-palette-light-canvas: #f7f8fa");
     expect(tokens).toContain("--readora-palette-dark-canvas: #10141a");
   });
 });

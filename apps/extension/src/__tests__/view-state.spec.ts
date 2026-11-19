@@ -2,10 +2,12 @@
  * 会话视图状态测试（ARC-004 §4.1 focusMode / toggleOutline、§4.5 宽度键位、
  * §6.2 ReaderSessionState；投递门控沿用 §8.7）。
  *
- * 断言的是「命令 → 会话状态 → reader.viewState」这条链的三件事：
+ * 断言的是「命令 → 会话状态 → reader.viewState」这条链的四件事：
  * 1. 初值来自偏好，命令只改会话、不回写用户设置；
  * 2. 宽度收口在契约区间 [480, 1600]，越界只到边界；
- * 3. 面板未 ready 时只更新状态不投递，ready 后随首帧补投。
+ * 3. 面板未 ready 时只更新状态不投递，ready 后随首帧补投；
+ * 4. 配置里的宽度值本身变化时同步进会话（弹层拖滑杆当场生效），
+ *    无关键的配置事件不碰会话宽度。
  *
  * 末尾再加一条弹层回路：`config.patch` 写回的配置键必须能被同一进程读回并广播，
  * 那是用户在真实宿主里报过的缺陷形状（写进了 settings.json、界面无反应）。
@@ -258,6 +260,55 @@ describe("配置变更与视图状态", () => {
       outlineVisible: true,
       contentWidth: 820 + CONTENT_WIDTH_STEP
     });
+  });
+});
+
+/**
+ * 设置宽度的即时生效（用户报的缺陷形状：弹层拖滑杆、面板纹丝不动，重开才变）。
+ *
+ * 宽度变量在 Webview 侧以视图状态优先，因此配置里的宽度值本身变化时，Host 必须
+ * 把它同步进会话并随 reader.viewState 下发；改其它键触发的事件不带这个信号，
+ * 命令调过的会话宽度不被配置回滚。
+ */
+describe("设置宽度的即时生效", () => {
+  test("配置宽度变化 → 会话同步，随 viewState 下发新值", async () => {
+    const panel = await open({ preferences: { contentWidth: 820 } });
+    configValues.set("readora.contentWidth", 1000);
+    fireDidChangeConfiguration();
+    await flush();
+    expect(postedPreferences(panel)?.contentWidth).toBe(1000);
+    expect(postedViewState(panel)?.contentWidth).toBe(1000);
+  });
+
+  test("弹层 config.patch 走同一条链：写盘事件把新宽度落到会话", async () => {
+    const panel = await open({ preferences: { contentWidth: 820 } });
+    panel.webview.receive(
+      createEnvelope("config.patch", { key: "contentWidth", value: 1240 })
+    );
+    await flush();
+    expect(configValues.get("readora.contentWidth")).toBe(1240);
+    expect(postedViewState(panel)?.contentWidth).toBe(1240);
+  });
+
+  test("改其它配置键不重置命令调过的会话宽度", async () => {
+    const panel = await open({ preferences: { contentWidth: 820 } });
+    await command("readora.adjustContentWidth")(1);
+    configValues.set("readora.fontSize", 20);
+    fireDidChangeConfiguration();
+    await flush();
+    expect(postedViewState(panel)?.contentWidth).toBe(820 + CONTENT_WIDTH_STEP);
+  });
+
+  test("同步过一次后，基准跟着走：宽度未变的后续事件不再触碰会话宽度", async () => {
+    const panel = await open({ preferences: { contentWidth: 820 } });
+    configValues.set("readora.contentWidth", 1000);
+    fireDidChangeConfiguration();
+    await flush();
+    await command("readora.adjustContentWidth")(1);
+    configValues.set("readora.lineHeight", 2);
+    fireDidChangeConfiguration();
+    await flush();
+    expect(postedViewState(panel)?.contentWidth).toBe(1000 + CONTENT_WIDTH_STEP);
   });
 });
 

@@ -2,9 +2,10 @@
  * 状态条与浮动快速条（PRD-003 §4.6 的诚实字段清单、§10.5 外壳第四段与快速条）。
  *
  * 状态条最容易犯的不是少字段而是**造字段**：原型图里有 `Ln 142, Col 18` 与
- * `UTF-8`，Webview 拿不到光标位置与文件编码。所以这里除了「六项齐全」，
- * 还要反向断言「不含编出来的第七项」。迁入右端 pill 组后，第七项的怀疑对象
- * 多了 pill 一格 —— 它带自己的 `data-readora-pill`，不占状态字段的位子。
+ * `UTF-8`，Webview 拿不到光标位置与文件编码。所以除了「三项齐全」，
+ * 这里还要反向断言「不含编造字段」与「已下线的节数、文档版本不回头」。
+ * 迁入右端 pill 组后，多一项的怀疑对象多了 pill 一格 —— 它带自己的
+ * `data-readora-pill`，不占状态字段的位子。
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { ComponentProps } from "react";
@@ -75,66 +76,54 @@ function metricsFor(units: number): TextMetrics {
 function status(overrides: Partial<ComponentProps<typeof StatusBar>> = {}) {
   return render(
     <StatusBar
-      sectionCount={12}
       wordCount={1_234}
       metrics={metricsFor(1_234)}
       focusMode={false}
-      documentVersion={7}
       zoom={1.1}
       theme="dark"
-      bridgeConnected
       {...overrides}
     />
   );
 }
 
 describe("StatusBar", () => {
-  test("六项齐备，顺序稳定，各自带可定位的 data-readora-status", () => {
+  test("三项齐备，顺序稳定，各自带可定位的 data-readora-status", () => {
     const view = status();
     const items = [...view.container.querySelectorAll<HTMLElement>(`.${STATUS_ITEM_CLASS}`)];
     expect(items.map((item) => item.getAttribute("data-readora-status"))).toEqual([
-      "sections",
       "words",
-      "version",
       "zoom",
-      "theme",
-      "bridge"
+      "theme"
     ]);
     expect(items.map((item) => item.textContent)).toEqual([
-      "12 sections",
       "1,234 words",
-      "v7",
       "zoom 110%",
-      "theme dark",
-      "Bridge: Connected"
+      "theme dark"
     ]);
   });
 
-  test("不含编造的第七项：光标位置、编码、可点面包屑都不在这条上（§4.6）", () => {
+  test("不含编造字段：光标位置、编码、可点面包屑、Bridge 都不在这条上（§4.6）", () => {
     const view = status();
     const text = view.container.textContent ?? "";
     expect(text).not.toMatch(/Ln\s*\d|Col\s*\d/iu);
     expect(text).not.toContain("UTF-8");
+    // Bridge 字段已删：状态条随外壳一起等第一份快照，出现即已连接，
+    // 恒为 Connected 的字段等于没有字段（§4.6 诚实性）。
+    expect(text).not.toContain("Bridge");
+    // 节数字段已删（产品反馈：目录那一栏直接数得出来，底部再说一遍是重复）。
+    expect(text).not.toMatch(/\bsections?\b/iu);
     expect(view.container.querySelectorAll("a, button")).toHaveLength(0);
-    expect(view.container.querySelectorAll("[data-readora-status]")).toHaveLength(6);
+    expect(view.container.querySelector('[data-readora-status="version"]')).toBeNull();
+    expect(text).not.toMatch(/\bv\d+\b/u);
+    expect(view.container.querySelectorAll("[data-readora-status]")).toHaveLength(3);
   });
 
-  test("0 节 0 字照样如实显示，不写成「—」也不省略字段", () => {
-    const view = status({ sectionCount: 0, wordCount: 0 });
+  test("0 字照样如实显示，不写成「—」也不省略字段", () => {
+    const view = status({ wordCount: 0, metrics: metricsFor(0) });
     const texts = [...view.container.querySelectorAll<HTMLElement>(`.${STATUS_ITEM_CLASS}`)].map(
       (item) => item.textContent
     );
-    expect(texts[0]).toBe("0 sections");
-    expect(texts[1]).toBe("0 words");
-  });
-
-  test("Bridge 的判据是收到过 document.load：没收到就说 Disconnected", () => {
-    const view = status({ bridgeConnected: false });
-    const bridge = view.container.querySelector<HTMLElement>(
-      '[data-readora-status="bridge"] .readora-status-indicator'
-    );
-    expect(bridge?.getAttribute("data-readora-bridge-state")).toBe("disconnected");
-    expect(view.container.textContent).toContain("Bridge: Disconnected");
+    expect(texts[0]).toBe("0 words");
   });
 
   test("地标是 contentinfo 且有可读名称", () => {

@@ -17,12 +17,7 @@ import {
   type ResourceKind,
   type ResourceResolveResult
 } from "@readora/contracts";
-import {
-  canonicalFileUri,
-  contentVersion,
-  versionedFileUri,
-  type ResourceStamp
-} from "./webview-uri";
+import { canonicalFileUri, contentVersion, versionedFileUri, type ResourceStamp } from "./webview-uri";
 import { resourceCacheKey, ResourceCache } from "./cache";
 import { verifyBoundary } from "./boundary";
 import {

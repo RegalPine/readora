@@ -127,15 +127,20 @@ describe("ReaderShell 布局", () => {
     expect(columns(view.container)).toBe("two");
   });
 
-  test("四段栅格齐备且各有 data-readora-band（PRD-003 §10.5）", () => {
+  test("主体栅格齐备且各有 data-readora-band（大纲通顶、顶栏在右列，PRD-003 §10.5）", () => {
     const view = shell(true, false);
     const bands = [...view.container.querySelectorAll<HTMLElement>("[data-readora-band]")].map(
       (band) => band.getAttribute("data-readora-band")
     );
-    // 顺序即视觉顺序；四段都挂 data-readora-band，基线与 e2e 按它取 rect。
-    expect(bands).toEqual(["topbar", "body", "statusbar"]);
+    // 文档顺序 = 视觉顺序：body 是父（含左列大纲 + 右列内容），topbar 在右列里，
+    // statusbar 横贯整窗在最后。基线与 e2e 按 band 取 rect。
+    expect(bands).toEqual(["body", "topbar", "statusbar"]);
+    // 大纲与顶栏都在 body 之下：左列 aside、右列 shell-main 里嵌 topbar。
     expect(view.container.querySelector(".readora-body .readora-shell-nav")).not.toBeNull();
     expect(view.container.querySelector(".readora-body .readora-shell-main")).not.toBeNull();
+    expect(
+      view.container.querySelector(".readora-shell-main [data-readora-band='topbar']")
+    ).not.toBeNull();
   });
 
   test("专注模式整段不输出顶栏，常规档输出（隐藏了就不许留透明占位）", () => {
@@ -185,11 +190,19 @@ describe("ReaderShell 布局", () => {
     const bands = [...withSearch.container.querySelectorAll<HTMLElement>("[data-readora-band]")].map(
       (band) => band.getAttribute("data-readora-band")
     );
-    expect(bands).toEqual(["topbar", "searchbar", "body", "statusbar"]);
-    // 搜索段排在主体之前、顶栏之后，「随内容」而不是浮在正文上。
-    expect(withSearch.container.querySelector(".readora-searchbar")?.nextElementSibling?.className).toBe(
-      "readora-body"
-    );
+    // body 是父，topbar/searchbar 都在它的右列里，statusbar 横贯整窗在最后。
+    expect(bands).toEqual(["body", "topbar", "searchbar", "statusbar"]);
+    // 搜索段排在顶栏之后、正文之前，同在右列：「随内容」而不是浮在正文上。
+    expect(
+      withSearch.container.querySelector(".readora-searchbar")?.previousElementSibling?.getAttribute(
+        "data-readora-band"
+      )
+    ).toBe("topbar");
+    expect(
+      withSearch.container.querySelector(".readora-searchbar")?.nextElementSibling?.getAttribute(
+        "data-testid"
+      )
+    ).toBe("canvas");
   });
 });
 
@@ -224,7 +237,6 @@ describe("TopBar 工具栏", () => {
     options: {
       settingsOpen?: boolean;
       exportOpen?: boolean;
-      documentUri?: string;
       zoom?: ZoomApi;
     } = {}
   ) {
@@ -235,7 +247,6 @@ describe("TopBar 工具栏", () => {
         searchOpen={searchOpen}
         settingsOpen={options.settingsOpen ?? false}
         exportOpen={options.exportOpen ?? false}
-        documentUri={options.documentUri}
         zoom={options.zoom ?? fakeZoom()}
         {...next}
       />
@@ -270,6 +281,14 @@ describe("TopBar 工具栏", () => {
     expect(pressed(view.container, "Toggle outline")).toBe("true");
     expect(pressed(view.container, "Enter focus mode")).toBe("false");
     expect(pressed(view.container, "Search in document")).toBe("false");
+  });
+
+  test("大纲开合靠左、不在靠右动作组里（与通顶大纲列同侧）", () => {
+    const { view } = bar();
+    const outline = view.container.querySelector('[aria-label="Toggle outline"]');
+    expect(outline).not.toBeNull();
+    // 动作组靠 `margin-left: auto` 顶到右侧；大纲按钮被挪到它前面，不共享这段。
+    expect(outline?.closest(".readora-toolbar-actions")).toBeNull();
   });
 
   test("Settings 触发器是弹层入口而非开关：aria-haspopup + aria-expanded", () => {

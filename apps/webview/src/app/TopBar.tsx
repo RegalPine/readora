@@ -1,73 +1,33 @@
 /**
  * 顶栏（PRD-003 §10.5 外壳第一段，UX-001 / UX-003 / UX-006）。
  *
- * M6 之前只有三枚按钮。§10.5 要求的是「大纲开合、面包屑、阅读时长 pill、
- * 模式标签、Reader Settings、缩放组、搜索、专注模式」，本节补齐剩下五样，
- * 每样的数据源都在组件外部真实存在：
+ * 顶栏只留动作控件，分两坨摆：大纲开合**靠左**（紧邻左侧通顶的大纲列），其余
+ * 控件（专注、搜索、缩放组、导出、Reader Settings）成组**靠右**（`.readora-toolbar-actions`
+ * 的 `margin-left: auto` 撑起中间空白）。
+ * 数据源都在组件外部真实存在：
  *
- *  面包屑        `DocumentSnapshot.documentUri` 去 scheme 取末 3 段，
- *                目录段 muted、文件名 primary，**纯文本不可点** ——
- *                §4.6 明确剔除「可点击目录段」，因为没有 reveal-in-explorer 能力，
- *                给了就是假 affordance。
  *  缩放组        会话内 `useZoom`，50%–200% 步长 10%，点百分号复位。
  *  Settings      弹层触发器不是路由：`aria-haspopup="dialog"` + `aria-expanded`。
  *
- * 阅读时长 pill 与模式标签不在这里：产品反馈要它们退到底部右侧（状态条右端），
- * 顶栏只留动作控件，归 `StatusBar`（口径不变：空文档不出时长 pill，§5.6）。
+ * 面包屑不在这里：readora 以自定义编辑器形态接管 Markdown（ARC-004 §7.2），
+ * 宿主会在编辑器上方画出**原生面包屑**（路径链 + 同级文件切换）。自绘一条就是
+ * 第二层冗余导航，违背「用 VS Code 的，不用自己实现」，故顶栏不再画面包屑。
+ *
+ * 阅读时长 pill 与模式标签也不在这里：产品反馈要它们退到底部右侧（状态条右端），
+ * 归 `StatusBar`（口径不变：空文档不出时长 pill，§5.6）。
  *
  * 三个常驻按钮继续用 `aria-pressed` 表达开合（§4.3 状态可见性）。
  */
 import type { ExportFormat } from "@readora/contracts";
 import type { ZoomApi } from "./zoom";
 import { ExportMenu } from "./ExportMenu";
-import { ExportIcon, FocusIcon, MinusIcon, OutlineIcon, PlusIcon, SearchIcon, SettingsIcon } from "./Icon";
+import { ExportIcon, FocusIcon, MinusIcon, OutlineToggleIcon, PlusIcon, SearchIcon, SettingsIcon } from "./Icon";
 
 export const TOOLBAR_CLASS = "readora-toolbar";
 export const TOOLBAR_ACTIONS_CLASS = "readora-toolbar-actions";
-export const BREADCRUMB_CLASS = "readora-breadcrumb";
 export const ZOOM_GROUP_CLASS = "readora-zoom";
 /** M11：导出触发器与它的下拉菜单需要一个定位上下文，菜单是触发器的绝对定位子层。 */
 export const EXPORT_GROUP_CLASS = "readora-toolbar-export-group";
-
-/** 面包屑段数上限（§10.5：取末 3 段，再长就只是噪声）。 */
-export const BREADCRUMB_MAX_SEGMENTS = 3;
-
-/** scheme 与 authority：`file:///a/b.md`、`vscode-file://vscode-app/a/b.md` 都要剥掉。 */
-const SCHEME_PREFIX = /^[a-z][a-z0-9+.-]*:\/\/[^/]*/iu;
-
-export interface BreadcrumbSegment {
-  readonly name: string;
-  /** 末段是文件名（primary），其余是目录段（muted）。 */
-  readonly directory: boolean;
-}
-
-/**
- * `documentUri` → 末 3 段。
- *
- * 先剥 scheme 与 authority 再切分；百分号编码要还原成人读的目录名（工作区路径
- * 里的空格在 URI 里是 `%20`，直接显示会把用户绕晕），解码失败按原文显示 ——
- * 一个显示用的字符串不值得为此抛穿渲染。
- */
-export function breadcrumbOf(documentUri: string | undefined): BreadcrumbSegment[] {
-  if (!documentUri) {
-    return [];
-  }
-  const path = documentUri.replace(SCHEME_PREFIX, "");
-  const parts = path.split("/").filter((segment) => segment.length > 0);
-  const tail = parts.slice(-BREADCRUMB_MAX_SEGMENTS);
-  return tail.map((segment, index) => ({
-    name: decodeSegment(segment),
-    directory: index < tail.length - 1
-  }));
-}
-
-function decodeSegment(segment: string): string {
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
-}
 
 export interface TopBarProps {
   outlineVisible: boolean;
@@ -76,7 +36,6 @@ export interface TopBarProps {
   settingsOpen: boolean;
   /** Export 下拉菜单的开合（M11）：状态在 App，触发器只报告图。 */
   exportOpen: boolean;
-  documentUri: string | undefined;
   zoom: ZoomApi;
   onToggleOutline(): void;
   onToggleFocusMode(): void;
@@ -93,7 +52,6 @@ export function TopBar({
   searchOpen,
   settingsOpen,
   exportOpen,
-  documentUri,
   zoom,
   onToggleOutline,
   onToggleFocusMode,
@@ -103,25 +61,26 @@ export function TopBar({
   onCloseExport,
   onExport
 }: TopBarProps) {
-  const breadcrumb = breadcrumbOf(documentUri);
-
   // 专注模式不在这里分支：那一段由 `ReaderShell` 整段不渲染，退出入口住在快速条
   // 右侧。留一个 `focusMode` 在这里只会供出一个选不中的退出按钮（旧版就是这么
   // 把退出入口藏到 4px 触发沿里的）。
   return (
     <div className={TOOLBAR_CLASS} role="toolbar" aria-label="Reading controls">
-      <Breadcrumb segments={breadcrumb} documentUri={documentUri} />
+      {/* 大纲开合靠左：它紧邻左侧通顶的大纲列，开关与它控制的面板在同一侧，
+          视线不用横穿整条顶栏找按钮。其余动作仍成组靠右。
+          只给图标不给文字（产品反馈）：常驻且就在栏位边上的开关不需要标签自证，
+          可读名称仍由 `aria-label` 承担，`title` 补鼠标悬停的解释（§10.6：图标是装饰）。 */}
+      <button
+        type="button"
+        className={`readora-toolbar-button ${TOOLBAR_CLASS}-button--icon ${TOOLBAR_CLASS}-outline`}
+        aria-pressed={outlineVisible}
+        aria-label="Toggle outline"
+        title={outlineVisible ? "Hide outline" : "Show outline"}
+        onClick={onToggleOutline}
+      >
+        <OutlineToggleIcon visible={outlineVisible} />
+      </button>
       <div className={TOOLBAR_ACTIONS_CLASS}>
-        <button
-          type="button"
-          className="readora-toolbar-button"
-          aria-pressed={outlineVisible}
-          aria-label="Toggle outline"
-          onClick={onToggleOutline}
-        >
-          <OutlineIcon />
-          Outline
-        </button>
         <button
           type="button"
           className="readora-toolbar-button"
@@ -172,36 +131,6 @@ export function TopBar({
           Settings
         </button>
       </div>
-    </div>
-  );
-}
-
-function Breadcrumb({
-  segments,
-  documentUri
-}: {
-  segments: readonly BreadcrumbSegment[];
-  documentUri: string | undefined;
-}) {
-  if (segments.length === 0) {
-    return null;
-  }
-  return (
-    <div className={BREADCRUMB_CLASS} title={documentUri} aria-label="Document path">
-      {segments.map((segment, index) => (
-        <span
-          key={`${segment.name}-${String(index)}`}
-          className={
-            segment.directory
-              ? `${BREADCRUMB_CLASS}-segment ${BREADCRUMB_CLASS}-segment--directory`
-              : `${BREADCRUMB_CLASS}-segment ${BREADCRUMB_CLASS}-segment--file`
-          }
-          data-readora-breadcrumb={segment.directory ? "directory" : "filename"}
-        >
-          {index > 0 ? <span aria-hidden="true">/</span> : null}
-          {segment.name}
-        </span>
-      ))}
     </div>
   );
 }

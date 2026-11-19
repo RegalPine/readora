@@ -1,7 +1,7 @@
 /**
- * 外壳四段与阅读辅助字段（PRD-003 §10.5 / §4.6，IMP-002 STORY-06-01 外壳部分）。
+ * 外壳栅格与阅读辅助字段（PRD-003 §10.5 / §4.6，IMP-002 STORY-06-01 外壳部分）。
  *
- * 这一组是**只有浏览器能回答**的问题：四段的实际几何、状态条字段是否随真实数据变、
+ * 这一组是**只有浏览器能回答**的问题：各带的实际几何、状态条字段是否随真实数据变、
  * pill 真的落在状态条右端而不被挤出去、专注模式把大纲收掉后快速条补得上导航。
  * §4.6 的区块渲染诚实性在这里的可观测形式是：字段值必须跟着换文档 / 换主题变，
  * 而不是渲染一次就定死的字符串。
@@ -9,7 +9,7 @@
 import { expect, test } from "@playwright/test";
 import { openReader, RICH_DOC, scrollTo } from "../helpers/reader";
 
-const FIELDS = ["sections", "words", "version", "zoom", "theme", "bridge"] as const;
+const FIELDS = ["words", "zoom", "theme"] as const;
 
 async function fieldText(page: import("@playwright/test").Page, field: string): Promise<string> {
   return (await page.locator(`[data-readora-status="${field}"]`).innerText()).trim();
@@ -35,7 +35,7 @@ async function expectBandHeight(
 }
 
 test.describe("外壳与状态条", () => {
-  test("四段栅格的实测几何：顶栏 44px、状态条 24px，搜索段未打开不占位", async ({ page }) => {
+  test("各带的实测几何：顶栏 44px、状态条 24px，搜索段未打开不占位", async ({ page }) => {
     await openReader(page);
 
     await expectBandHeight(page, ".readora-topbar", "--readora-topbar-height", 44);
@@ -49,24 +49,43 @@ test.describe("外壳与状态条", () => {
     expect((topbar?.y ?? 1) + (topbar?.height ?? 0)).toBeLessThan(statusbar?.y ?? 0);
   });
 
-  test("状态条六项齐备，且取值全部来自当前快照", async ({ page }) => {
+  test("大纲通顶 + 顶栏让位：左栏从视口顶贯到状态条上沿，顶栏右偏不压大纲", async ({ page }) => {
     await openReader(page);
 
-    await expect(page.locator(".readora-status .readora-status-item")).toHaveCount(6);
+    const viewport = page.viewportSize();
+    const nav = await page.locator(".readora-shell-nav").boundingBox();
+    const topbar = await page.locator(".readora-topbar").boundingBox();
+    const statusbar = await page.locator(".readora-statusbar").boundingBox();
+    expect(nav).not.toBeNull();
+    expect(topbar).not.toBeNull();
+    expect(statusbar).not.toBeNull();
+
+    // 通顶：左栏顶边贴视口顶，底边到状态条上沿为止（状态条仍横贯整窗）。
+    expect(nav?.y ?? -1).toBeLessThanOrEqual(1);
+    expect((nav?.y ?? 0) + (nav?.height ?? 0)).toBeLessThanOrEqual((statusbar?.y ?? 0) + 1);
+
+    // 让位：顶栏左缘落在大纲右缘之右，宽度也不铺满整窗（只占右侧内容列）。
+    expect(topbar?.x ?? 0).toBeGreaterThanOrEqual((nav?.x ?? 0) + (nav?.width ?? 0) - 1);
+    expect(topbar?.width ?? 0).toBeLessThan(viewport?.width ?? Number.POSITIVE_INFINITY);
+  });
+
+  test("状态条只保留三项，文档更新后也不展示内部版本", async ({ page }) => {
+    await openReader(page, { text: RICH_DOC, version: 0 });
+
+    await expect(page.locator(".readora-status .readora-status-item")).toHaveCount(3);
     for (const field of FIELDS) {
       await expect(page.locator(`[data-readora-status="${field}"]`)).toBeVisible();
     }
-    // 大纲有 4 个标题 → 4 sections；版本与消息严格同源，不是本地计数器。
-    expect(await fieldText(page, "sections")).toBe("4 sections");
-    expect(await fieldText(page, "version")).toBe("v1");
+    // 节数字段已删（产品反馈：目录那一栏直接数得出来，底部再说一遍是重复）。
+    await expect(page.locator('[data-readora-status="sections"]')).toHaveCount(0);
+    await expect(page.locator('[data-readora-status="version"]')).toHaveCount(0);
+    await expect(page.locator(".readora-status")).not.toContainText(/\bv\d+\b/u);
+    await expect(page.locator(".readora-document")).toHaveAttribute("data-readora-document-version", "0");
     expect(await fieldText(page, "zoom")).toBe("zoom 100%");
-    expect(Number.parseInt(await fieldText(page, "words"), 10)).toBeGreaterThan(0);
-    await expect(page.locator('[data-readora-status="bridge"] [data-readora-bridge-state]')).toHaveAttribute(
-      "data-readora-bridge-state",
-      "connected"
-    );
+    const words = Number.parseInt(await fieldText(page, "words"), 10);
+    expect(words).toBeGreaterThan(0);
 
-    // 换一份文档：sections 与 version 必须跟着走，留旧值就是 §4.6 说的假字段。
+    // 换一份文档：字数必须跟着走，内部版本仍不作为状态字段显示。
     await page.evaluate(() =>
       window.__readora.load({
         text: "# One\n\nOnly a heading and a line.\n\n## Two\n\nBody.",
@@ -74,23 +93,19 @@ test.describe("外壳与状态条", () => {
         version: 7
       })
     );
-    await expect(page.locator('[data-readora-status="sections"]')).toHaveText("2 sections");
-    expect(await fieldText(page, "version")).toBe("v7");
+    await expect(page.locator(".readora-document")).toHaveAttribute("data-readora-document-version", "7");
+    await expect(page.locator('[data-readora-status="version"]')).toHaveCount(0);
+    await expect(page.locator(".readora-status")).not.toContainText(/\bv\d+\b/u);
+    expect(Number.parseInt(await fieldText(page, "words"), 10)).toBeLessThan(words);
   });
 
-  test("面包屑取末 3 段且是纯文本（没有 reveal-in-explorer 就不给可点的假 affordance）", async ({ page }) => {
+  test("顶栏不再自绘面包屑：路径导航交给 VS Code 原生面包屑", async ({ page }) => {
     await openReader(page);
 
-    const segments = page.locator(".readora-breadcrumb [data-readora-breadcrumb]");
-    await expect(segments).toHaveCount(3);
-    await expect(segments.nth(2)).toHaveAttribute("data-readora-breadcrumb", "filename");
-    // 段内的分隔符 `/` 是 aria-hidden 节点，整串文本因此带前缀 —— 按后缀断言。
-    await expect(segments.nth(2)).toHaveText(/reader\.md$/);
-    await expect(segments.nth(0)).toHaveAttribute("data-readora-breadcrumb", "directory");
-    expect(await segments.nth(0).innerText()).toBe("vault");
-
-    await expect(page.locator(".readora-breadcrumb a")).toHaveCount(0);
-    await expect(page.locator(".readora-breadcrumb")).toHaveAttribute("title", "file:///vault/e2e/reader.md");
+    // 自定义编辑器形态下宿主在编辑器上方给原生面包屑，webview 顶栏不该再有第二条。
+    await expect(page.locator(".readora-breadcrumb")).toHaveCount(0);
+    await expect(page.locator("[data-readora-breadcrumb]")).toHaveCount(0);
+    await expect(page.locator('[aria-label="Document path"]')).toHaveCount(0);
   });
 
   test("阅读时长 pill 随字数出现，空文档不出 pill，两者都贴状态条右端", async ({ page }) => {

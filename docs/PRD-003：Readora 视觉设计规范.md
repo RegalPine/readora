@@ -4,7 +4,7 @@
 |---|---|
 | 文档编号 | PRD-003 |
 | 文档名称 | 视觉设计规范 |
-| 文档版本 | 1.3.0 |
+| 文档版本 | 1.5.0 |
 | 文档状态 | Draft |
 | 所属产品 | Readora |
 | 关联文档 | PRD-001、PRD-002 |
@@ -187,28 +187,28 @@ Semantic Token 将基础设计值映射为使用语义。
 
 | Token | 色值 | 用途 |
 |---|---|---|
-| canvas | #F8F9FF | 阅读画布 |
-| surface | #EFF4FF | 卡片及面板 |
-| surface-subtle | #E5EEFF | 次级表面 |
-| surface-raised | #DCE9FF | 抬升表面（悬停、选中底色） |
+| canvas | #F7F8FA | 阅读画布 |
+| surface | #F1F3F6 | 卡片及面板 |
+| surface-subtle | #E9EDF1 | 次级表面 |
+| surface-raised | #E2E6EC | 抬升表面（悬停、选中底色） |
 | surface-sunken | #FFFFFF | 下沉表面（代码块、表格、数学块） |
 | text-primary | #0B1C30 | 正文 |
 | text-secondary | #4A4455 | 次级文字 |
 | text-muted | #6B6478 | 弱化文字 |
-| border | rgb(204 195 215 / 0.7) | 分隔边界 |
-| border-strong | #CCC3D7 | 控件与容器边界 |
-| accent | #6D28D9 | 强调填充（按钮、进度、选中轨） |
-| accent-text | #5300B7 | 正文可读紫（链接、强调文字） |
+| border | #D3D7DE | 分隔边界 |
+| border-strong | #C2C7CF | 控件与容器边界 |
+| accent | #7642DE | 强调填充（按钮、进度、选中轨） |
+| accent-text | #592DAC | 正文可读紫（链接、强调文字） |
 | accent-on | #FFFFFF | 填充之上的文字 |
-| accent-soft | rgb(109 40 217 / 0.08) | 强调背景 |
-| link | #5300B7 | 链接 |
+| accent-soft | rgb(11 28 48 / 0.06) | 强调背景 |
+| link | #592DAC | 链接 |
 | info | #00645B | 信息提示（tertiary） |
 | success | #0F6A43 | 成功 |
 | warning | #8A5A00 | 警告 |
 | danger | #BA1A1A | 错误 |
 | glass | rgb(255 255 255 / 0.86) | 浮动件背景（配 `backdrop-filter`） |
 
-`text-muted` 相对原型基准值 `#7B7486` 做了加深：`#7B7486` 在 `#F8F9FF` 上的对比度约 4.3:1，低于 §14.1 要求的 4.5:1，而该 token 用于 12–13px 的标签与元信息，属于小字号，必须过 AA。调整由 `apps/webview/src/styles/__tests__/contrast.spec.ts` 固化，回归即红灯。
+`text-muted` 相对原型基准值 `#7B7486` 做了加深：`#7B7486` 在 `#F7F8FA` 上的对比度约 4.2:1，低于 §14.1 要求的 4.5:1，而该 token 用于 12–13px 的标签与元信息，属于小字号，必须过 AA。调整由 `apps/webview/src/styles/__tests__/contrast.spec.ts` 固化，回归即红灯。§4.2 的面族取中性灰蓝、边界取实色、强调底取中性柔光（1.4.0）：蓝紫相的层叠在浅底上呈整体光晕，半透明边界轮廓发虚。
 
 ### 4.3 Dark Theme
 
@@ -222,20 +222,22 @@ Semantic Token 将基础设计值映射为使用语义。
 | surface-raised | #262A31 | 抬升表面（悬停、选中底色） |
 | surface-sunken | #0A0E14 | 下沉表面（代码块、表格、数学块） |
 | text-primary | #DFE2EB | 正文 |
-| text-secondary | #CCC3D8 | 次级文字 |
-| text-muted | #958DA1 | 弱化文字 |
-| border | rgb(74 68 85 / 0.6) | 分隔边界 |
-| border-strong | #4A4455 | 控件与容器边界 |
-| accent | #7C3AED | 强调填充 |
-| accent-text | #D2BBFF | 正文可读紫（链接、强调文字） |
+| text-secondary | #C2C8D2 | 次级文字 |
+| text-muted | #8E949F | 弱化文字 |
+| border | rgb(67 72 80 / 0.6) | 分隔边界 |
+| border-strong | #434850 | 控件与容器边界 |
+| accent | #7642DE | 强调填充 |
+| accent-text | #D2CCF0 | 正文可读紫（链接、强调文字） |
 | accent-on | #EDE0FF | 填充之上的文字 |
-| accent-soft | rgb(124 58 237 / 0.2) | 强调背景 |
+| accent-soft | rgb(118 66 222 / 0.2) | 强调背景 |
 | link | #58A6FF | 链接 |
 | info | #A2C9FF | 信息提示（tertiary） |
 | success | #34D399 | 成功 |
 | warning | #FBBF24 | 警告 |
 | danger | #FFB4AB | 错误 |
 | glass | rgb(49 53 60 / 0.9) | 浮动件背景 |
+
+暗色中性档去紫（1.6.0）：`text-secondary` / `text-muted` / `border` / `border-strong` 的旧值彩度 0.029~0.031、色相 301~305°，比正文档（271°、0.013）紫了一倍多，于是 13px 的次级文字压在 `#10141A` 上呈"白里透紫 + 边缘发雾"（大纲条目是最典型的落点）。新值按「同 OKLCH L、彩度砍半、色相拉回正文同族 263°」重算，四表面最低对比度逐项不低于旧值（secondary 8.56 / 旧 8.48，muted 4.72 / 旧 4.53，border-strong 1.56 / 旧 1.54），可读性不是这次调整的代价。`accent-text` 按产品决策压淡一档（L 0.895→0.861、C 0.056→0.050，色相 293° 不动）：品牌紫仍是点睛位，只是不再在暗底上发光。这次只动暗色，§4.2 的亮色中性档保持 1.4.0 的取值。
 
 暗色块必须覆盖 §4.2 列出的**全部**语义 token，一个都不能漏：漏掉的那个会沿用亮色值，表现为"暗色里渗出一块亮色"。这条约束由 `design-tokens.spec.ts` 的必需清单逐名断言，扩充语义 token 时必须同步扩充清单。
 
@@ -253,7 +255,7 @@ Semantic Token 将基础设计值映射为使用语义。
 | Info | 信息提示 |
 | Neutral | 普通内容 |
 
-强调色有两个值，不可混用：`accent` 是**填充色**，只出现在背景与进度条上，上面的文字必须是 `accent-on`；`accent-text` 是**文字色**，用于正文链接与强调文字，直接落在 `canvas`/`surface` 上。把 `accent`（暗色 `#7C3AED`）直接当文字色用，在 `#10141A` 上只有约 3.1:1，小字号不过 AA。
+强调色有两个值，不可混用：`accent` 是**填充色**，只出现在背景与进度条上，上面的文字必须是 `accent-on`；`accent-text` 是**文字色**，用于正文链接与强调文字，直接落在 `canvas`/`surface` 上。把 `accent`（暗色 `#7642DE`）直接当文字色用，在 `#10141A` 上只有约 3.2:1，小字号不过 AA。
 
 ### 4.5 强调色规则
 
@@ -281,11 +283,17 @@ Semantic Token 将基础设计值映射为使用语义。
 | 安全 & CSP 审计面板 | 无审计器 |
 | PDF / SVG 导出按钮 | 无导出实现 |
 | 状态条 `Ln 142, Col 18`、`UTF-8` | webview 没有光标位置与文件编码信息 |
-| 面包屑的"可点击目录段" | 无 reveal-in-explorer 能力，改为纯文本，不给假 affordance |
+| 面包屑（整条） | 当年（≤1.4）无 reveal-in-explorer 能力，顶栏面包屑为纯文本，不给假 affordance。1.5.0 一度以"切换同目录文档是真能力"为由恢复为自绘可点按钮 + `document.list` 通道；**1.7.0 撤销该自绘方案**：readora 迁移到自定义编辑器（ARC-004 §7.2），文档路径链与同级文件切换由 **VS Code 原生面包屑**在编辑器上方提供。原生那条出现后，顶栏再留一条（哪怕纯文本）就是**两层冗余导航**，故 **1.7.0 把顶栏面包屑整条删除**，`document.list` 通道一并移除 |
 
 同一条规则也约束开关：Reader Settings 弹层不提供"代码行号 / 关闭 KaTeX / 平滑滚动"三项，因为当前没有对应实现，给了就是假开关。
 
-状态条只保留能自证的字段：`N 节`、`字数`、`文档版本 v{n}`、`缩放 z%`、`主题 light/dark`、`Bridge: Connected`（依据是收到过 `document.load`）。
+状态条只保留能自证的阅读字段：`字数`、`缩放 z%`、`主题 light/dark`。
+
+`文档版本 v{n}` 已按产品反馈删除：它是内部快照版本，没有文本编辑器模型时可能为 `v0`，容易被误认为插件版本。内部版本仍用于消息时序、搜索与导出一致性，不再由状态条接收或展示。
+
+原第六项 `Bridge: Connected`（判据为收到过 `document.load`）已按同一条诚实性规则删除：状态条随外壳一起只在第一份快照落地后才渲染（`App.tsx` 的 loading 分支不渲染外壳），字段出现即已连接，于是它恒为 Connected —— 一个永不变化的字段等于没有信息量，且 "Bridge" 是 `HostBridge` 的内部术语，读者无从理解。「收到过快照」改由状态条本身的存在来证明，不再重复报一遍。
+
+原第一项 `N 节`（顶层分节数）**1.7.2 起删除**（产品反馈）：节数是目录那一栏直接数得出来的东西，在底部再报一次只把同一个信息说两遍；旧口径（取 `buildOutlineTree(outline).length`，h2/h3 不计，单复数跟值走）需要读者先理解「只算顶层」才和目录对得上，本身也是一处负担。`buildOutlineTree` 仍由 `App.tsx` 建一次，只供活动标题的祖先展开使用。
 
 ---
 
@@ -444,9 +452,9 @@ Semantic Token 将基础设计值映射为使用语义。
 | shadow-sm | 浮动工具栏 |
 | shadow-md | 弹出菜单 |
 | shadow-lg | 模态预览 |
-| shadow-pill | 浮动快速条、顶栏 pill（暗色 `0 8px 24px rgb(0 0 0 / .35)`，亮色 `0 4px 12px rgb(109 40 217 / .08)`） |
+| shadow-pill | 浮动快速条、顶栏 pill（暗色 `0 8px 24px rgb(0 0 0 / .35)`，亮色 `0 4px 12px rgb(11 28 48 / .08)`） |
 
-默认使用边框而不是阴影区分普通内容区域。亮色的阴影一律带品牌紫相而非纯黑，纯黑投影在蓝白底上发脏。
+默认使用边框而不是阴影区分普通内容区域。亮色的阴影一律用正文同相的深藏青 `rgb(11 28 48)`：品牌紫投影在浅底上呈辉光（整体光晕感），纯黑投影在蓝白底上发脏。
 
 **hairline**：`--readora-hairline: 1px` 是所有分隔线的唯一来源，高对比模式下不提粗——提粗会让 3px 的 callout 左轨变成 7px 的色块。
 
@@ -529,6 +537,21 @@ V1.2.0 起支持 `> [!TYPE]` 语法（NOTE / TIP / WARNING / DANGER / INFO 及 O
 - 复制按钮采用低干扰样式。
 - 超长代码支持横向滚动。
 - 可选行号。
+
+### 8.6.1 行内代码
+
+行内代码（反引号包裹，产物 `.readora-inline-code`）与代码块同属一套代码语汇，但它是嵌在正文行里的一枚**色块**，因此除了字体外还要有底色、描边、前景三条线索（1.7.3）：
+
+| 要素 | 规则 |
+|---|---|
+| 底色 | `--readora-inline-code-background`，取「正文前景掺 12% 透明」的派生柔光 `color-mix(in srgb, var(--readora-color-text-primary) 12%, transparent)` |
+| 描边 | 1px `--readora-color-border-strong`（不依赖底色） |
+| 文字 | `--readora-syntax-attr`，与代码块里的变量 / 属性同色，挂在 `[data-readora-scheme]` 轴上 |
+| 字体 | `--readora-font-family-mono`，0.9em，圆角 `--readora-radius-sm` |
+
+**色块不得复用任何一档 `surface`**：`surface-subtle` 同时是引用块的底（§8.3），色块取它就在引用里与背景逐字节同色（实测 1.00:1，色块直接消失），落在正文画布上也只有 1.11:1。用户报的「亮色下 `code` 对比度不够」量的是**色块与容器的区分度**，当时的文字对比度是 14.59:1、完全合格 —— 所以只调底色治不了根：任何复用五档表面阶梯的取值迟早与同档容器撞色，描边与前景这两条不依赖底色的线索必须同时在。改用前景掺透明的派生柔光还有一个附带收益：宿主模式（§13.3）下它跟着编辑器的 `editorForeground` / `editorBackground` 走，不必为三套 palette 各抄一个经验值（同 §8.6 代码块的处理口径）。
+
+门禁：`contrast.spec.ts`「行内代码色块与它的落点」按 light / dark × 五档落点（canvas / surface / surface-subtle / surface-raised / surface-sunken）逐个合成后断言 ① 色块 vs 容器 ≥ 1.15 ② 色块内文字过 AA 4.5:1，另加一条「声明里不得出现 `color-surface`」的结构断言。改后实测：色块区分度 1.27~1.28（亮）/ 1.29~1.38（暗），前景最低 4.66:1（亮色压 `surface-raised`）。
 
 ### 8.7 图片
 
@@ -636,18 +659,24 @@ Primary 仅用于明确的主要操作。
 
 ### 10.5 外壳布局组件（V1.2.0）
 
-外壳纵向四段，尺寸由组件 token 固定：
+面包屑删除后，外壳定型为**大纲通顶的侧栏布局**：主体段是「大纲列 | 内容列」的 grid，
+顶栏与搜索行**移进右列**（不再横压左列、也就不再遮住大纲顶部），状态条仍横贯整窗。
+滚动容器仍是 window、各带 `position: sticky`，只是大纲列 `sticky top: 0` 一路贯到状态条上沿。
+尺寸由组件 token 固定：
 
 | 组件 | 类名 | 高度/宽度 | 内容 |
 |---|---|---|---|
-| TopBar | `.readora-topbar` | `--readora-topbar-height`（44px） | 大纲开合、面包屑、阅读时长 pill、模式标签、Reader Settings、缩放组、搜索、专注模式、Export 下拉（M11） |
-| 搜索行 | `.readora-searchbar` | 随内容 | 搜索面板整行展开（原型的 `doc-search-toolbar`） |
-| 主体 | `.readora-body` | flex row | 大纲（`--readora-outline-width`，256px，可关）+ 唯一滚动容器 `main.readora-canvas-scroll` |
-| StatusBar | `.readora-statusbar` | `--readora-statusbar-height`（24px） | 见 §4.6 的诚实字段清单 |
+| TopBar | `.readora-topbar` | `--readora-topbar-height`（44px），**只占右列宽** | **大纲开合靠左且只给图标**（紧邻大纲列，`.readora-toolbar-button--icon`），专注 / 搜索 / 缩放组 / Export 下拉 / Reader Settings 成组靠右；不含面包屑（1.7.0 删除）、不含 pill（迁状态条右端） |
+| 搜索行 | `.readora-searchbar` | 随内容 | 在右列顶栏之下整行展开（原型的 `doc-search-toolbar`） |
+| 主体 | `.readora-body` | grid 两列：`--readora-outline-width`（256px，可关）+ 内容列 | 左列大纲（`.readora-shell-nav`，`sticky top:0` **通顶**）+ 右列内容（`.readora-shell-main`：顶栏 → 搜索行 → 快速条 + 画布） |
+| StatusBar | `.readora-statusbar` | `--readora-statusbar-height`（24px） | 横贯整窗，见 §4.6 的诚实字段清单 |
 
-- **面包屑**：从 `documentUri` 去 scheme 后取末 3 段，目录段 `text-muted`、文件名 `text-primary`，**纯文本不可点**。
+- **大纲通顶 + 顶栏让位**（1.7.0，面包屑删除的直接结果）：路径链交给宿主原生面包屑后，顶栏左侧空了出来，于是把大纲开合按钮挪到顶栏**左侧**，让它和它控制的大纲列同侧；同时把顶栏/搜索行从"横贯整窗的第一段"改成"只在右侧内容列"，左列大纲得以从视口顶贯到底（`sticky top:0`，高 `calc(100vh − 状态条 − hairline)`）。**单列形态**（目录收起 / 专注 / ≤900px 窄窗）没有左列可让位，顶栏随内容列铺满整窗——这与旧版四段形态一致。
+- **面包屑**：**1.7.0 起顶栏不再自绘任何面包屑**。readora 迁移到自定义编辑器（ARC-004 §7.2）后，宿主在编辑器上方原生给出**文档路径链 + 同级文件切换**的面包屑；顶栏再留一条（哪怕纯文本、不可点）就是**两层冗余导航**，故整条删除——`TopBar.tsx` 去掉 `Breadcrumb`/`breadcrumbOf`/`BREADCRUMB_*` 常量与 `documentUri` prop，`shell.css` 去掉面包屑样式，`App.tsx`/`dev/visual.tsx` 去掉 `documentUri` 透传。（历史：≤1.4 纯文本不可点；1.5.0 曾以"切换同目录文档是真能力"恢复为自绘可点目录段 + `document.list` 通道 + `BreadcrumbMenu.tsx`，该通道与菜单已随 1.7.0 一并删除，消息 18→17。）
 - **pill**：`radius-full` + `shadow-pill` + `font-xs` + `tracking-label`，用于阅读时长与模式标签。
 - **缩放组**：`−` `100%` `+` 三枚连排，点百分号复位；字号 50%–200%，步长 10%。
+- **开合 toggle（Outline / Search）**：用 `aria-pressed` 表达当前开合。顶栏 Outline 使用双态侧栏图标：大纲显示时箭头向左（收起），隐藏时箭头向右（展开），`title` 对应 `Hide outline` / `Show outline`；两态均无常驻灰底，保留通用悬停反馈与键盘焦点环。Search 仍用淡底（`--readora-outline-active-bg`）+ 加粗（600）表达按下态，不上 accent 紫描边、不改文字色。
+- **纯图标控件（1.7.2）**：顶栏的 Outline 开合与大纲面板头部的「展开全部 / 过滤」只给图标不给文字（产品要求：三枚控件只要图标；位置常驻的开关本就不需要文字自证）。它们仍分别带 `aria-label`（`Toggle outline` / 动态的 `Collapse all`–`Expand all` / `Filter`）与 `title` 悬停文案，**可读名称不因去文字而丢失**（§10.6：图标只是装饰）。内边距由 `.readora-toolbar-button--icon` / `.readora-outline-action--icon` 收成与图标等宽的定量；点击区实测 34×24（旧「图标+文字」82×29）与 22×18（旧 91×24）—— 确实随文字一同收窄，量级对齐 VS Code 侧栏图标按钮。顶栏其余四个动作仍图标 + 文字。
 - **Reader Settings 触发器**：它是弹层触发器不是路由，`aria-haspopup="dialog"` + `aria-expanded`。
 - **Export 下拉（M11）**：动作区里排在缩放组之后、Reader Settings 之前（导出是动作，
   Settings 恒为末位）。触发器复用同一枚 `.readora-toolbar-button`，额外带
@@ -666,18 +695,26 @@ Primary 仅用于明确的主要操作。
 
 图标一律是内联 SVG React 组件（`apps/webview/src/app/Icon.tsx`），统一 24 viewBox、`stroke="currentColor"`、`stroke-width: 1.5`、`aria-hidden="true"`。
 
+Outline 图形在 1.7.2 由「三个项目点 + 三条右对齐横线」（与正文里的 `ul` 同形，看着像列表视图而不像目录）改为**层级树**：根行在上、竖向连接线引出两个缩进一级的子行。大纲的辨识特征是缩进层级，与 §10.7 条目的层级缩进同源语义。
+
 不引入图标字体：Material Symbols 全量 woff2 是 MB 级且需要 CI 增加 fonttools 子集化这一原生工具依赖，codicons 的字形与原型不符。内联 SVG 组件的代价只是几百行 JSX，且随 tree-shaking 只打包用到的部分。
+
+顶栏的开合控件改用 `OutlineToggleIcon`（侧栏轮廓 + 左右箭头），按显示/隐藏状态切换图形；快速条的大纲入口仍用上述层级树图标。
 
 ### 10.7 大纲面板
 
-在既有的树/折叠/active 之上扩展三块，全部有真实数据源（1.2.0 起进度块与源行号
-标签下线，阅读进度只由 §10.5 的浮动快速条一处报告）：
+在既有的树/折叠/active 之上扩展以下三块，前两块的数全部来自真实数据源（1.2.0
+起进度块与源行号标签下线，阅读进度只由 §10.5 的浮动快速条一处报告）：
 
 | 区块 | 数据源 |
 |---|---|
-| 头部（展开全部 / 过滤）+ heading 过滤输入框 | 本地状态；过滤按 `title` 子串并自动展开命中项，`Escape` 清空 |
+| 头部（展开全部 / 过滤）+ heading 过滤输入框 | 本地状态；两枚**纯图标靠右排列**（见 §10.5 / §10.6）；过滤按 `title` 子串并自动展开命中项，`Escape` 清空 |
 | 行内标签 | 只给 H1 显示分节字数（`840w`，`section-metrics.ts`）。`position` 缺失则不显示该标签；更深层级不配标签——源行号是编辑器坐标而不是阅读信息，读者据此无法定位自己在正文里的位置 |
-| 底部 | `N Sections` + `Depth: H1–H{max}` |
+| 底部 | 不摆统计：面板内没有 footer，也没有 `Sections` / `Depth` 两个口子。节数连 §4.6 状态条那一份也在 1.7.2 删掉了，不再在任何地方重复报 |
+
+列表使用 **3px 极细滚动条**（Chromium / VS Code），轨道透明、滑块使用 `border-strong`，悬停使用 `text-muted`；不支持 WebKit 滚动条伪元素的引擎回退到标准 `thin`。仅列表滚动，头部图标常驻，正文滚动与活动项跟随逻辑不变。
+
+活动条目（active）的高亮在 1.7.2 由「强调色 + `inset 2px` 左侧指示条」改为**强调色 + 淡底背景**（`--readora-outline-active-bg`，产品反馈）：旧那根指示条跟着 `.readora-outline-link` 的 padding 走，而条目按层级缩进，于是它停在标题左侧的空档里，读者要顺着它去找「是哪一行」；背景铺在标题那一块上，不需要解释就能看出当前在读哪一节。加粗（600）与 accent 文字色保留。
 
 分节字数按 outline 顺序取相邻标题之间的源行区间计数，`useMemo` 依赖 `[text, outline]`——每次渲染一次，不是每次滚动一次。行号不上 UI，但 `OutlineItem.position.startLine` 仍是切区间的边界，继续在数据结构里。区间按 **0 基**行号算（与 `docs/ARC-002` §4.3 的 `SourcePosition` 同基），左闭右开：第 i 节是 `[startLine_i, startLine_{i+1})`，最后一节到文件末尾——把行号当 1 基算会把首行的 H1 整条判成没有区间而丢标签。
 
@@ -872,6 +909,7 @@ KaTeX 样式必须在最前、阅读器覆盖在后，这是既有不变量（IM
 - 普通正文对比度至少 4.5:1。
 - 大字号文字对比度至少 3:1。
 - 重要 UI 边界和控件状态应满足相应非文本对比度要求。
+- 色块类元素（行内代码）除了自身文字过 AA，还要与它实际落进的容器拉开可辨识的区分度，否则「一块与背景同色的补丁」不会被读成代码（口径见 §8.6.1）。
 
 ---
 
@@ -914,23 +952,23 @@ Markdown、代码块、Mermaid 图表和辅助面板必须使用统一的设计�
 
 | 语义 | Stitch / M3 名 | 本仓库 token | Dark | Light |
 |---|---|---|---|---|
-| 画布 | `background` / `surface` / `surface-dim` | `--readora-color-canvas` | `#10141a` | `#f8f9ff` |
-| 面板 | `surface-container-low` | `--readora-color-surface` | `#181c22` | `#eff4ff` |
-| 次级面 | `surface-container` | `--readora-color-surface-subtle` | `#1c2026` | `#e5eeff` |
-| 抬升面 | `surface-container-high` | `--readora-color-surface-raised`（新） | `#262a31` | `#dce9ff` |
+| 画布 | `background` / `surface` / `surface-dim` | `--readora-color-canvas` | `#10141a` | `#f7f8fa` |
+| 面板 | `surface-container-low` | `--readora-color-surface` | `#181c22` | `#f1f3f6` |
+| 次级面 | `surface-container` | `--readora-color-surface-subtle` | `#1c2026` | `#e9edf1` |
+| 抬升面 | `surface-container-high` | `--readora-color-surface-raised`（新） | `#262a31` | `#e2e6ec` |
 | 最高实面 | `surface-container-highest` | `--readora-color-surface-highest`（新） | `#31353c` | `#d3e4fe` |
 | 下沉面 | `surface-container-lowest` | `--readora-color-surface-sunken`（新） | `#0a0e14` | `#ffffff` |
 | 浮动面 | （原型 `surface-container-highest/90`） | `--readora-color-glass`（新，仅浮动件） | `rgb(49 53 60 / .9)` | `rgb(255 255 255 / .86)` |
 | 主文字 | `on-surface` | `--readora-color-text-primary` | `#dfe2eb` | `#0b1c30` |
-| 次文字 | `on-surface-variant` | `--readora-color-text-secondary` | `#ccc3d8` | `#4a4455` |
-| 弱文字 | `outline` | `--readora-color-text-muted` | `#958da1` | `#6b6478`（原型 `#7b7486` 加深以过 AA） |
-| 边界 | `outline-variant` | `--readora-color-border` | `rgb(74 68 85 / .6)` | `rgb(204 195 215 / .7)` |
-| 强边界 | `outline` | `--readora-color-border-strong`（新） | `#4a4455` | `#ccc3d7` |
-| 主色填充 | `primary-container` | `--readora-color-accent` | `#7c3aed` | `#6d28d9` |
-| 主色文字 | `primary` | `--readora-color-accent-text`（新） | `#d2bbff` | `#5300b7` |
+| 次文字 | `on-surface-variant` | `--readora-color-text-secondary` | `#c2c8d2` | `#4a4455` |
+| 弱文字 | `outline` | `--readora-color-text-muted` | `#8e949f` | `#6b6478`（原型 `#7b7486` 加深以过 AA） |
+| 边界 | `outline-variant` | `--readora-color-border` | `rgb(67 72 80 / .6)` | `#d3d7de` |
+| 强边界 | `outline` | `--readora-color-border-strong`（新） | `#434850` | `#c2c7cf` |
+| 主色填充 | `primary-container` | `--readora-color-accent` | `#7642de` | `#7642de` |
+| 主色文字 | `primary` | `--readora-color-accent-text`（新） | `#d2ccf0` | `#592dac` |
 | 填充上文字 | `on-primary-container` | `--readora-color-accent-on`（新） | `#ede0ff` | `#ffffff` |
-| 主色淡底 | （原型自算） | `--readora-color-accent-soft` | `rgb(124 58 237 / .2)` | `rgb(109 40 217 / .08)` |
-| 链接 | `link` | `--readora-color-link`（新） | `#58a6ff` | `#5300b7` |
+| 主色淡底 | （原型自算） | `--readora-color-accent-soft` | `rgb(118 66 222 / .2)` | `rgb(11 28 48 / .06)` |
+| 链接 | `link` | `--readora-color-link`（新） | `#58a6ff` | `#592dac` |
 | 信息 | `tertiary` | `--readora-color-info`（新） | `#a2c9ff` | `#00645b` |
 | 成功 | `tertiary-fixed-dim` | `--readora-color-success` | `#34d399` | `#0f6a43` |
 | 警告 | — | `--readora-color-warning` | `#fbbf24` | `#8a5a00` |
@@ -955,3 +993,11 @@ Markdown、代码块、Mermaid 图表和辅助面板必须使用统一的设计�
 | 1.1.0 | 附录 A Tailwind 裁决变更：引入构建期 Tailwind utility 层（用户决策，IMP-001 §21 登记），Token 映射、色值基准与 CSP 约束不变；元数据设计体系同步更新 |
 | 1.2.0 | §10.7 大纲面板去进度块与源行号标签（用户要求，进度只留 §10.5 快速条一处）；§13.1 随之移除无消费方的 `--readora-progress-fill-start/end`；`docs/ARC-006` §4 示例同步；§10.7 补写分节的 0 基行号口径（去行号后字数成了唯一行内标签，旧实现的 1 基误读会让首行 H1 静默不显示） |
 | 1.3.0 | §10.5 顶栏控件清单新增 Export 下拉（M11 导出链路）：位置、类名、`data-readora-export-menu` 探针、`aria-haspopup="menu"` 与三枚 `role="menuitem"`，并记明专注模式下不可达。未新增任何颜色 Token 与尺寸变量，44px 顶栏高度不变（10 档视觉基线因此只改像素不改取值） |
+| 1.4.0 | §4.2 亮色去光晕修订（用户反馈「整体有光晕感、不够清爽」）：面族从蓝紫相改中性灰蓝（canvas `#F8F9FF→#F7F8FA`、surface `#EFF4FF→#F1F3F6`、subtle `#E5EEFF→#E9EDF1`、raised `#DCE9FF→#E2E6EC`），边界改实色去紫（border `rgb(204 195 215 / .7)→#D3D7DE`、border-strong `#CCC3D7→#C2C7CF`），强调底改中性柔光（accent-soft `rgb(109 40 217 / .08)→rgb(11 28 48 / .06)`）；§7.2 亮色阴影同批由品牌紫相改正文同相深藏青 `rgb(11 28 48)`。品牌色相（accent / accent-text / link / focus）不变；暗色板不动；AA 矩阵实测仍全过 |
+| 1.4.1 | §10.5 顶栏开合 toggle（Outline / Search）按下态去紫：`shell.css` 的 `.readora-toolbar-button[aria-pressed="true"]` 移除 `border-color: accent` 与 `color: outline-active-color`，只留淡底 + 加粗。用户实测反馈：大纲默认可见使 Outline 常驻按下态，紫描边与 `:focus-visible` 焦点环同色，看着像被聚焦/选中、抢阅读注意力。未改任何 Token 取值，焦点环仍由 `components.css` 独占；10 档视觉基线因此改 `.readora-toolbar-button` 的 computed `color`/`borderColor`（紫→中性）与像素，`visual:update` 重采后 `check` 全等 |
+| 1.5.0 | §10.5 面包屑**目录段恢复为可点按钮**（切换同目录文档）：新增补设通道 `document.list`（view-to-host，返回该目录直属 Markdown，上限 200），切换复用既有 `document.navigate`。安全边界：只允许列当前文档所在目录本身或其祖先、且落在 workspace folder 内、`allowWorkspaceResources` 为真，否则 `RESOURCE_DENIED`。§4.6 对当年剔除结论补更正（reveal-in-explorer ≠ 切换文档）。新增 `BreadcrumbMenu.tsx`（复用 ExportMenu 键盘/焦点骨架），`shell.css` 面包屑容器由 `overflow:hidden` 改 `visible` 以让菜单溢出（截断仍由分段负责）；未新增颜色 Token。视觉基线因目录段 span→button、容器 overflow 变更需 `visual:update` 重采，核对 diff 只落在 breadcrumb 相关选择器与像素 |
+| 1.6.0 | §4.3 暗色中性档去紫（用户反馈「左侧大纲视图字体白里透紫、雾茫茫的」）：`text-secondary` `#CCC3D8→#C2C8D2`、`text-muted` `#958DA1→#8E949F`、`border` `rgb(74 68 85 / .6)→rgb(67 72 80 / .6)`、`border-strong` `#4A4455→#434850`，高对比预设暗色同两档 `#B8B3C0→#B1B6C0`、`#807C88→#7A7F88`；`accent-text` `#DDD6FF→#D2CCF0` 按产品决策压淡一档（色相 293° 不动）。取档口径为「同 OKLCH L、中性档彩度砍半、色相拉回正文同族 263°」，四表面最低对比度逐项不低于旧值，AA/AAA 矩阵实测仍全过。根因不是对比度而是色相：旧中性档彩度 0.029~0.031 / 301~305°，比正文档（0.013 / 271°）紫一倍多，13px 亮字压深底即呈紫雾。亮色板与 1.4.0 的面族/边界/柔光取值不动 |
+| 1.7.0 | §10.5 面包屑**整条从顶栏删除、改用 VS Code 原生面包屑**（用户决策「readora 也用 VS Code 的，不用自己实现」；实测发现迁移后出现两层面包屑）：readora 文档面板从 `createWebviewPanel` 迁移为自定义编辑器 `registerCustomEditorProvider`（只读，`priority: option`，ARC-004 §4.4/§7.2），宿主在编辑器上方原生给出路径链与同级文件切换。原生那条出现后顶栏再留一条（哪怕纯文本）即冗余，故**顶栏面包屑整条不渲染**：删 `TopBar` 的 `Breadcrumb`/`breadcrumbOf`/`BREADCRUMB_*` 常量与 `documentUri` prop、删 `shell.css` 面包屑样式、`App.tsx`/`dev/visual.tsx` 去掉 `documentUri` 透传；同时删除 `BreadcrumbMenu.tsx` 与补设通道 `document.list`（消息 18→17）、`resource-service.listMarkdown`、`ports.readDirectory`。§4.6 记录「两层导航」的撤销理由。视觉基线因顶栏少一段需 `visual:update` 重采（核对 diff 只落在面包屑选择器删除 + 截图像素） |
+| 1.7.1 | §10.5 外壳由「纵向四段」改为**大纲通顶的侧栏布局**（1.7.0 删面包屑后顶栏左侧空出，顺势定型）：主体段 `.readora-body` 仍是「大纲列 \| 内容列」两列 grid（保留 grid 以守住基线的 `gridTemplateColumns` 收单列护栏），但顶栏 `.readora-topbar` 与搜索行 `.readora-searchbar` **移进右列 `.readora-shell-main`**，横向不再压过左列；大纲列 `.readora-shell-nav` 从 `sticky top: var(--readora-topbar-height)` 改 `sticky top: 0`、高度去掉 topbar 项（`calc(100vh − statusbar − hairline)`），一路贯到状态条上沿。`TopBar` 的 Outline 按钮从靠右的 `.readora-toolbar-actions` 移到工具栏**首节点（左侧）**，与它控制的大纲列同侧；动作组仍 `margin-left: auto` 靠右。状态条仍横贯整窗（Q：只有顶栏让位）。滚动模型不变（window + sticky），专注 / 窄窗 / 目录收起的单列形态下顶栏随内容列铺满整窗、回到旧观。`ReaderShell` DOM 层级重排但 props 与 band 名不变；`reader-shell.spec` band 顺序改 `["body","topbar",…,"statusbar"]`，e2e 新增「大纲通顶 + 顶栏让位」几何断言。视觉基线因 topbar 变窄、nav 变高、body/main 变高需 `visual:update` 重采 |
+| 1.7.2 | 外壳细节四处按产品反馈收敛（均不改 Token 取值，10 档视觉基线只改像素需 `visual:update` 重采）：① §10.5 / §10.6 **三枚控件改为纯图标** —— 顶栏 Outline 开合与大纲面板头部的「展开全部 / 过滤」去掉文字，`aria-label` + `title` 保留可读名称与悬停解释，内边距由 `.readora-toolbar-button--icon` / `.readora-outline-action--icon` 收成与图标等宽的定量（点击区实测 34×24 与 22×18，随文字一同收窄）；② §10.6 `OutlineIcon` 图形由项目点列表改为**层级树**（旧图形与正文 `ul` 同形）；③ §10.7 **活动条目高亮改背景** —— `.readora-outline-link[aria-current="location"]` 去掉 `inset 2px` 左侧指示条（它随条目缩进停在空档里），改用 `--readora-outline-active-bg` 淡底，accent 文字色与加粗保留；④ §4.6 **状态条删掉 `N sections` 字段**（节数目录那一栏直接数得出来，五降到四），`StatusBar` 去 `sectionCount` prop 与 `sections` 字段名，`App.tsx`/`dev/visual.tsx` 不再透传 |
+| 1.7.3 | §8.6.1 **新增行内代码小节，色块改三重线索**（用户反馈「` 包裹内容` 在亮色模式下对比度不够」）：`--readora-inline-code-background` 由 `var(--readora-color-surface-subtle)` 改为 `color-mix(in srgb, var(--readora-color-text-primary) 12%, transparent)`，`.readora-inline-code` 补 `border: var(--readora-hairline) solid var(--readora-color-border-strong)` 与 `color: var(--readora-syntax-attr)`。诊断口径：旧写法的文字对比度 14.59:1 本来就合格，缺陷在色块与容器——对画布 1.11:1、落进引用块（同取 `surface-subtle`）1.00:1 逐字节撞色。未新增 Token 名（描边复用 `border-strong`、前景复用 `syntax-attr`），亮／暗两套 palette 同步；§14.1 补一条色块类元素的验收要求；`contrast.spec.ts` 新增「行内代码色块与它的落点」21 条门禁；10 档视觉基线取值只改 `--readora-inline-code-background` 与 `.readora-inline-code` 的 computed 三项，需 `visual:update` 重采 |

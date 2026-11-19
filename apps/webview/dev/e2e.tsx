@@ -274,10 +274,13 @@ class ScriptedHost {
         this.deliver("state.restore", { state });
       },
       setPreferences: (patch) => {
+        const previousWidth = this.preferences.contentWidth;
         this.preferences = { ...this.preferences, ...patch };
-        // 等价于用户改 settings.json：真 Host 的那条路径同样是先广播主题再广播偏好。
+        // 等价于用户改 settings.json：真 Host 的那条路径同样是先广播主题再广播偏好，
+        // 且配置宽度变化时同步会话视图状态并下发 reader.viewState（见 syncWidthIfNeeded）。
         this.broadcastTheme();
         this.deliver("config.update", { preferences: this.preferences });
+        this.syncWidthIfNeeded(previousWidth);
       },
       setResourceScript: (script) => {
         this.resourceScript = script;
@@ -362,6 +365,23 @@ class ScriptedHost {
     this.deliver("theme.update", { theme: state.mode, source: state.source });
   }
 
+  /**
+   * 真 Host 的 `broadcastConfig({ syncContentWidth })`：配置宽度变了才同步会话。
+   *
+   * Webview 的宽度变量以视图状态优先（`App.tsx`），只发 config.update 改不动
+   * 正文 —— 不抄这条，弹层改宽度在这套 e2e 里就是「拖了滑杆、面板纹丝不动」。
+   */
+  private syncWidthIfNeeded(previousWidth: number): void {
+    if (this.preferences.contentWidth === previousWidth) {
+      return;
+    }
+    this.viewState = {
+      ...this.viewState,
+      contentWidth: this.preferences.contentWidth
+    };
+    this.deliver("reader.viewState", this.viewState);
+  }
+
   private onViewMessage(message: ViewMessage): void {
     this.posted.push(message);
     switch (message.type) {
@@ -404,10 +424,8 @@ class ScriptedHost {
           this.respond(message.id, false, { code: script.code, message: script.message });
           return;
         }
-        this.deliver(
-          "document.load",
-          toPayload({ documentUri: script.documentUri, text: script.text }, this.preferences)
-        );
+        const payload = toPayload({ documentUri: script.documentUri, text: script.text }, this.preferences);
+        this.deliver("document.load", payload);
         this.respond(message.id, true, undefined);
         return;
       }
@@ -416,6 +434,7 @@ class ScriptedHost {
         // 与真 Host 同一口径：先整体过 Schema，非法就广播当前值（界面必须回到原样）。
         const next = { ...this.preferences, [key]: value } as ReaderPreferences;
         const accepted = validPreferences(next);
+        const previousWidth = this.preferences.contentWidth;
         this.preferences = accepted ? next : this.preferences;
         // `application.ts` 的 onDidChange 监听是「先 broadcastTheme 再 broadcastConfig」，
         // 顺序与条数都得照抄：Webview 侧取色只认 `theme.update`（App.tsx 头注），
@@ -427,6 +446,11 @@ class ScriptedHost {
         // 这里的回显（把当前值再广播一次）是夹具替「非法值也要让界面落回确认值」造的
         // 便捷通路；生产侧的对应行为是不写配置、因而没有变更事件，界面停在原值上。
         this.deliver("config.update", { preferences: this.preferences });
+        // 真 Host 的 broadcastConfig 在配置宽度变化时把它同步进会话并随
+        // reader.viewState 下发；被拒的补丁不动宽度（同上，事件根本不会发生）。
+        if (accepted) {
+          this.syncWidthIfNeeded(previousWidth);
+        }
         return;
       }
       default:

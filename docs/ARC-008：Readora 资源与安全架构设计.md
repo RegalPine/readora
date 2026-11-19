@@ -289,6 +289,8 @@ interface ResourcePolicy {
 
 实现注记（1.1.0，依据 AUD-001）：本节要求已按三重防御落地（AUD-001 §7 ARC-008 ✓、§4.3 F06）——渲染期惰性标记（`images.ts` 的 `data-readora-image-src`，不预解析为可加载 URI）+ Host 侧策略判定（`resource-policy.ts` / `resource-resolver.ts` / `resource-service.ts`）+ Webview 水合时复判；路径穿越与符号链接逃逸有专项 spec 锁定（STORY-08-01～03 Done）。图片缺失时展示 `missing-base` 降级提示（`image-layer.ts`）。
 
+实现注记（1.5.0 曾引入、1.7.0 撤销）：1.5.0 为自绘面包屑的目录段切换补设过 `document.list` 目录列举通道（`resource-service.listMarkdown` 对 `directoryUri` 施加四条硬约束：`file:` scheme、目标目录必须是会话文档目录本身或其祖先、落在 workspace folder 内、`allowWorkspaceResources` 为真，否则 `RESOURCE_DENIED`）。**该通道连同 `listMarkdown`、`ports.readDirectory` 已于 1.7.0 整体删除**：readora 迁移到自定义编辑器形态后，同级文件切换由 VS Code 原生面包屑在 Host 侧完成，Webview 不再需要列目录能力，本节约面因此缩小——资源面只剩 `resource.resolve` 单篇引用解析，不再有「枚举目录」这一潜在越权入口（见 ARC-004 §8.3 更正）。
+
 ## 7. Webview 资源 URI 转换
 
 ### 7.1 转换原则

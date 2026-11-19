@@ -47,6 +47,8 @@ import {
 
 export const OUTLINE_PANEL_CLASS = "readora-outline-panel";
 export const COLLAPSED_CLASS = "readora-outline-item--collapsed";
+/** 头部纯图标动作的修饰类：左右内边距改成与图标等宽的定量（点击区 22×18，细节见 shell.css）。 */
+export const OUTLINE_ACTION_ICON_CLASS = "readora-outline-action--icon";
 export const OUTLINE_FILTER_INPUT_ID = "readora-outline-filter-input";
 /** 活动条目标记的属性与值：焦点跟随靠它找到要滚到哪个条目，不靠高亮样式反推。*/
 export const OUTLINE_ACTIVE_ATTRIBUTE = "data-readora-outline";
@@ -186,26 +188,30 @@ export function OutlinePanel({
 
   return (
     <nav className={OUTLINE_PANEL_CLASS} aria-label="Document outline">
+      {/* 头部两枚只给图标（产品反馈）：这一栏本身就是窄列，「Collapse all / Filter」
+          两串英文会把头部撑到换行，而图标位置常驻就不需要文字复述。可读名称全部
+          留在 `aria-label`，`title` 给悬停解释（§10.6：图标只是控件的装饰）。 */}
       <div className="readora-outline-header">
         <button
           type="button"
-          className="readora-outline-action"
+          className={`readora-outline-action ${OUTLINE_ACTION_ICON_CLASS}`}
           data-readora-outline-action="expand-all"
           aria-label={expandLabel}
           // 过滤中折叠态看不见效果，按钮就该说它做不到的话别说（§4.6 诚实性）。
           disabled={filtering}
-          title={filtering ? "过滤中：命中项始终展开" : undefined}
+          title={filtering ? "过滤中：命中项始终展开" : expandLabel}
           onClick={() => {
             onCollapsedChange(allCollapsed ? [] : [...foldable]);
           }}
         >
           <ExpandIcon size={12} />
-          {expandLabel}
         </button>
         <button
           type="button"
-          className="readora-outline-action"
+          className={`readora-outline-action ${OUTLINE_ACTION_ICON_CLASS}`}
           data-readora-outline-action="filter"
+          aria-label="Filter"
+          title="Filter"
           aria-expanded={filterOpen}
           aria-controls={OUTLINE_FILTER_INPUT_ID}
           onClick={() => {
@@ -217,7 +223,6 @@ export function OutlinePanel({
           }}
         >
           <FilterIcon size={12} />
-          Filter
         </button>
       </div>
 

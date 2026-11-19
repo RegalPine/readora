@@ -20,7 +20,7 @@ import {
   THEME_PRESETS
 } from "@readora/contracts";
 import { DEFAULT_CUSTOM_CSS_MAX_CHARS } from "@readora/design-tokens";
-import { CONFIG_SECTION, READORA_ACTIVE_CONTEXT, READORA_COMMANDS } from "../constants";
+import { CONFIG_SECTION, READORA_ACTIVE_CONTEXT, READORA_COMMANDS, READORA_VIEW_TYPE } from "../constants";
 import {
   BYTES_PER_MB,
   createResourcePolicy,
@@ -39,6 +39,12 @@ interface Manifest {
   bugs?: { url: string };
   homepage?: string;
   contributes: {
+    customEditors: {
+      viewType: string;
+      displayName: string;
+      selector: { filenamePattern: string }[];
+      priority: string;
+    }[];
     commands: { command: string; title: string }[];
     menus: Record<string, { command: string; when?: string; group?: string }[]>;
     keybindings: {
@@ -103,6 +109,25 @@ describe("manifest 护栏", () => {
     expect([...registered].sort()).toEqual(
       Object.values(READORA_COMMANDS).sort()
     );
+  });
+
+  /**
+   * 自定义编辑器声明（ARC-004 §4.2，M6 起改为原生面包屑依赖的前提）：
+   * readora 以 CustomEditorProvider 形态接管 Markdown，宿主才会在编辑器上方
+   * 画出原生面包屑与「打开方式」切换。viewType 必须与代码常量一致，priority
+   * 必须是 option（文本编辑器仍是 .md 默认，readora 只是候选，行为最保守）。
+   */
+  test("customEditors 声明只读编辑器形态，priority=option 且选择器覆盖 .md/.markdown", () => {
+    const editors = manifest.contributes.customEditors;
+    expect(editors).toHaveLength(1);
+    const [editor] = editors;
+    expect(editor?.viewType).toBe(READORA_VIEW_TYPE);
+    expect(editor?.displayName).toBe("Readora");
+    expect(editor?.priority).toBe("option");
+    expect(editor?.selector.map((item) => item.filenamePattern).sort()).toEqual([
+      "*.markdown",
+      "*.md"
+    ]);
   });
 
   test("宽度命令不进命令面板（它只服务键位）", () => {

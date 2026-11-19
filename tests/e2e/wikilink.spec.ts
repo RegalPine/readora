@@ -64,10 +64,6 @@ test.describe("Wiki Link", () => {
     await page.locator("a[data-readora-wikilink]").first().click();
 
     await expect(page.locator(".readora-document h1")).toHaveText("Note Two");
-    // 分隔符 `/` 是段内的 aria-hidden 节点，所以用后缀匹配而不是整串相等。
-    await expect(page.locator(".readora-breadcrumb [data-readora-breadcrumb='filename']")).toHaveText(
-      /Note Two\.md$/
-    );
     // 行内提示不该出现在成功路径上。
     await expect(page.locator(".readora-inline-note")).toHaveCount(0);
 

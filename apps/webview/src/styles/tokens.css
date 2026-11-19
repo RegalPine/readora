@@ -13,26 +13,30 @@
  * 两个属性都由 Host 首帧写进 `<html>`（PRD-003 §11.3），不是等 theme.update 回来才上色。
  */
 
-/* ---------- Primitive：亮色板（PRD-003 §4.2） ---------- */
+/* ---------- Primitive：亮色板（PRD-003 §4.2） ----------
+ * 面族取中性灰蓝、边界取实色（§4.2 1.4.0）：蓝紫相的面与紫柔光、紫阴影同相叠加，
+ * 在浅底上呈整体光晕；半透明边界随底色合成，轮廓发虚。 */
 
 :root {
-  --readora-palette-light-canvas: #f8f9ff;
-  --readora-palette-light-surface: #eff4ff;
-  --readora-palette-light-surface-subtle: #e5eeff;
-  --readora-palette-light-surface-raised: #dce9ff;
+  --readora-palette-light-canvas: #f7f8fa;
+  --readora-palette-light-surface: #f1f3f6;
+  --readora-palette-light-surface-subtle: #e9edf1;
+  --readora-palette-light-surface-raised: #e2e6ec;
   --readora-palette-light-surface-sunken: #ffffff;
   --readora-palette-light-text-primary: #0b1c30;
   --readora-palette-light-text-secondary: #4a4455;
   --readora-palette-light-text-muted: #6b6478;
   /* text-muted 相对原型 #7b7486 加深过：后者在 canvas 上只有约 4.3:1，
    * 过不了小字号 AA（PRD-003 §4.2，由 contrast.spec.ts 固化）。 */
-  --readora-palette-light-border: rgb(204 195 215 / 0.7);
-  --readora-palette-light-border-strong: #ccc3d7;
-  --readora-palette-light-accent: #6d28d9;
-  --readora-palette-light-accent-text: #5300b7;
+  --readora-palette-light-border: #d3d7de;
+  --readora-palette-light-border-strong: #c2c7cf;
+  --readora-palette-light-accent: #7642de;
+  --readora-palette-light-accent-text: #592dac;
   --readora-palette-light-accent-on: #ffffff;
-  --readora-palette-light-accent-soft: rgb(109 40 217 / 0.08);
-  --readora-palette-light-link: #5300b7;
+  --readora-palette-light-accent-soft: rgb(11 28 48 / 0.06);
+  /* 焦点环与 accent 解耦取档：accent 换档时不会连带 focus 翻车（contrast 门禁实测回归）。 */
+  --readora-palette-light-focus: #7642de;
+  --readora-palette-light-link: #592dac;
   --readora-palette-light-info: #00645b;
   --readora-palette-light-success: #0f6a43;
   --readora-palette-light-warning: #8a5a00;
@@ -42,7 +46,14 @@
    * 这里按「压住正文的遮罩」取值，登记进 README 偏差。 */
   --readora-palette-light-overlay: rgb(11 28 48 / 0.86);
 
-  /* ---------- Primitive：暗色板（PRD-003 §4.3） ---------- */
+  /* ---------- Primitive：暗色板（PRD-003 §4.3） ----------
+   * 中性档与亮色同口径去紫（§4.3 1.6.0）：旧 secondary/muted/border/border-strong 的
+   * 彩度 0.029~0.031、色相 301~305°，比正文档（271°、0.013）紫了一倍多，于是大纲这类
+   * 13px 亮字压深底呈「白里透紫 + 边缘发雾」。新值按「同 OKLCH L、彩度砍半、色相拉回
+   * 正文同族 263°」重算，四表面最低对比度逐项不低于旧值（secondary 8.56/旧 8.48、
+   * muted 4.72/旧 4.53、border-strong 1.56/旧 1.54），可读性没有作为代价被交出去。
+   * accent-text 另按产品决策压淡一档：L 0.895→0.861、C 0.056→0.050，色相 293° 不动，
+   * 品牌紫仍是点睛位，只是不再在暗底上发光。 */
 
   --readora-palette-dark-canvas: #10141a;
   --readora-palette-dark-surface: #181c22;
@@ -50,14 +61,16 @@
   --readora-palette-dark-surface-raised: #262a31;
   --readora-palette-dark-surface-sunken: #0a0e14;
   --readora-palette-dark-text-primary: #dfe2eb;
-  --readora-palette-dark-text-secondary: #ccc3d8;
-  --readora-palette-dark-text-muted: #958da1;
-  --readora-palette-dark-border: rgb(74 68 85 / 0.6);
-  --readora-palette-dark-border-strong: #4a4455;
-  --readora-palette-dark-accent: #7c3aed;
-  --readora-palette-dark-accent-text: #d2bbff;
+  --readora-palette-dark-text-secondary: #c2c8d2;
+  --readora-palette-dark-text-muted: #8e949f;
+  --readora-palette-dark-border: rgb(67 72 80 / 0.6);
+  --readora-palette-dark-border-strong: #434850;
+  --readora-palette-dark-accent: #7642de;
+  --readora-palette-dark-accent-text: #d2ccf0;
   --readora-palette-dark-accent-on: #ede0ff;
-  --readora-palette-dark-accent-soft: rgb(124 58 237 / 0.2);
+  --readora-palette-dark-accent-soft: rgb(118 66 222 / 0.2);
+  /* 暗底焦点环用品牌 500 档提亮：600 档对 surface 只有 2.94:1，过不了 1.4.11。 */
+  --readora-palette-dark-focus: #9265ff;
   --readora-palette-dark-link: #58a6ff;
   --readora-palette-dark-info: #a2c9ff;
   --readora-palette-dark-success: #34d399;
@@ -72,10 +85,10 @@
    * 门槛由 `contrast.spec.ts` 按实测断言，这里的注释只说取值理由。 */
   --readora-palette-light-hc-text-muted: #4e4857;
   --readora-palette-light-hc-border-strong: #7d7884;
-  --readora-palette-light-hc-accent-text: #440096;
-  --readora-palette-dark-hc-text-muted: #b8b3c0;
-  --readora-palette-dark-hc-border-strong: #807c88;
-  --readora-palette-dark-hc-accent-text: #e0d0ff;
+  --readora-palette-light-hc-accent-text: #3f2279;
+  --readora-palette-dark-hc-text-muted: #b1b6c0;
+  --readora-palette-dark-hc-border-strong: #7a7f88;
+  --readora-palette-dark-hc-accent-text: #eeebff;
 
   /* ---------- Primitive：代码配色（每套 scheme 一组） ---------- */
 
@@ -171,11 +184,12 @@
   --readora-radius-xl: 12px;
   --readora-radius-full: 999px;
 
-  /* 亮色阴影带品牌紫相：纯黑投影在蓝白底上发脏（§7.2）。 */
+  /* 亮色阴影用正文同相的深藏青：品牌紫投影在浅底上呈辉光（整体光晕感），
+   * 纯黑投影在蓝白底上发脏（§7.2）。 */
   --readora-shadow-none: none;
-  --readora-shadow-sm: 0 1px 2px rgb(109 40 217 / 0.08);
-  --readora-shadow-md: 0 6px 18px rgb(109 40 217 / 0.12);
-  --readora-shadow-lg: 0 12px 32px rgb(109 40 217 / 0.16);
+  --readora-shadow-sm: 0 1px 2px rgb(11 28 48 / 0.08);
+  --readora-shadow-md: 0 6px 18px rgb(11 28 48 / 0.1);
+  --readora-shadow-lg: 0 12px 32px rgb(11 28 48 / 0.12);
 
   --readora-motion-fast: 100ms;
   --readora-motion-normal: 160ms;
@@ -213,7 +227,7 @@
   --readora-color-danger: var(--readora-palette-light-danger);
   --readora-color-overlay: var(--readora-palette-light-overlay);
   /* 焦点环走宿主，缺变量时退回本色板（ARC-006 §6.1 第 7 条、§12 第 3 条）。 */
-  --readora-color-focus: var(--vscode-focusBorder, var(--readora-palette-light-accent));
+  --readora-color-focus: var(--vscode-focusBorder, var(--readora-palette-light-focus));
 }
 
 /* ---------- 组件层（ARC-006 §4.4）：只能引用语义层 ---------- */
@@ -226,11 +240,18 @@
   --readora-button-text: var(--readora-color-accent-on);
   --readora-button-border: var(--readora-color-border-strong);
 
-  --readora-inline-code-background: var(--readora-color-surface-subtle);
+  /* 行内代码色块不得复用任何一档 surface（PRD-003 §8.6.1）：`surface-subtle` 同时是
+   * 引用块的底，色块取它就在引用里与背景逐字节同色（实测 1.00:1，色块直接消失），
+   * 落在正文画布上也只有 1.11:1。改成「正文色掺进透明」的一档派生柔光 ——
+   * 它不属于表面阶梯，因此与五档底天然拉开；且宿主模式下跟着编辑器的
+   * 前景/背景走，不必为三套 palette 各抄一个经验值（同 §8.6 代码块的处理口径）。
+   * 掺量 12%：对 canvas 与对引用底都是 1.27（旧值分别是 1.11 与 1.00），与 `accent-soft`
+   * 的 6% 柔光同族但翻倍，因为色块要读成「一个物件」而不是「一层氛围」。 */
+  --readora-inline-code-background: color-mix(in srgb, var(--readora-color-text-primary) 12%, transparent);
   --readora-quote-background: var(--readora-color-surface-subtle);
   /* 代码块贴正文底色（偏离 PRD-003 §4.2 / §4.3 的「surface-sunken 给代码块」，README
    * 已登记）：实测 sunken 在画布上留下一块与正文不同色的补丁 —— 亮色是纯白
-   * `#ffffff` 对 `#f8f9ff`，暗色是 `#0a0e14` 对 `#10141a`，宿主模式下更是直接与编辑器
+   * `#ffffff` 对 `#f7f8fa`，暗色是 `#0a0e14` 对 `#10141a`，宿主模式下更是直接与编辑器
    * 底色打架。代码块的身份靠等宽字与语法色就够了，不需要额外的面。表格与数学块
    * 继续用 sunken（它们是真·独立面板）。 */
   --readora-code-background: var(--readora-color-canvas);
@@ -316,7 +337,7 @@
   --readora-hairline: 1px;
   --readora-navigation-offset: 5rem;
   --readora-baseline-ratio: 0.25;
-  --readora-shadow-pill: 0 4px 12px rgb(109 40 217 / 0.08);
+  --readora-shadow-pill: 0 4px 12px rgb(11 28 48 / 0.08);
 }
 
 /* ---------- 宿主中转层（PRD-003 §13.3，映射表来自 host-theme-map） ---------- */
@@ -358,7 +379,7 @@
   --readora-color-warning: var(--readora-palette-dark-warning);
   --readora-color-danger: var(--readora-palette-dark-danger);
   --readora-color-overlay: var(--readora-palette-dark-overlay);
-  --readora-color-focus: var(--vscode-focusBorder, var(--readora-palette-dark-accent));
+  --readora-color-focus: var(--vscode-focusBorder, var(--readora-palette-dark-focus));
 }
 
 /* ---------- 明暗轴：代码配色、图表系列色与阴影形状 ----------
@@ -367,6 +388,13 @@
  * 会漏掉 `vscode` + 暗色那一格——暗背景上渗出一圈亮紫边，正是 §13.2 要防的形态。 */
 
 [data-readora-scheme="dark"] {
+  /* 按下态淡底在暗色渗紫的修复：亮色早在去光晕时把 accent-soft 中性化为
+   * `rgb(11 28 48/.06)`，暗色这档仍跟 accent 走品牌紫（OKLCH 精化时定案），于是
+   * Outline 等 `aria-pressed` 控件的淡底在暗色里发紫（用户实测反馈）。这里只把按下态
+   * 背景从 accent-soft 解耦为一档中性柔光，不动 accent-soft 本身（diagram-accent / hover
+   * 柔光继续用紫，是点睛位不是铺满面）。挂 scheme 轴：一次覆盖 product-dark 与
+   * `vscode`+暗宿主两种暗色形态，与阴影「形状挂明暗轴」同一口径（PRD-003 §7.2）。 */
+  --readora-outline-active-bg: color-mix(in srgb, var(--readora-color-text-primary) 12%, transparent);
   --readora-shadow-pill: 0 8px 24px rgb(0 0 0 / 0.35);
   --readora-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
   --readora-shadow-md: 0 6px 18px rgb(0 0 0 / 0.45);

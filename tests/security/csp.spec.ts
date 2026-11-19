@@ -101,6 +101,38 @@ test.describe("CSP 基线", () => {
     expect(await pageErrors(page)).toEqual([]);
   });
 
+  test("违规收集器保留标准事件的内容样本与来源", async ({ page }) => {
+    await openProductionReader(page);
+    await expectReaderAlive(page);
+    expect(await violations(page)).toEqual([]);
+
+    // 合成事件只验证采集字段映射；真实 CSP 拦截由后续用例覆盖。
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new SecurityPolicyViolationEvent("securitypolicyviolation", {
+          blockedURI: "inline",
+          violatedDirective: "script-src-elem",
+          sample: "window.__pwned = 1",
+          sourceFile: `${location.origin}/sample.js`,
+          lineNumber: 12,
+          columnNumber: 3
+        })
+      );
+      window.dispatchEvent(new SecurityPolicyViolationEvent("securitypolicyviolation"));
+    });
+
+    expect(await violations(page)).toEqual([
+      {
+        blockedURI: "inline",
+        directive: "script-src-elem",
+        html: "window.__pwned = 1",
+        source: new URL("/sample.js", page.url()).href,
+        at: "12:3"
+      },
+      { blockedURI: "", directive: "", html: "", source: "", at: "0:0" }
+    ]);
+  });
+
   test("无 nonce 的三种注入入口全被浏览器拦下，且没有一种真的执行", async ({ page }) => {
     await openProductionReader(page);
     await loadDocument(page, "# Baseline\n\nSafe paragraph.\n");
@@ -132,7 +164,7 @@ test.describe("CSP 基线", () => {
     expect(scriptEntries).toHaveLength(2);
     expect(entries.filter((entry) => entry.directive.startsWith("frame-src"))).toHaveLength(1);
     // 两条 script-src 各自对应一种入口：`inline` 是文档自带脚本，另一条带着外链的 URL。
-    // `originalHTML` 帮不上忙 —— Chromium 只对 Trusted Types 违规填充它（规范如此）。
+    // 当前策略未启用 'report-sample'，不能依赖内容样本区分注入入口。
     expect(scriptEntries.some((entry) => entry.blockedURI === "inline")).toBe(true);
     expect(scriptEntries.some((entry) => entry.blockedURI.includes("main.js?evil=1"))).toBe(true);
 

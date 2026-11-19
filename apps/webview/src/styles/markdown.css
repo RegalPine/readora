@@ -93,12 +93,19 @@
   color: var(--readora-color-text-muted);
 }
 
+/* 三重线索（PRD-003 §8.6.1）：底色柔光 + 描边 + 代码暖色。只留底色时，亮色下
+ * 色块对画布只有 1.11、落进引用块（同取 surface-subtle）就是 1.00 —— 完全撞色；
+ * 描边与前景色不依赖底色，容器换底也不会让行内码退回普通正文。
+ * 前景色取 `--readora-syntax-attr`：与代码块里的变量/属性同色，行内与块级因此
+ * 读成同一套代码语汇；它挂在 scheme 轴上，暗色与宿主暗色自动换档。 */
 .readora-inline-code {
   padding: 0.12em 0.36em;
+  border: var(--readora-hairline) solid var(--readora-color-border-strong);
   border-radius: var(--readora-radius-sm);
   background: var(--readora-inline-code-background);
   font-family: var(--readora-font-family-mono);
   font-size: 0.9em;
+  color: var(--readora-syntax-attr);
 }
 
 .readora-thematic-break {

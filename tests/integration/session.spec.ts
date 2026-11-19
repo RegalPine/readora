@@ -31,7 +31,8 @@ test.describe("document.update 版本作用域", () => {
     );
     await page.waitForTimeout(200);
     await expect(page.locator(".readora-document h1")).toHaveText("Alpha");
-    await expect(page.locator('[data-readora-status="version"]')).toHaveText("v5");
+    await expect(page.locator(".readora-document")).toHaveAttribute("data-readora-document-version", "5");
+    await expect(page.locator('[data-readora-status="words"]')).toHaveText("3 words");
 
     await page.evaluate(() =>
       window.__readora.update({
@@ -41,7 +42,8 @@ test.describe("document.update 版本作用域", () => {
       })
     );
     await expect(page.locator(".readora-document h1")).toHaveText("Alpha edited");
-    await expect(page.locator('[data-readora-status="version"]')).toHaveText("v6");
+    await expect(page.locator(".readora-document")).toHaveAttribute("data-readora-document-version", "6");
+    await expect(page.locator('[data-readora-status="words"]')).toHaveText("4 words");
 
     // 换文档：版本号是另一条计数线。拿上一版的 6 去拦新文档的 v1，跨文档跳转就会停在旧内容上。
     await page.evaluate(() =>
@@ -52,7 +54,8 @@ test.describe("document.update 版本作用域", () => {
       })
     );
     await expect(page.locator(".readora-document h1")).toHaveText("Beta");
-    await expect(page.locator('[data-readora-status="version"]')).toHaveText("v1");
+    await expect(page.locator(".readora-document")).toHaveAttribute("data-readora-document-version", "1");
+    await expect(page.locator('[data-readora-status="words"]')).toHaveText("3 words");
     // 大纲也跟着换文档：正文换了、目录留旧版就是两源。
     await expect(page.locator(".readora-outline-link")).toHaveCount(1);
   });

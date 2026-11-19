@@ -641,16 +641,25 @@ describe("顶栏 / 弹层 / 状态条装配（M6）", () => {
       .getAttribute("aria-expanded");
   }
 
-  test("状态条的 Bridge 字段以收到过 document.load 为判据（§4.6）", () => {
+  test("状态条以收到过 document.load 为前提（§4.6：Bridge 字段已删，出现即已连接）", () => {
     setup();
-    const bridge = document.querySelector<HTMLElement>('[data-readora-status="bridge"]');
-    expect(bridge?.textContent).toContain("Bridge: Connected");
-    expect(bridge?.querySelector(".readora-status-indicator")?.getAttribute("data-readora-bridge-state")).toBe(
-      "connected"
-    );
-    // 字数与节数都来自真实数据源：TEXT 有 4 个标题，单元数由 text-metrics 数。
-    expect(document.querySelector('[data-readora-status="sections"]')?.textContent).toBe("4 sections");
+    // 状态条随外壳一起只在快照落地后才渲染（App.tsx 的 loading 分支不渲染外壳），
+    // 它出现本身就是「document.load 到过」的证据，不再单列一个恒为 Connected 的字段。
+    expect(document.querySelector(".readora-statusbar")).not.toBeNull();
+    // 字数来自真实数据源：单元数由 text-metrics 数。节数已按产品反馈从状态条删掉
+    // （目录那一栏直接数得出来），这里反向钉一下它不回头。
+    expect(document.querySelector('[data-readora-status="sections"]')).toBeNull();
     expect(document.querySelector('[data-readora-status="words"]')?.textContent).toMatch(/^\d+ words$/u);
+  });
+
+  test.each([0, 7])("内部文档版本 %i 不再显示在状态条中", (version) => {
+    setup({ version });
+    expect(document.querySelector('[data-readora-status="version"]')).toBeNull();
+    expect(document.querySelector(".readora-status")?.textContent).not.toMatch(/\bv\d+\b/u);
+    expect(document.querySelectorAll("[data-readora-status]")).toHaveLength(3);
+    // 渲染版本仍保留，搜索、导出与拒收旧快照继续使用同一份内部版本。
+    expect(document.querySelector(".readora-document")?.getAttribute("data-readora-document-version"))
+      .toBe(String(version));
   });
 
   test("弹层开合：aria-expanded 跟随，Escape 关闭且焦点回触发器", () => {

@@ -18,7 +18,7 @@ import {
 import { sanitizeCustomCss } from "@readora/design-tokens";
 import { registerCommands } from "./commands";
 import { isMarkdownDocument, isMarkdownPath } from "./commands/target";
-import { FILE_EVENT_DEBOUNCE_MS } from "./constants";
+import { FILE_EVENT_DEBOUNCE_MS, READORA_VIEW_TYPE } from "./constants";
 import {
   CUSTOM_CSS_MAX_LENGTH,
   ConfigurationService
@@ -34,6 +34,7 @@ import { createResourcePorts } from "./resources/vscode-port";
 import { ResourceService } from "./resources/resource-service";
 import { isAbsoluteReference } from "./resources/path-resolver";
 import { SessionManager } from "./session/session-manager";
+import { ReadoraCustomEditorProvider } from "./webview/custom-editor-provider";
 import { WebviewManager } from "./webview/webview-manager";
 
 export interface ReaderApplication {
@@ -144,17 +145,27 @@ export function createReaderApplication(
   const disposables: vscode.Disposable[] = [];
   const updateTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+  /**
+   * 自定义只读编辑器 provider（ARC-004 §7 的自定义编辑器形态）。
+   *
+   * 注册成自定义编辑器是「用 VS Code 原生面包屑」的前提：宿主只在编辑器（含自定义
+   * 编辑器）上方画面包屑栏，普通 webview 面板没有。装配主体复用 WebviewManager.configure，
+   * 与历史 createWebviewPanel 路径同源。
+   */
+  const customEditor = new ReadoraCustomEditorProvider({
+    readSnapshot: (uri) => documents.readSnapshot(uri),
+    sessions,
+    webviews,
+    getPreferences: () => configuration.getPreferences()
+  });
+
   async function openDocument(uri: vscode.Uri, column: vscode.ViewColumn): Promise<void> {
-    // 先读快照（含超限预校验），失败时不创建面板（ARC-004 §8.7）。
-    const snapshot = await documents.readSnapshot(uri);
-    const { session } = sessions.getOrCreate(uri.toString());
-    const preferences = configuration.getPreferences();
-    if (session.panel && !session.isDisposed) {
-      webviews.pushUpdate(session, snapshot, preferences);
-      session.panel.reveal(column);
-      return;
-    }
-    webviews.open(session, snapshot, preferences, column);
+    // 交给宿主的自定义编辑器通道：openWith 触发 resolveCustomEditor 读快照并装配面板，
+    // 于是宿主在其上方画出原生面包屑（点目录段列同级文件）。文档已在阅读器中打开时，
+    // 宿主复用/聚焦该编辑器（supportsMultipleEditorsPerDocument:false），不重复装配。
+    await vscode.commands.executeCommand("vscode.openWith", uri, READORA_VIEW_TYPE, {
+      viewColumn: column
+    });
   }
 
   /**
@@ -299,7 +310,14 @@ export function createReaderApplication(
       void vscode.window.showErrorMessage("Readora: no Markdown document to refresh.");
       return;
     }
-    await openDocument(uri, vscode.ViewColumn.Active);
+    // 已在阅读器里：openWith 只会复用/聚焦编辑器而不重读，所以显式再推一帧最新快照。
+    // 还没打开：走自定义编辑器通道打开（resolveCustomEditor 首帧即读最新内容）。
+    const session = sessions.get(uri.toString());
+    if (session && session.panel) {
+      await pushDocumentUpdate(uri);
+    } else {
+      await openDocument(uri, vscode.ViewColumn.Active);
+    }
   }
 
   async function pushDocumentUpdate(uri: vscode.Uri): Promise<void> {
@@ -379,7 +397,22 @@ export function createReaderApplication(
    * 「激活异常可见」，而散在 return 字面量里的注册代码没法整体捕获。
    */
   function registerActivationListeners(): void {
+    /**
+     * 配置宽度的基准：与上次事件相比真的变了才同步会话（syncContentWidth）。
+     *
+     * 会话宽度是命令的领地（adjustContentWidth 只改会话不写配置），改字号、
+     * 换主题这类事件不得拿配置值覆盖它；而弹层滑杆与设置 UI 改的正是配置值，
+     * 变了就必须落到已打开的面板上 —— 否则用户看到的就是「设置宽度不即时生效」
+     * （重开面板才变）。基准在激活期读一次，首个事件比较的就是那份初值。
+     */
+    let lastConfiguredWidth = configuration.getPreferences().contentWidth;
     disposables.push(
+      // 自定义只读编辑器：宿主据此在 readora 打开的 Markdown 上方画出原生面包屑。
+      // supportsMultipleEditorsPerDocument:false —— 一篇文档一个编辑器，与「一会话一面板」同口径。
+      vscode.window.registerCustomEditorProvider(READORA_VIEW_TYPE, customEditor, {
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: false
+      }),
       ...registerCommands({
         openDocument,
         refresh,
@@ -403,8 +436,12 @@ export function createReaderApplication(
         }
       }),
       configuration.onDidChange(() => {
-        webviews.broadcastTheme(configuration.resolveTheme());
-        webviews.broadcastConfig(configuration.getPreferences());
+        const preferences = configuration.getPreferences();
+        webviews.broadcastTheme(configuration.resolveTheme(preferences));
+        webviews.broadcastConfig(preferences, {
+          syncContentWidth: preferences.contentWidth !== lastConfiguredWidth
+        });
+        lastConfiguredWidth = preferences.contentWidth;
       })
     );
 

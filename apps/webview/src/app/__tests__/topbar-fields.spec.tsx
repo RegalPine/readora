@@ -1,10 +1,11 @@
 /**
- * 顶栏新增字段的取证（PRD-003 §10.5、§4.6 的诚实性规则）。
+ * 顶栏控件的取证（PRD-003 §10.5、§4.6 的诚实性规则）。
  *
- * 两条主线，逐条都是「有真实数据源才渲染」：
- * - 面包屑：`documentUri` 去 scheme 取末 3 段，纯文本、不可点（§4.6 点名剔除
- *   「可点击目录段」，因为没有 reveal-in-explorer 能力）；
+ * 顶栏只留动作控件，逐条都是「有真实数据源才渲染」：
  * - 缩放组：端点上禁用 − / +，点百分号复位（§10.5）。
+ *
+ * 面包屑不在顶栏：readora 是自定义编辑器，宿主在编辑器上方给原生面包屑，
+ * 顶栏自绘第二条就是冗余导航（「用 VS Code 的，不用自己实现」）。
  *
  * 时长 pill 与模式标签的取证在 `status-quick-bars.spec.tsx`：它们已按产品反馈
  * 从顶栏迁到状态条右端。
@@ -13,13 +14,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import type { ZoomApi } from "../zoom";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_RESET } from "../zoom";
-import {
-  BREADCRUMB_CLASS,
-  BREADCRUMB_MAX_SEGMENTS,
-  TOOLBAR_CLASS,
-  TopBar,
-  breadcrumbOf
-} from "../TopBar";
+import { TOOLBAR_CLASS, TopBar } from "../TopBar";
 
 afterEach(cleanup);
 
@@ -37,8 +32,8 @@ function zoomApi(overrides: Partial<ZoomApi> = {}): ZoomApi {
 }
 
 function bar(overrides: {
-  documentUri?: string;
   zoom?: ZoomApi;
+  outlineVisible?: boolean;
 } = {}) {
   const handlers = {
     onToggleOutline: vi.fn(),
@@ -51,11 +46,10 @@ function bar(overrides: {
   };
   const view = render(
     <TopBar
-      outlineVisible
+      outlineVisible={overrides.outlineVisible ?? true}
       searchOpen={false}
       settingsOpen={false}
       exportOpen={false}
-      documentUri={overrides.documentUri}
       zoom={overrides.zoom ?? zoomApi()}
       {...handlers}
     />
@@ -63,71 +57,13 @@ function bar(overrides: {
   return { view, handlers };
 }
 
-describe("breadcrumbOf", () => {
-  test("取末 3 段，前面的目录段丢掉", () => {
-    const segments = breadcrumbOf("file:///Users/me/notes/vault/deep/arch.md");
-    expect(segments.map((segment) => segment.name)).toEqual(["vault", "deep", "arch.md"]);
-    expect(segments.map((segment) => segment.directory)).toEqual([true, true, false]);
-    expect(BREADCRUMB_MAX_SEGMENTS).toBe(3);
-  });
-
-  test("剥掉 scheme 与 authority：vscode-file 的假 host 不是目录", () => {
-    expect(breadcrumbOf("vscode-file://vscode-app/Users/me/a.md").map((s) => s.name)).toEqual([
-      "Users",
-      "me",
-      "a.md"
-    ]);
-    // 段数不足 3 就照实显示，不拿空串凑数。
-    expect(breadcrumbOf("file:///a.md").map((s) => s.name)).toEqual(["a.md"]);
-  });
-
-  test("百分号编码还原成人读的目录名", () => {
-    expect(breadcrumbOf("file:///My%20Notes/%E7%AC%94%E8%AE%B0.md")[0]?.name).toBe("My Notes");
-    expect(breadcrumbOf("file:///My%20Notes/%E7%AC%94%E8%AE%B0.md")[1]?.name).toBe("笔记.md");
-  });
-
-  test("解码失败按原文显示：一个显示用的字符串不值得抛穿渲染", () => {
-    expect(breadcrumbOf("file:///%E0%A4%A.md")[0]?.name).toBe("%E0%A4%A.md");
-  });
-
-  test("没有 URI（Host 还没下发）就是空数组，不编一个占位路径", () => {
-    expect(breadcrumbOf(undefined)).toEqual([]);
-    expect(breadcrumbOf("")).toEqual([]);
-  });
-});
-
-describe("面包屑渲染", () => {
-  test("末段是文件名、其余是目录段，整条 URI 放在 title 上", () => {
-    const uri = "file:///vault/notes/deep/arch.md";
-    const { view } = bar({ documentUri: uri });
-    const crumb = view.container.querySelector<HTMLElement>(`.${BREADCRUMB_CLASS}`);
-    expect(crumb?.getAttribute("title")).toBe(uri);
-    expect(crumb?.getAttribute("aria-label")).toBe("Document path");
-    const marked = [...view.container.querySelectorAll<HTMLElement>("[data-readora-breadcrumb]")];
-    expect(marked.map((node) => node.getAttribute("data-readora-breadcrumb"))).toEqual([
-      "directory",
-      "directory",
-      "filename"
-    ]);
-  });
-
-  test("纯文本不可点：段里没有 a / button，点上去也不触发动作", () => {
-    const { view, handlers } = bar({ documentUri: "file:///vault/a.md" });
-    const crumb = view.container.querySelector(`.${BREADCRUMB_CLASS}`) as HTMLElement;
-    expect(crumb.querySelectorAll("a, button")).toHaveLength(0);
-    expect(view.container.querySelectorAll("[role='link']")).toHaveLength(0);
-    // 点了什么都不知道：没有 onNavigate 之类的通道可走（§4.6 剔除假 affordance）。
-    fireEvent.click(crumb);
-    fireEvent.click(crumb.querySelector(`.${BREADCRUMB_CLASS}-segment--file`) as Element);
-    expect(handlers.onToggleOutline).not.toHaveBeenCalled();
-    expect(handlers.onToggleSearch).not.toHaveBeenCalled();
-    expect(handlers.onToggleFocusMode).not.toHaveBeenCalled();
-    expect(handlers.onToggleSettings).not.toHaveBeenCalled();
-  });
-
-  test("无 URI 时整段不输出，不留一个空面包屑", () => {
+describe("顶栏不再自绘面包屑（改用 VS Code 原生）", () => {
+  test("顶栏不输出任何面包屑节点，也不接 documentUri", () => {
     const { view } = bar();
-    expect(view.container.querySelector(`.${BREADCRUMB_CLASS}`)).toBeNull();
+    expect(view.container.querySelector(".readora-breadcrumb")).toBeNull();
+    expect(view.container.querySelector("[data-readora-breadcrumb]")).toBeNull();
+    // 路径链与同级切换由宿主原生面包屑承担，顶栏不该有第二条。
+    expect(view.container.querySelectorAll('[aria-label="Document path"]')).toHaveLength(0);
   });
 });
 
@@ -143,6 +79,32 @@ describe("顶栏不再有 pill（已迁到状态条右端）", () => {
     expect(view.container.querySelectorAll("[data-readora-pill]")).toHaveLength(0);
     expect(view.container.querySelector('[aria-label="Exit focus mode"]')).toBeNull();
     expect(view.container.querySelector(`.${TOOLBAR_CLASS}--focus`)).toBeNull();
+  });
+});
+
+describe("大纲双态图标", () => {
+  test("显示与隐藏使用不同图形，保留按钮名称、状态和点击回调", () => {
+    const shown = bar();
+    const hide = shown.view.getByRole("button", { name: "Toggle outline" });
+    expect(hide.textContent).toBe("");
+    expect(hide.getAttribute("aria-pressed")).toBe("true");
+    expect(hide.getAttribute("title")).toBe("Hide outline");
+    expect(hide.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    const shownShape = hide.querySelector("svg")?.innerHTML;
+    expect(shownShape).toBeTruthy();
+    fireEvent.click(hide);
+    expect(shown.handlers.onToggleOutline).toHaveBeenCalledTimes(1);
+    shown.view.unmount();
+
+    const hidden = bar({ outlineVisible: false });
+    const show = hidden.view.getByRole("button", { name: "Toggle outline" });
+    expect(show.textContent).toBe("");
+    expect(show.getAttribute("aria-pressed")).toBe("false");
+    expect(show.getAttribute("title")).toBe("Show outline");
+    expect(show.querySelectorAll("svg")).toHaveLength(1);
+    expect(show.querySelector("svg")?.innerHTML).not.toBe(shownShape);
+    fireEvent.click(show);
+    expect(hidden.handlers.onToggleOutline).toHaveBeenCalledTimes(1);
   });
 });
 

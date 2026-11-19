@@ -172,6 +172,8 @@ export class FakeWebview {
   html = "";
   readonly cspSource = "https://stub.vscode-cdn.net";
   readonly postedMessages: unknown[] = [];
+  /** 自定义编辑器 provider 会写 `webview.options`（enableScripts / localResourceRoots）。 */
+  options?: { enableScripts?: boolean; localResourceRoots?: readonly Uri[] };
   private readonly messageEmitter = new StubEmitter<[unknown]>();
   readonly onDidReceiveMessage = this.messageEmitter.event;
 
@@ -236,6 +238,8 @@ export class FakePanel {
 }
 
 export const createdPanels: FakePanel[] = [];
+/** 注册的自定义编辑器 provider（registerCustomEditorProvider 的调用记录）。 */
+export const customEditorProviders: { viewType: string; provider: unknown }[] = [];
 export const errorMessages: string[] = [];
 export const warningMessages: string[] = [];
 export const openedExternally: string[] = [];
@@ -302,6 +306,23 @@ export const window = {
     const panel = new FakePanel(viewType, title, options, column);
     createdPanels.push(panel);
     return panel;
+  },
+  registerCustomEditorProvider(
+    viewType: string,
+    provider: unknown,
+    _options?: unknown
+  ): StubDisposable {
+    customEditorProviders.push({ viewType, provider });
+    return {
+      dispose(): void {
+        const index = customEditorProviders.findIndex(
+          (entry) => entry.viewType === viewType
+        );
+        if (index >= 0) {
+          customEditorProviders.splice(index, 1);
+        }
+      }
+    };
   },
   onDidChangeActiveColorTheme(listener: () => void): StubDisposable {
     colorThemeChangeListeners.add(listener);
@@ -568,6 +589,32 @@ export const commands = {
       contextValues.set(key, value);
       return Promise.resolve(true);
     }
+    // vscode.openWith 是宿主内部命令：以指定自定义编辑器打开文档。忠实复刻宿主这一段
+    // —— 建一个面板、交给我们注册的 provider（openCustomDocument + resolveCustomEditor），
+    // provider 再经 WebviewManager.configure 装配。这样命令路径的面板创建在夹具里可见。
+    if (id === "vscode.openWith") {
+      const [uri, viewType] = args as [Uri, string];
+      const entry = customEditorProviders.find((item) => item.viewType === viewType);
+      if (!entry) {
+        return Promise.reject(new Error(`no custom editor provider for ${viewType}`));
+      }
+      const provider = entry.provider as {
+        openCustomDocument(uri: Uri, context: unknown, token: unknown): unknown;
+        resolveCustomEditor(document: unknown, panel: FakePanel, token: unknown): Promise<void>;
+      };
+      const panel = window.createWebviewPanel(viewType, "Readora", -1, {});
+      const document = provider.openCustomDocument(uri, {}, {});
+      return provider.resolveCustomEditor(document, panel, {}).catch((error: unknown) => {
+        // 宿主在 resolveCustomEditor 抛错时会关掉这个失败的编辑器：夹具同样把它从记录里
+        // 撤下并 dispose，于是「打开不可读文档不留读者面板」这条口径与真机一致。
+        const index = createdPanels.indexOf(panel);
+        if (index >= 0) {
+          createdPanels.splice(index, 1);
+        }
+        panel.dispose();
+        throw error;
+      });
+    }
     const handler = commandHandlers.get(id);
     return handler
       ? Promise.resolve(handler(...args))
@@ -577,6 +624,7 @@ export const commands = {
 
 export function resetVscodeStub(): void {
   createdPanels.length = 0;
+  customEditorProviders.length = 0;
   errorMessages.length = 0;
   warningMessages.length = 0;
   openedExternally.length = 0;

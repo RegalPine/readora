@@ -66,12 +66,7 @@ export class WebviewManager implements vscode.Disposable {
     preferences: ReaderPreferences,
     column: vscode.ViewColumn
   ): vscode.WebviewPanel {
-    const payload: DocumentLoadPayload = { ...snapshot, preferences };
-    const validated = parsePayload<DocumentLoadPayload>("document.load", payload);
-    if (!validated.ok) {
-      throw new ReaderError(validated.error.code as ReaderError["code"], validated.error.message);
-    }
-
+    const validated = this.validate(snapshot, preferences);
     const panel = vscode.window.createWebviewPanel(
       READORA_VIEW_TYPE,
       `Readora — ${basename(vscode.Uri.parse(snapshot.documentUri).fsPath)}`,
@@ -83,8 +78,53 @@ export class WebviewManager implements vscode.Disposable {
         localResourceRoots: this.panelResourceRoots(snapshot.documentUri)
       }
     );
+    this.applyToPanel(session, validated, panel);
+    return panel;
+  }
+
+  /**
+   * 把首帧装配到一个**已由宿主创建**的面板上（自定义编辑器路径）。
+   *
+   * 与 `open()` 唯一区别是面板来源：`open()` 自己 createWebviewPanel（投递测试与
+   * 历史命令路径），本方法接收 `resolveCustomEditor` 交来的 WebviewPanel —— 于是
+   * 阅读面板注册成自定义编辑器后，宿主会在其上方画出原生面包屑（点目录段列同级文件），
+   * 我们不再自绘那套切换 UI。面板的 `options`（enableScripts / localResourceRoots）
+   * 由 provider 先设好，这里只做与 `open()` 完全同源的首帧装配。
+   */
+  configure(
+    session: ReaderSession,
+    snapshot: DocumentSnapshot,
+    preferences: ReaderPreferences,
+    panel: vscode.WebviewPanel
+  ): void {
+    const validated = this.validate(snapshot, preferences);
+    this.applyToPanel(session, validated, panel);
+  }
+
+  /** 首帧载荷校验：超限/非法早报，两条面板路径共用同一道闸门。 */
+  private validate(
+    snapshot: DocumentSnapshot,
+    preferences: ReaderPreferences
+  ): DocumentLoadPayload {
+    const payload: DocumentLoadPayload = { ...snapshot, preferences };
+    const validated = parsePayload<DocumentLoadPayload>("document.load", payload);
+    if (!validated.ok) {
+      throw new ReaderError(validated.error.code as ReaderError["code"], validated.error.message);
+    }
+    return validated.value;
+  }
+
+  /**
+   * 面板装配主体：写 HTML、暂存首帧、初始化视图状态、接线消息与释放。
+   * 只依赖已校验载荷与一个现成面板，故 `open()` 与 `configure()` 共用。
+   */
+  private applyToPanel(
+    session: ReaderSession,
+    payload: DocumentLoadPayload,
+    panel: vscode.WebviewPanel
+  ): void {
     session.panel = panel;
-    session.documentVersion = snapshot.version;
+    session.documentVersion = payload.version;
 
     const webview = panel.webview;
     const nonce = randomBytes(16).toString("hex");
@@ -94,7 +134,7 @@ export class WebviewManager implements vscode.Disposable {
           vscode.Uri.joinPath(this.deps.extensionUri, "dist", "webview", "assets", file)
         )
         .toString();
-    const themeState = this.deps.resolveTheme(preferences);
+    const themeState = this.deps.resolveTheme(payload.preferences);
     const customCss = this.deps.resolveCustomCss();
     webview.html = renderWebviewHtml({
       nonce,
@@ -105,15 +145,15 @@ export class WebviewManager implements vscode.Disposable {
       palette: themePalette(themeState),
       scheme: themeState.mode,
       // 字族与预设同理：三者都是「paint 之前必须到位」的取色/排版维度。
-      typography: preferences.typography,
-      preset: preferences.themePreset,
+      typography: payload.preferences.typography,
+      preset: payload.preferences.themePreset,
       customCss: customCss.ok ? customCss.css : ""
     });
 
     // 只暂存、不发送：等待 reader.ready（ARC-004 §8.7）。
-    this.pending.stage(session.id, validated.value);
+    this.pending.stage(session.id, payload);
     // 视图状态与首帧同批：初值取偏好，命令切换只在会话内生效（ARC-004 §6.2）。
-    this.deps.sessions.initializeViewState(session.id, preferences);
+    this.deps.sessions.initializeViewState(session.id, payload.preferences);
     this.setReaderActive(true);
 
     this.subscriptions.push(
@@ -135,7 +175,6 @@ export class WebviewManager implements vscode.Disposable {
         this.setReaderActive(this.hasVisiblePanel());
       })
     );
-    return panel;
   }
 
   /** 是否还有可见的阅读器面板（决定 readora.readerActive 上下文键）。 */
@@ -158,8 +197,11 @@ export class WebviewManager implements vscode.Disposable {
    * （ARC-008 §5.1 要求 `../assets/logo.png` 可解析，只给 docDir 会误拒）。
    * 可读面扩大由两道闸门收敛：resource-policy 的 MIME/大小白名单、
    * boundary 的按段包含判断与 realpath 二次校验；Webview 永远拿不到本地绝对路径。
+   *
+   * 公开给自定义编辑器 provider 设置 `webview.options.localResourceRoots` 复用，
+   * 于是两条面板路径（createWebviewPanel / resolveCustomEditor）授权根完全同源。
    */
-  private panelResourceRoots(documentUri: string): vscode.Uri[] {
+  panelResourceRoots(documentUri: string): vscode.Uri[] {
     const roots = new Map<string, vscode.Uri>();
     const add = (uri: vscode.Uri): void => {
       roots.set(uri.toString(), uri);
@@ -311,15 +353,27 @@ export class WebviewManager implements vscode.Disposable {
    *
    * `showOutline` 是用户设置，因此以配置为准覆盖会话的 `outlineVisible`；
    * `focusMode` 与命令改过的宽度属会话状态，不随配置回滚（ARC-007 §10.1）。
+   *
+   * 宽度只有 `syncContentWidth` 为真时才同步：那是「配置里的宽度值本身变了」
+   * 的信号（弹层滑杆或设置 UI），必须落进会话并随 viewState 下发 —— Webview
+   * 的宽度变量以视图状态优先（App.tsx），只发 config.update 改不动正文，
+   * 用户看到的就是「设置里拖了滑杆、面板纹丝不动，重开才生效」。改字号、
+   * 换主题这类事件不带这个信号，命令调过的会话宽度得以保留。
    */
-  broadcastConfig(preferences: ReaderPreferences): void {
+  broadcastConfig(
+    preferences: ReaderPreferences,
+    options: { syncContentWidth?: boolean } = {}
+  ): void {
     for (const session of this.deps.sessions.all()) {
       if (session.panel) {
         void session.panel.webview.postMessage(
           createEnvelope("config.update", { preferences })
         );
         this.deps.sessions.patchViewState(session.id, {
-          outlineVisible: preferences.showOutline
+          outlineVisible: preferences.showOutline,
+          ...(options.syncContentWidth
+            ? { contentWidth: preferences.contentWidth }
+            : {})
         });
         this.postViewState(session.id);
       }

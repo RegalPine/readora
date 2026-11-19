@@ -16,7 +16,105 @@ import {
   viewMessages
 } from "../helpers/reader";
 
+import {
+  expectReaderAlive,
+  loadDocument,
+  openProductionReader,
+  pageErrors,
+  postToView,
+  violations
+} from "../helpers/production-page";
+
+declare global {
+  interface Window {
+    __readoraStartup: {
+      frames: Array<{ palette: string; scheme: string; background: string; target: string }>;
+      regressions: string[];
+      running: boolean;
+    };
+  }
+}
+
 const ROOT = "html";
+
+test.describe("暗色首帧交接（生产模板与 bundle）", () => {
+  for (const palette of ["dark", "vscode"] as const) {
+    test(`${palette}：主题消息迟到期间没有亮色帧`, async ({ page }) => {
+      // 在生产脚本执行前开始记录；最终暗色正确不能证明中途没闪过白。
+      await page.addInitScript((expectedPalette) => {
+        const trace: Window["__readoraStartup"] = { frames: [], regressions: [], running: true };
+        window.__readoraStartup = trace;
+        const observer = new MutationObserver((records) => {
+          for (const record of records) {
+            if (!trace.running || record.target !== document.documentElement) continue;
+            const expected = record.attributeName === "data-readora-theme" ? expectedPalette : "dark";
+            const current = document.documentElement.getAttribute(record.attributeName ?? "");
+            if (current !== expected || (record.oldValue !== null && record.oldValue !== expected)) {
+              trace.regressions.push(`${record.attributeName}: ${record.oldValue} -> ${current}`);
+            }
+          }
+        });
+        observer.observe(document, {
+          subtree: true,
+          attributes: true,
+          attributeOldValue: true,
+          attributeFilter: ["data-readora-theme", "data-readora-scheme"]
+        });
+        const sample = () => {
+          if (!trace.running) {
+            observer.disconnect();
+            return;
+          }
+          const root = document.documentElement;
+          const target = root && getComputedStyle(root).getPropertyValue("--readora-color-canvas").trim();
+          if (document.body && target) {
+            const normalized = document.createElement("div");
+            normalized.style.backgroundColor = target;
+            trace.frames.push({
+              palette: root.dataset.readoraTheme ?? "",
+              scheme: root.dataset.readoraScheme ?? "",
+              background: getComputedStyle(document.body).backgroundColor,
+              target: normalized.style.backgroundColor
+            });
+          }
+          requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      }, palette);
+
+      await openProductionReader(page, { palette, scheme: "dark" });
+      await expectReaderAlive(page);
+      await page.waitForFunction(() => window.__readoraStartup.frames.length >= 3);
+      await expect(page.locator(ROOT)).toHaveAttribute("data-readora-theme", palette);
+      await expect(page.locator(ROOT)).toHaveAttribute("data-readora-scheme", "dark");
+
+      // 故意让 document.load 先到、theme.update 晚到，中间实际经历多个绘制帧。
+      await loadDocument(page, "# Dark startup\n\n主题消息尚未到达，正文也必须保持暗色。", { theme: palette });
+      const before = await page.evaluate(() => window.__readoraStartup.frames.length);
+      await page.waitForFunction((count) => window.__readoraStartup.frames.length >= count + 3, before);
+      await expect(page.locator('[data-readora-status="theme"]')).toHaveText("theme dark");
+      await postToView(page, hostMessage("theme.update", {
+        theme: "dark", source: palette === "vscode" ? "vscode" : "product"
+      }));
+      const delivered = await page.evaluate(() => window.__readoraStartup.frames.length);
+      await page.waitForFunction((count) => window.__readoraStartup.frames.length >= count + 3, delivered);
+      const trace = await page.evaluate(() => {
+        window.__readoraStartup.running = false;
+        return window.__readoraStartup;
+      });
+      expect(trace.regressions).toEqual([]);
+      expect(trace.frames.length).toBeGreaterThanOrEqual(9);
+      for (const frame of trace.frames) {
+        expect(frame.palette).toBe(palette);
+        expect(frame.scheme).toBe("dark");
+        expect(frame.background).toBe(frame.target);
+      }
+      expect(new Set(trace.frames.map((frame) => frame.background)).size).toBe(1);
+      expect(await pageErrors(page)).toEqual([]);
+      expect(await violations(page)).toEqual([]);
+    });
+  }
+});
 
 /** 根元素上某个 CSS 变量的实测取值（去空白，便于跨浏览器比较）。 */
 async function cssVariable(page: import("@playwright/test").Page, name: string): Promise<string> {
@@ -34,7 +132,7 @@ test.describe("主题就地切换", () => {
 
     // 探针写在正文根节点上：一旦 React 重建这棵子树，它是第一个消失的东西。
     await page.evaluate(() => {
-      const doc = document.querySelector(".readora-document");
+      const doc = document.querySelector<HTMLElement>(".readora-document");
       if (!doc) {
         throw new Error("fixture: .readora-document not mounted");
       }
@@ -69,7 +167,7 @@ test.describe("主题就地切换", () => {
     expect(scrolled).toBeGreaterThan(0);
 
     await page.evaluate(() => {
-      const doc = document.querySelector(".readora-document");
+      const doc = document.querySelector<HTMLElement>(".readora-document");
       if (!doc) {
         throw new Error("fixture: .readora-document not mounted");
       }
@@ -200,7 +298,7 @@ test.describe("主题就地切换", () => {
 
     // 拒收不等于崩：正文与状态条必须还在，用户看不出刚才那条消息存在过。
     await expect(page.locator(".readora-document")).toBeVisible();
-    await expect(page.locator('[data-readora-status="bridge"]')).toBeVisible();
+    await expect(page.locator(".readora-statusbar")).toBeVisible();
   });
 
   /**

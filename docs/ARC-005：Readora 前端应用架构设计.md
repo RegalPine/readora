@@ -234,6 +234,8 @@ flowchart TB
 - 窄窗口下采用自适应布局。
 - 布局状态不得与文档内容状态耦合。
 
+实现注记（1.7.1，与 PRD-003 §10.5 同步）：本节的抽象映射到 DOM 为——`ROOT` = `.readora-shell`，`BODY` = `.readora-body`（两列 grid：`LEFT` = `.readora-shell-nav`、`MAIN` = `.readora-shell-main`），`MAIN` 内自上而下是 `TOOLBAR`（`.readora-topbar`，即 §5.2 的"中央顶部 ReadingToolbar"）→ 搜索行 → `CONTENT`（`.readora-canvas`），`FOOTER` = `.readora-statusbar`。1.7.0 删除顶栏面包屑后，1.7.1 把 §5.1 里本就属于 `MAIN` 的 ReadingToolbar 落回 `MAIN`（此前实现把它抬成横贯整窗的第一段），左列大纲因此得以**通顶**（`sticky top:0`，从视口顶贯到状态条上沿）；大纲开合按钮随之移到工具栏左侧、与 `LEFT` 同侧。`HEADER`（§5.1 根级）在实现中不存在——文档标题/路径链改由宿主原生面包屑在编辑器上方提供（ARC-004 §7.2），Webview 不再自建顶栏面包屑。滚动容器为 window，各带 `position: sticky`；`RIGHT`（AuxiliaryPanel）仍无数据源、不输出 DOM。
+
 ### 5.4 组件接口示例
 
 ```typescript

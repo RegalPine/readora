@@ -43,7 +43,7 @@ import { ReaderShell } from "./ReaderShell";
 import { StatusBar } from "./StatusBar";
 import { TopBar } from "./TopBar";
 import { ThemeProvider, type ThemeContextValue } from "./theme-context";
-import { applyTheme } from "./theme";
+import { applyTheme, readInitialTheme } from "./theme";
 import { measureText } from "./text-metrics";
 import {
   arrivalKey,
@@ -125,8 +125,8 @@ export function recoverAfterDocumentChange(
 
 export function App({ bridge }: AppProps) {
   const [payload, setPayload] = useState<DocumentLoadPayload | null>(null);
-  // 主题状态是两轴的（明暗 + 取色来源），Host 的 theme.update 是唯一致源。
-  const [theme, setTheme] = useState<ThemeState>({ mode: "light", source: "product" });
+  // 首次挂载接续 Host 预置的两轴主题，之后只由 theme.update 更新。
+  const [theme, setTheme] = useState<ThemeState>(() => readInitialTheme(document.documentElement));
   const [viewState, setViewState] = useState<ViewStatePayload | null>(null);
   // 工具栏本地覆写：只覆盖这两个开关，宽度始终由 Host 的会话状态决定。
   const [override, setOverride] = useState<Partial<ViewStatePayload> | null>(null);
@@ -152,9 +152,6 @@ export function App({ bridge }: AppProps) {
    * 正是 §4.6 禁止的形态。退出专注、Host 下发视图状态、换文档三种情形都清掉它。
    */
   const [focusOutline, setFocusOutline] = useState(false);
-  // 状态条的 Bridge 字段判据是「收到过 document.load」（PRD-003 §4.6），
-  // 不是「组件挂载了」：挂载了但一条消息都没收到时，它得诚实说 Disconnected。
-  const [bridgeConnected, setBridgeConnected] = useState(false);
 
   const versionRef = useRef(-1);
   const renderedVersionRef = useRef(-1);
@@ -188,7 +185,6 @@ export function App({ bridge }: AppProps) {
         return;
       }
       versionRef.current = next.version;
-      setBridgeConnected(true);
       // 指标起点：以「快照被接受」为时刻，旧快照在上面已 return，不参与计时。
       payloadRef.current = next;
       arrivalRef.current = recordArrival(next, monotonicNow());
@@ -331,6 +327,12 @@ export function App({ bridge }: AppProps) {
     );
   }, [theme, payload?.preferences, viewState?.contentWidth, zoom.zoom]);
 
+  /**
+   * 大纲树只建一次：活动标题的祖先展开靠它（状态条那份节数已按产品要求删掉，
+   * 这棵树不再被第二处读）。建树只有一处入口，免得两处数出两个答案。
+   */
+  const outlineTree = useMemo(() => buildOutlineTree(outline), [outline]);
+
   const anchors = useMemo(() => outline.map((item) => item.anchor), [outline]);
   const documentVersion = payload?.version ?? -1;
   const navigation = useActiveHeading(anchors, documentVersion);
@@ -345,7 +347,7 @@ export function App({ bridge }: AppProps) {
     if (!active) {
       return;
     }
-    const ancestors = ancestorKeysOf(buildOutlineTree(outline), active);
+    const ancestors = ancestorKeysOf(outlineTree, active);
     if (ancestors.length === 0) {
       return;
     }
@@ -353,7 +355,7 @@ export function App({ bridge }: AppProps) {
       const next = new Set([...current].filter((key) => !ancestors.includes(key)));
       return next.size === current.size ? current : next;
     });
-  }, [navigation.activeHeadingId, outline]);
+  }, [navigation.activeHeadingId, outlineTree]);
 
   /**
    * 一次渲染的指标上报（F11-014）。
@@ -553,7 +555,6 @@ export function App({ bridge }: AppProps) {
             searchOpen={searchOpen}
             settingsOpen={settingsOpen}
             exportOpen={exportOpen}
-            documentUri={payload.documentUri}
             zoom={zoom}
             onToggleOutline={toggleOutline}
             onToggleFocusMode={toggleFocusMode}
@@ -612,14 +613,11 @@ export function App({ bridge }: AppProps) {
         }
         statusbar={
           <StatusBar
-            sectionCount={outline.length}
             wordCount={metrics.units}
             metrics={metrics}
             focusMode={shell.focusMode}
-            documentVersion={payload.version}
             zoom={zoom.zoom}
             theme={theme.mode}
-            bridgeConnected={bridgeConnected}
           />
         }
       >

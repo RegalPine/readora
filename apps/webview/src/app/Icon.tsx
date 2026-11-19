@@ -61,12 +61,31 @@ export function ExportIcon(props: IconProps) {
   );
 }
 
-/** 大纲：三条右对齐的横线 + 项目点，层级感来自缩进而非颜色。 */
+/**
+ * 大纲：一棵层级树（根标题在上，两条连接线引出两个缩进一级的子行）。
+ *
+ * 旧图形是「三个项目点 + 三条右对齐横线」的无序列表，与正文里的 `ul` 长得一样，
+ * 放在顶栏读起来像「列表视图」而说不出它控制的是左侧那一栏目录；大纲的辨识特征
+ * 是**缩进层级**而不是项目符号，于是改用连接线 + 缩进表达（§10.7 行内缩进同源语义）。
+ */
 export function OutlineIcon(props: IconProps) {
   return (
     <Icon {...props}>
-      <path d="M9 6h11M9 12h11M9 18h11" />
-      <path d="M4.5 6h.01M4.5 12h.01M4.5 18h.01" />
+      <path d="M4 5h10" />
+      <path d="M6.5 7.5V19" />
+      <path d="M6.5 12.5H10M6.5 19H10" />
+      <path d="M12.5 12.5H20M12.5 19H20" />
+    </Icon>
+  );
+}
+
+/** 大纲侧栏开关：展开时向左收起，隐藏时向右展开，不靠按钮底色区分。 */
+export function OutlineToggleIcon({ visible, ...props }: IconProps & { visible: boolean }) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
+      <path d={visible ? "m16 9-3 3 3 3" : "m14 9 3 3-3 3"} />
     </Icon>
   );
 }

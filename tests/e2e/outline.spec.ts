@@ -9,6 +9,76 @@ import { expect, test } from "@playwright/test";
 import { longDoc, openReader, scrollTo } from "../helpers/reader";
 
 test.describe("大纲导航", () => {
+  test("头部图标靠右，3px 滚动条仍能独立滚动长目录", async ({ page }) => {
+    await openReader(page, { text: longDoc(60) });
+    const header = page.locator(".readora-outline-header");
+    const actions = header.locator("button");
+    await expect(actions).toHaveCount(2);
+    await expect(header).toHaveCSS("justify-content", "flex-end");
+    const headerBox = await header.boundingBox();
+    const lastBox = await actions.last().boundingBox();
+    expect(headerBox).not.toBeNull();
+    expect(lastBox).not.toBeNull();
+    expect(Math.abs(lastBox!.x + lastBox!.width - headerBox!.x - headerBox!.width)).toBeLessThan(1);
+    for (const action of await actions.all()) {
+      await expect(action).toHaveText("");
+      await expect(action.locator("svg")).toHaveCount(1);
+    }
+
+    const list = page.locator(".readora-outline-list");
+    const size = await list.evaluate((node) => ({
+      width: getComputedStyle(node, "::-webkit-scrollbar").width,
+      gutter: node.getBoundingClientRect().width - node.clientWidth,
+      overflow: node.scrollHeight > node.clientHeight
+    }));
+    expect(size.width).toBe("3px");
+    expect(size.gutter).toBeLessThanOrEqual(3);
+    expect(size.overflow).toBe(true);
+    const before = await page.evaluate(() => window.scrollY);
+    await list.hover();
+    await page.mouse.wheel(0, 300);
+    await expect.poll(() => list.evaluate((node) => node.scrollTop)).toBeGreaterThan(0);
+    expect(await page.evaluate(() => window.scrollY)).toBe(before);
+    await expect(header).toBeInViewport();
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`${theme}：Outline 开合换图标、不留灰底，搜索按下态不受影响`, async ({ page }) => {
+      await openReader(page);
+      await page.evaluate((value) => window.__readora.setTheme(value), theme);
+      await expect(page.locator("html")).toHaveAttribute("data-readora-theme", theme);
+      const toggle = page.getByRole("button", { name: "Toggle outline" });
+      const outline = page.getByRole("navigation", { name: "Document outline" });
+      await page.mouse.move(0, 0);
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      await expect(toggle).toHaveAttribute("title", "Hide outline");
+      await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      const shownShape = await toggle.locator("svg").innerHTML();
+      await toggle.click();
+      await page.mouse.move(0, 0);
+      await expect(outline).toBeHidden();
+      await expect(toggle).toHaveAttribute("aria-pressed", "false");
+      await expect(toggle).toHaveAttribute("title", "Show outline");
+      expect(await toggle.locator("svg").innerHTML()).not.toBe(shownShape);
+      await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+      // 键盘也能恢复大纲；焦点反馈独立于按钮的显示状态底色。
+      await toggle.focus();
+      await toggle.press("Enter");
+      await expect(outline).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-pressed", "true");
+      expect(await toggle.locator("svg").innerHTML()).toBe(shownShape);
+      await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(toggle).not.toHaveCSS("outline-style", "none");
+      const search = page.getByRole("button", { name: "Search in document" });
+      await search.click();
+      await page.mouse.move(0, 0);
+      await expect(search).toHaveAttribute("aria-pressed", "true");
+      await expect(search).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    });
+  }
+
   test("点击目录项把对应标题送进视口，并把高亮钉在它身上", async ({ page }) => {
     await openReader(page);
     const target = page.locator("#search-scope");
@@ -55,14 +125,14 @@ test.describe("大纲导航", () => {
     await expect(filter).toHaveValue("");
   });
 
-  // 底部不再输出 `N Sections` / `Depth`（产品要求）：节数在状态条已有，
-  // 同一个数不在两处各说一遍；层级跨度读者用不上。
-  test("底部不摆统计：没有 footer，节数只在状态条那一份", async ({ page }) => {
+  // 底部不再输出 `N Sections` / `Depth`（产品要求）：层级跨度读者用不上；
+  // 节数连状态条那一份也下掉了（产品反馈：目录直接数得出来，不必另设字段）。
+  test("底部不摆统计：没有 footer，节数不在任何地方重复报", async ({ page }) => {
     await openReader(page);
     await expect(page.locator(".readora-outline-footer")).toHaveCount(0);
     await expect(page.locator('[data-readora-outline="sections"]')).toHaveCount(0);
     await expect(page.locator('[data-readora-outline="depth"]')).toHaveCount(0);
-    await expect(page.locator('[data-readora-status="sections"]')).toHaveText("4 sections");
+    await expect(page.locator('[data-readora-status="sections"]')).toHaveCount(0);
   });
 
   /**

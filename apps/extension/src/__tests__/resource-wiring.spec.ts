@@ -125,9 +125,10 @@ describe("资源装配", () => {
 
   test("localResourceRoots 增补文档目录与所属工作区 folder", async () => {
     const panel = await createWiredApp();
-    const roots = (
-      panel.showOptions as { localResourceRoots: { toString(): string }[] }
-    ).localResourceRoots.map((root) => root.toString());
+    // 自定义编辑器架构下，localResourceRoots 由 provider 写到 webview.options。
+    const roots = (panel.webview.options?.localResourceRoots ?? []).map((root) =>
+      root.toString()
+    );
     expect(roots).toContain("file:///ext/dist/webview");
     expect(roots).toContain("file:///ext/resources");
     expect(roots).toContain("file:///docs/src");

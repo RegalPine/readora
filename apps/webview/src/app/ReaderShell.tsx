@@ -1,17 +1,21 @@
 /**
- * Reader Shell 外壳四段（PRD-003 §10.5，ARC-005 §5.1 / §5.2，STORY-09-01）。
+ * Reader Shell 外壳（PRD-003 §10.5，ARC-005 §5.1 / §5.2，STORY-09-01）。
  *
- * M4/M5 是「工具栏在 main 里 + 两列 grid」。§10.5 要的是纵向四段：
+ * 面包屑删除后定的形态：**大纲列通顶**，顶栏只在右侧内容列让位。外壳纵向两大段，
+ * 主体段内部是「大纲列 | 内容列」的 grid：
  *
- *  `.readora-topbar`    44px（`--readora-topbar-height`），装 TopBar
- *  `.readora-searchbar` 随内容，装文档内搜索面板；没打开搜索时整段不输出 DOM
- *  `.readora-body`      flex row：大纲（`--readora-outline-width`）+ 阅读区
- *  `.readora-statusbar` 24px（`--readora-statusbar-height`），装 StatusBar
+ *  `.readora-body`      grid 两列：大纲（`--readora-outline-width`，通顶）+ 内容列
+ *    `.readora-shell-nav`   左列，`position: sticky; top: 0`，从视口顶贯到状态条上沿
+ *    `.readora-shell-main`  右列（flex 纵向）：顶栏 → 搜索行 → 正文（快速条 + 画布）
+ *      `.readora-topbar`    44px（`--readora-topbar-height`），装 TopBar；只占右列宽
+ *      `.readora-searchbar` 随内容，装文档内搜索面板；没打开搜索时整段不输出 DOM
+ *  `.readora-statusbar` 24px（`--readora-statusbar-height`），横贯整窗，装 StatusBar
  *
  * 布局约束（沿用 ARC-005 §5.3）：
- * - 大纲与主体仍是 grid 两列，目录收起、专注模式、窄窗口三种情形退成单列；
- * - 顶栏与状态条都 `position: sticky`（上/下），因为滚动容器是 window：段落本身
- *   在流内，粘住的只是这两条带，正文照常整页滚；
+ * - 大纲与主体仍是 grid 两列，目录收起、专注模式、窄窗口三种情形退成单列；单列时
+ *   顶栏随内容列铺满整窗（没有大纲可让位），两列时顶栏 left 落在大纲右缘；
+ * - 顶栏、搜索行、状态条都 `position: sticky`（上/下），因为滚动容器仍是 window：
+ *   段落本身在流内，粘住的只是带子，正文照常整页滚；大纲列 sticky top:0 实现通顶；
  * - 窄窗口（≤900px）自动收起左栏用 matchMedia 而不是只靠 CSS 媒体查询：收起与否
  *   是可读状态，组件测试要能断言，也避免「DOM 里有一栏但看不见」这种对读屏器
  *   不诚实的隐藏；
@@ -110,25 +114,29 @@ export function ReaderShell({
       data-readora-compact={compact ? "true" : undefined}
       data-readora-focus-mode={focusMode ? "true" : undefined}
     >
-      {/* 专注模式下整段不输出：顶栏只剩退出入口，而它已搬到快速条右侧，留下一个
-          空段就是那条被投诉的透明占位。常规档不写多余属性，行为与旧版一致。 */}
-      {focusMode ? null : (
-        <div className={TOPBAR_CLASS} data-readora-band="topbar">
-          {toolbar}
-        </div>
-      )}
-      {searchbar ? (
-        <div className={SEARCHBAR_CLASS} data-readora-band="searchbar">
-          {searchbar}
-        </div>
-      ) : null}
+      {/* 主体段是外层栅格：左列大纲通顶，右列内容栈（顶栏 + 搜索行 + 正文）。
+          顶栏/搜索行移进右列，才让得出左侧整高大纲——它们仍是 `position: sticky`
+          的上/中带，只是横向不再压过大纲（面包屑删除后的两层导航整改由此定型）。 */}
       <div className={BODY_CLASS} data-readora-band="body">
         {showOutline ? <aside className="readora-shell-nav">{outline}</aside> : null}
         <div className="readora-shell-main">
+          {/* 专注模式下整段不输出顶栏：只剩退出入口，而它已搬到快速条右侧，留下一个
+              空段就是那条被投诉的透明占位。常规档不写多余属性，行为与旧版一致。 */}
+          {focusMode ? null : (
+            <div className={TOPBAR_CLASS} data-readora-band="topbar">
+              {toolbar}
+            </div>
+          )}
+          {searchbar ? (
+            <div className={SEARCHBAR_CLASS} data-readora-band="searchbar">
+              {searchbar}
+            </div>
+          ) : null}
           {children}
           {/* 右栏 AuxiliaryPanel（属性 / 反向链接）槽位：无数据源，不输出 DOM。 */}
         </div>
       </div>
+      {/* 状态条仍是外壳最后一段，横贯整窗（大纲列止于其上沿）。 */}
       <div className={STATUSBAR_CLASS} data-readora-band="statusbar">
         {statusbar}
       </div>

@@ -111,8 +111,8 @@ function htmlOptions(options: ProductionOptions): WebviewHtmlOptions {
     cspSource: "'self'",
     scriptUri: `${ASSET_PREFIX}main.js`,
     styleUri: `${ASSET_PREFIX}main.css`,
-    palette: "light",
-    scheme: "light",
+    palette: options.palette ?? "light",
+    scheme: options.scheme ?? "light",
     typography: options.typography ?? "newsreader",
     preset: options.preset ?? "default",
     // `rawCustomCss` 存在 = 用例刻意跳过 Host 净化，直投模板（测模板那道防线）。
@@ -121,6 +121,9 @@ function htmlOptions(options: ProductionOptions): WebviewHtmlOptions {
 }
 
 export interface ProductionOptions {
+  /** Host 预置的主题，用于验证生产入口挂载前后的配色交接。 */
+  palette?: WebviewHtmlOptions["palette"];
+  scheme?: WebviewHtmlOptions["scheme"];
   /** 覆盖首帧预设（自定义 CSS 注入与预设类用例用）。 */
   preset?: WebviewHtmlOptions["preset"];
   typography?: WebviewHtmlOptions["typography"];
@@ -259,11 +262,11 @@ export async function openProductionReader(
           blockedURI: event.blockedURI,
           directive: event.violatedDirective,
           // `blockedURI` 已经能分入口：inline 脚本是字面量 "inline"，外链与远端图是 URL。
-          // `originalHTML` 按规范只在 Trusted Types 违规时填充，这里存下来说明它确实是空的，
-          // 而不是我们没接住。
-          html: event.originalHTML ?? "",
+          // 保留 html 字段兼容现有记录结构，实际存储标准 sample（违规内容样本）。
+          // 当前策略未启用 'report-sample'，普通脚本违规的样本为空字符串。
+          html: event.sample ?? "",
           // 举报里带来源：红灯时先看清是文档塞进来的，还是我们自己的 bundle 在 eval。
-          source: event.sourceURL ?? "",
+          source: event.sourceFile ?? "",
           at: `${event.lineNumber}:${event.columnNumber}`
         });
       });

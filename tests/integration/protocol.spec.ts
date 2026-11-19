@@ -70,8 +70,9 @@ test.describe("首帧门控", () => {
 
     await page.evaluate(() => window.__readora.setGate("open"));
     await expect(page.locator(".readora-document h1")).toHaveText("Held");
-    // 排队的这一份必须被**完整**投递：状态条版本号与正文同源。
-    await expect(page.locator('[data-readora-status="version"]')).toHaveText("v1");
+    // 排队的这一份必须被完整投递：正文保留内部版本，状态条只显示阅读字段。
+    await expect(page.locator(".readora-document")).toHaveAttribute("data-readora-document-version", "1");
+    await expect(page.locator('[data-readora-status="words"]')).toHaveText("3 words");
   });
 
   test("reader.ready 恰好一条，且是最早发出的 View→Host 消息", async ({ page }) => {

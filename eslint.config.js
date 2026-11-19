@@ -48,8 +48,10 @@ export default tseslint.config(
   },
   {
     // 测试替身常需要「声明参数形状但只用到其中一部分」：TS 要求签名完整，
-    // 于是下划线前缀成为「有意为之的不使用」的唯一可表达形式。
-    files: ["**/__tests__/**/*.{ts,tsx}"],
+    // 于是下划线前缀成为「有意为之的不使用」的唯一可表达形式。`__stubs__` 同性质 ——
+    // 它按宿主真实 API 的完整签名建模（如 registerCustomEditorProvider 的 options），
+    // 替身只用其中一部分，多余形参同样只能靠下划线表达「故意不用」。
+    files: ["**/__tests__/**/*.{ts,tsx}", "**/__stubs__/**/*.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-unused-vars": [
         "error",

@@ -2,14 +2,23 @@
  * 状态条（PRD-003 §10.5 外壳四段之一，字段口径见 §4.6）。
  *
  * §4.6 是本仓的「区块渲染诚实性规则」：任何字段只在有真实数据源时渲染。
- * 因此这里只有六项，逐条都能自证：
+ * 因此这里只有三项，逐条都能自证：
  *
- *  N 节            outline 条目数（markdown-core 产）
  *  字数            `text-metrics.ts` 对 `DocumentSnapshot.text` 的单元数
- *  文档版本 v{n}   当前快照的 `version`（与消息严格同源，不是本地计数器）
  *  缩放 z%         会话内缩放状态
  *  主题 light/dark 解析后的明暗（`theme.update` 的 `ResolvedTheme`）
- *  Bridge: 连接态  判据是**收到过 `document.load`**，不是「组件挂载了」
+ *
+ * 文档版本已按产品反馈移除：内部快照版本（如 v0）容易被误认为插件版本。
+ * 版本仍用于消息时序、搜索与导出一致性，只是不再作为阅读字段展示。
+ *
+ * 原先的第一项 `N sections`（顶层分节数）已按产品反馈删掉：节数是目录那
+ * 一栏直接能数出来的东西，在底部再报一次只是把同一个信息说两遍，而且得先跟读者
+ * 解释「只算顶层、子节不计」才不跟目录对不上。
+ *
+ * 原先的第六项 `Bridge: Connected`（判据为收到过 `document.load`）已删：状态条随
+ * 外壳一起等第一份快照（`App.tsx` 的 loading 分支不渲染外壳），所以它出现即已连接，
+ * 一个恒为 Connected 的字段等于没有字段，而且 "Bridge" 是 `HostBridge` 的内部术语，
+ * 读者不知道那是什么。「收到过快照」这件事由状态条本身的存在来证明，不用重复报一遍。
  *
  * 原型 `code.html` 状态条里的 `Ln 142, Col 18` 与 `UTF-8` 被 §4.6 点名剔除：
  * Webview 没有光标位置与文件编码信息。面包屑的可点击目录段同理（无
@@ -39,51 +48,34 @@ export const STATUS_ITEM_CLASS = "readora-status-item";
 export const STATUS_PILLS_CLASS = "readora-status-pills";
 export const PILL_CLASS = "readora-pill";
 
-/** 六项的稳定名字：测试与 e2e 按它定位，改名等于改契约。 */
-export type StatusField = "sections" | "words" | "version" | "zoom" | "theme" | "bridge";
+/** 三项的稳定名字：测试与 e2e 按它定位，改名等于改契约。 */
+export type StatusField = "words" | "zoom" | "theme";
 
 export interface StatusBarProps {
-  sectionCount: number;
   /** `TextMetrics.units`：中文按字、拉丁按词。0 也照样显示，这是真实值。 */
   wordCount: number;
   /** 同一份计量：时长 pill 只在 `empty` 时缺席，字数那项照实显示。 */
   metrics: TextMetrics;
   /** 模式标签的数据源：真的在专注模式里才写 Focus（§11.2）。 */
   focusMode: boolean;
-  documentVersion: number;
   zoom: number;
   theme: ResolvedTheme;
-  /** 收到过 `document.load` 即为已连接（§4.6 的判据）。 */
-  bridgeConnected: boolean;
 }
 
 export function StatusBar({
-  sectionCount,
   wordCount,
   metrics,
   focusMode,
-  documentVersion,
   zoom,
-  theme,
-  bridgeConnected
+  theme
 }: StatusBarProps) {
   return (
     <div className={STATUS_CLASS} role="contentinfo" aria-label="Document status">
-      <Item field="sections">{`${sectionCount} sections`}</Item>
       {/* 文案走 text-metrics 的 formatter：状态条字数与 pill 时长、大纲行内标签是同一份计量，
           措辞也该只有一处定义。 */}
       <Item field="words">{formatUnitCount(wordCount)}</Item>
-      <Item field="version">{`v${documentVersion}`}</Item>
       <Item field="zoom">{`zoom ${formatZoom(zoom)}`}</Item>
       <Item field="theme">{`theme ${theme}`}</Item>
-      <Item field="bridge">
-        <span
-          className="readora-status-indicator"
-          data-readora-bridge-state={bridgeConnected ? "connected" : "disconnected"}
-          aria-hidden="true"
-        />
-        {`Bridge: ${bridgeConnected ? "Connected" : "Disconnected"}`}
-      </Item>
       <div className={STATUS_PILLS_CLASS}>
         {metrics.empty ? null : (
           <span className={PILL_CLASS} data-readora-pill="reading-time">

@@ -95,7 +95,6 @@ const SELECTORS = [
   ".readora-searchbar",
   ".readora-statusbar",
   ".readora-quickbar",
-  ".readora-breadcrumb-segment--file",
   ".readora-pill",
   ".readora-zoom",
   ".readora-properties",

@@ -7,6 +7,7 @@
  * `syncTheme 只切 class` 与 markdown-content 的「主题切换不重解析」两条覆盖，
  * 这里不重复实现一遍引擎替身。
  */
+import { StrictMode } from "react";
 import { act, cleanup, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -27,7 +28,8 @@ import {
   LINE_HEIGHT_MAX,
   LINE_HEIGHT_MIN,
   LINE_HEIGHT_VARIABLE,
-  applyTheme
+  applyTheme,
+  readInitialTheme
 } from "../theme";
 import * as themeContext from "../theme-context";
 
@@ -215,6 +217,74 @@ function payloadFor(overrides: Partial<DocumentLoadPayload> = {}): DocumentLoadP
     ...overrides
   };
 }
+
+describe("首帧主题交接不闪白", () => {
+  it("缺失或非法属性安全回退，合法暗色色板可补缺失的 scheme", () => {
+    const element = freshRoot();
+    expect(readInitialTheme(element)).toEqual({ mode: "light", source: "product" });
+    element.dataset.readoraTheme = "invalid";
+    element.dataset.readoraScheme = "invalid";
+    expect(readInitialTheme(element)).toEqual({ mode: "light", source: "product" });
+    element.dataset.readoraTheme = "dark";
+    expect(readInitialTheme(element)).toEqual({ mode: "dark", source: "product" });
+    element.dataset.readoraTheme = "vscode";
+    element.dataset.readoraScheme = "dark";
+    expect(readInitialTheme(element)).toEqual({ mode: "dark", source: "vscode" });
+  });
+
+  afterEach(() => {
+    cleanup();
+    root().removeAttribute("style");
+    delete root().dataset.readoraTheme;
+    delete root().dataset.readoraScheme;
+    delete root().dataset.readoraPreset;
+    delete root().dataset.readoraTypography;
+  });
+
+  for (const palette of ["light", "dark", "vscode"] as const) {
+    const schemes = palette === "vscode" ? ["light", "dark"] as const : [palette];
+    for (const scheme of schemes) {
+      it(`${palette}/${scheme}：挂载、文档先到和主题迟到都保留首帧配色`, () => {
+        root().dataset.readoraTheme = palette;
+        root().dataset.readoraScheme = scheme;
+        root().dataset.readoraPreset = "high-contrast";
+        root().dataset.readoraTypography = "geist";
+        const host = harness();
+        render(<StrictMode><App bridge={host.bridge} /></StrictMode>);
+        const expectInitialTheme = () => {
+          expect(root().dataset.readoraTheme).toBe(palette);
+          expect(root().dataset.readoraScheme).toBe(scheme);
+        };
+        expect(host.posted.some((entry) => entry.type === "reader.ready")).toBe(true);
+        expectInitialTheme();
+        expect(root().dataset.readoraPreset).toBe("high-contrast");
+        expect(root().dataset.readoraTypography).toBe("geist");
+
+        // 分开投递：不能靠 React 在一次 act 中合批掩盖正文先到时的亮色回退。
+        act(() => host.emit("document.load", payloadFor({
+          preferences: { ...PREFERENCES, theme: palette === "vscode" ? "vscode" : scheme }
+        })));
+        expectInitialTheme();
+        expect(document.querySelector('[data-readora-status="theme"]')?.textContent).toBe(`theme ${scheme}`);
+        const article = document.querySelector(".readora-document");
+        expect(article).not.toBeNull();
+        act(() => host.emit("theme.update", {
+          theme: scheme,
+          source: palette === "vscode" ? "vscode" : "system"
+        }));
+        expectInitialTheme();
+        expect(document.querySelector(".readora-document")).toBe(article);
+
+        // 首帧仅作初始化：Host 后续切换仍然生效。
+        act(() => host.emit("theme.update", {
+          theme: scheme === "dark" ? "light" : "dark",
+          source: "product"
+        }));
+        expect(root().dataset.readoraScheme).toBe(scheme === "dark" ? "light" : "dark");
+      });
+    }
+  }
+});
 
 describe("切换主题的六条约束（ARC-006 §11.1）", () => {
   let scrollY = 0;
