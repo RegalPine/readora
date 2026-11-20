@@ -4,10 +4,10 @@
 |---|---|
 | 文档编号 | IMP-001 |
 | 文档名称 | Readora 技术实现规范 |
-| 文档版本 | 1.1.0 |
-| 文档状态 | Draft |
+| 文档版本 | 1.2.0 |
+| 文档状态 | Final |
 | 所属阶段 | Implementation Specification |
-| 上游文档 | PRD-001～003、ARC-001～008 |
+| 上游文档 | PRD-001～003、ARC-001～009 |
 | 下游文档 | IMP-002、IMP-003 |
 | 适用产品 | Readora VS Code Extension |
 
@@ -804,6 +804,10 @@ sequenceDiagram
 
 ### 11.2 消息模型
 
+> **与 ARC-004 §8.2 的关系**：本节是早期写法，**权威定义在 ARC-004 §8.2**。
+> 字段名以 ARC-004 为准：响应载荷字段是 `payload`，不是 `data`。实现
+> （`packages/contracts/src/envelope.ts`）也已按该口径注释了这处差异。
+
 ```ts
 export interface MessageEnvelope<T = unknown> {
   id: string;
@@ -815,7 +819,7 @@ export interface MessageEnvelope<T = unknown> {
 export interface MessageResponse<T = unknown> {
   id: string;
   success: boolean;
-  data?: T;
+  payload?: T;
   error?: {
     code: string;
     message: string;
@@ -825,18 +829,26 @@ export interface MessageResponse<T = unknown> {
 
 ### 11.3 消息类型
 
-| 消息类型 | 方向 | 用途 |
-|---|---|---|
-| document:load | Host → Webview | 加载文档 |
-| document:update | Host → Webview | 更新文档 |
-| document:metadata | Host → Webview | 更新元数据 |
-| navigation:open | Webview → Host | 打开文档或资源 |
-| resource:resolve | Webview → Host | 请求资源解析 |
-| configuration:update | Host → Webview | 配置更新 |
-| theme:update | Host → Webview | 主题更新 |
-| session:restore | Host → Webview | 恢复阅读状态 |
-| session:save | Webview → Host | 保存阅读状态 |
-| host:response | Host → Webview | 请求响应 |
+**消息类型清单已由 ARC-004 §8.3 取代，不再在此维护。** 保留指针而不保留内容，是因为本小节
+原表用的是已废弃的冒号命名（`document:load` / `navigation:open` / `host:response` 等），
+ARC-005 §8.4 已明记这些名称「不得重新引入」。在这里养第二份名单只会制造第三套口径。
+
+当前权威口径（ARC-004 §8.3，实现为 `packages/contracts/src/protocol.ts` 的
+`MESSAGE_REGISTRY`，方向表在 `message-types.ts` 的 `MESSAGE_DIRECTIONS`）：共 **18 条**，
+其中 `view-to-host` 11 条、`host-to-view` 7 条。
+
+实现要求：
+
+1. 消息类型必须在注册表中定义；未注册类型返回统一 `UNSUPPORTED_MESSAGE` 错误。
+2. payload 必过 Schema 校验；**拒绝未知字段**（`.strict()`）。
+3. `id` 与 `type` 长度必校验（§11.4）。
+4. 方向必隔离：dispatcher 拒收 host-to-view 方向的入站消息（ARC-004 §8.4）。
+5. 新增消息不得修改 `PROTOCOL_VERSION`（固定为 `1`），只增长注册表。
+
+> **治理注记**：本小节原先给的是一张 10 行草案表（冒号命名、含未实现的
+> `document:metadata` 与 `host:response`），与实现的 17 条已全部分叉。本次同步为指针
+> 而不是把 18 条再拄一遍：两处名单必然再次分叉，而 ARC-004 §8.3 已明记它是
+> 「权威」且逐条登记了补设依据。
 
 ### 11.4 校验要求
 
@@ -1256,9 +1268,15 @@ IMP-001 是本产品的统一技术实现规范，不再拆分出重复的技术
 
 后续不再新增 ARC 文档，也不再扩展新的一级架构体系。
 
+> **1.2.0 注记**：本句冻结的是「默认不扩张」，不是永久禁止——ARC-009（编辑模式）已按需求变更
+> 流程立项（PRD-001 §10.3、IMP-002 §19.4），它新增了一个功能域而没有改动既有八篇的架构基线。
+> 口径与 IMP-003 §10.5（1.1.0 修订）一致。
+
 ### 阶段完成定义
 
-IMP-001 完成后，技术方案进入可执行状态。下一阶段将以现有 11 个功能域和 8 篇架构文档为依据，进行开发任务拆分，不再重复进行产品需求和总体架构设计。
+IMP-001 完成后，技术方案进入可执行状态。下一阶段将以现有 12 个功能域和 9 篇架构文档为依据，进行开发任务拆分，不再重复进行产品需求和总体架构设计。
+
+> 本句原为「11 个功能域和 8 篇架构文档」，随 PRD-001 §4 新增 F12 与 ARC-009 立项而更新（1.2.0）。
 
 ## 21. 修订记录
 
@@ -1268,6 +1286,7 @@ IMP-001 完成后，技术方案进入可执行状态。下一阶段将以现有
 |---|---|
 | 1.0.0 | 初始技术实现规范基线 |
 | 1.1.0 | 选型变更：引入构建期 Tailwind CSS 作为样式 utility 层（用户决策），同步修订 §3.1 / §3.3 / §7.4；Design Tokens 仍为视觉值唯一来源，CSP 与离线约束不变 |
+| 1.2.0 | F12 就地编辑口径对齐：§11.2 / §11.3 改为指向 ARC-004 §8.3 权威消息表（18 条），§20 修正功能域与架构文档计数并为本句加时点限定；状态转为 Final |
 
 ### 21.2 1.1.0 修订内容
 
@@ -1277,9 +1296,16 @@ IMP-001 完成后，技术方案进入可执行状态。下一阶段将以现有
 4. 本变更推翻 PRD-003 附录 A 原「原型 Tailwind 类名不作为实现依据」裁决中的不采用部分，PRD-003 附录 A 与 ARC-001 §12、ARC-005 §2.1 / §11.3、ARC-006 §10.2、ARC-008 §11.2 已同步修订。
 5. 实现侧迁移（安装依赖、`@theme` 映射、样式导入顺序调整、utility 护栏测试）属后续工程任务，不在本次文档修订范围；迁移完成前既有 CSS 方案继续有效。
 
+### 21.3 1.2.0 修订内容
+
+1. §11.2 响应载荷字段改为 `payload`（原写 `data`，与 `packages/contracts/src/envelope.ts` 实现不符），并标明权威定义在 ARC-004 §8.2。
+2. §11.3 消息清单**不再在本篇维护**，改为指向 ARC-004 §8.3。原因为该表原列 10 行已废弃的冒号命名（`document:load` 等），与实现的 `MESSAGE_REGISTRY` 已全部分叉；ARC-005 §8.4 已明记这些名称不得重新引入。同时登记当前口径：**18 条**（view-to-host 11 / host-to-view 7）。
+3. §20「后续不再新增 ARC 文档」与「阶段完成定义」的计数按 1.2.0 事实更正（见该节注记）。
+4. **未需要改动的项也记一笔**：§4.2 的 `packages/markdown-core` 运行环境本就是 Webview，§8.4 明确**允许**净化后的 `innerHTML`（只禁未净化写入）——两处与编辑模式不冲突，**未作修改**。本轮一度误判为需改，实测后推翻。
+
 ---
 
 **文档结束**
 
-**版本：1.1.0**
-**状态：Draft**
+**版本：1.2.0**
+**状态：Final**

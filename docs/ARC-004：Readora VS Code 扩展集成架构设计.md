@@ -4,10 +4,10 @@
 |---|---|
 | 文档编号 | ARC-004 |
 | 文档名称 | VS Code 扩展集成架构设计 |
-| 文档版本 | 1.2.0 |
+| 文档版本 | 1.3.0 |
 | 文档状态 | Final |
 | 所属产品 | Readora |
-| 关联文档 | PRD-001、PRD-002、ARC-001、ARC-002、ARC-003 |
+| 关联文档 | PRD-001、PRD-002、ARC-001、ARC-002、ARC-003、ARC-009（就地编辑） |
 | 开发语言 | TypeScript |
 | 运行平台 | Visual Studio Code |
 | 核心 API | VS Code Extension API |
@@ -296,6 +296,14 @@ F10-004（Markdown 文件关联，P1）决策（M6 复核后更新）：
 
 1. 贡献 `customEditors`，`priority` 取 **option**：文本编辑器仍是 `.md` / `.markdown` 的默认打开方式，readora 只是「打开方式」候选，最保守、不改变既有双击行为。
 2. 采用 `CustomReadonlyEditorProvider`（只读）而非 `CustomTextEditorProvider`：readora 是阅读器不承担编辑/脏态/保存，只读形态免掉那一整套生命周期设计。宿主据此在编辑器上方给出**原生面包屑**与同级文件切换，顶栏自绘面包屑整条与 `document.list` 通道因此删除（避免两层冗余导航，见 §8.3 更正）。
+
+   > **1.3.0 修订（F12 就地编辑）**：本条决策**维持不变**，但适用边界需要说清。
+   > 新增就地编辑能力（ARC-009）时重新评估过是否要换 `CustomTextEditorProvider`，结论是不要：
+   > 该形态的代价是接管 `saveCustomDocument` / `saveCustomDocumentAs` / `revertCustomDocument` / backup
+   > 全套生命周期，而我们的写回目标就是宿主已经持有的那个 `TextDocument` 模型 —— 撤销栈、脏态
+   > 标记、`Ctrl+S`、git 装饰、保存冲突提示都是宿主已经做得比我们可做的更好的东西。
+   > 因此只读 provider + `WorkspaceEdit` 写回（§9.4）是正确组合，且与 M6 面包屑那条
+   > 「用 VS Code 的，不用自己实现」保持同一条设计口径。
 3. 右键菜单（F10-002）与命令面板的 `openReader` / `openToSide` 继续保留，内部改走 `vscode.openWith`（见 §7）。
 
 ### 4.5 快捷键与冲突规避
@@ -593,9 +601,10 @@ interface MessageResponse<T = unknown> {
 | export.request | View → Host | 导出请求（顶栏菜单与三条命令汇合的唯一入口） |
 | export.capture | Host → View | 向 View 索取当前帧（只在保存对话框确认之后发出） |
 | export.data | View → Host | 正文序列化结果，交 Host 组装与写盘 |
+| document.edit | View → Host | 区块源行范围写回（就地编辑，ARC-009） |
 
 本表原列 11 条，与实现的消息注册表（`packages/contracts` 的 `MESSAGE_TYPES`）
-已不一致，本次补齐到 17 条。补设的各条各有推导依据，它们不是实现自行发明的通道：
+已不一致，本次补齐到 18 条。补设的各条各有推导依据，它们不是实现自行发明的通道：
 
 1. `reader.viewState`（M4）：§6.2 把 focusMode / leftPanelVisible / rightPanelVisible
    归入 ReaderSessionState，§4.1 又要求 focusMode / toggleOutline 两条 P0 命令，而原表
@@ -613,6 +622,13 @@ interface MessageResponse<T = unknown> {
 > （`registerCustomEditorProvider`，见 §4.2），文档路径链与同级文件切换由 **VS Code 原生
 > 面包屑**提供，无需自建列目录通道，也就无需承担「枚举目录」的安全面。原生那条出现后顶栏
 > 再留任何一段都是两层冗余导航，故 **Webview 顶栏面包屑整条删除**（PRD-003 §10.5），消息总数回到 17 条。
+> 该数字是 **1.2.0 时点**的叙述，不随本表增长；当前总数以上表为准（1.3.0 为 18 条）。
+
+> **`document.edit` 为何只要一条消息（1.3.0）**：它不是「又一个单向通知」，而是
+> **请求型**通道：§8.4 已有的信封 id 关联与统一错误响应（§8.5）恰好就是写回
+> 需要的应答面（成功返回新 version / 拒收返回错误码），因此不需另设确认或失败通道。
+> 也**不需要**一条新的“刷新”消息：`WorkspaceEdit` 改的是宿主 `TextDocument`，§9.1 已在监听的
+> `onDidChangeTextDocument` 会自然把新快照推回 View（见 §9.4）—— 编辑模式复用自动刷新，不新增刷新机制。
 
 ### 8.4 消息路由
 
@@ -651,6 +667,9 @@ flowchart TD
 7. Host 侧必须校验目标 URI 和操作权限。
 8. `export.data` 的载荷只用于写用户选定的路径，不参与任何授权判断：写盘位置由
    `window.showSaveDialog` 单独决定，正文内容不构成对路径、格式或目标目录的影响因子。
+9. `document.edit` 的 `range` 与 `newText` 均不得直接信任：行范围必须先过模型边界校验
+   （`endLine < lineCount`），且必须先用 `baseVersion` 做乐观锁。本条与第 7 条不重复 ——
+   第 7 条管「能不能写这个文件」，本条管「能不能按对方给的坐标写」。错误码分工见 §9.4。
 
 ### 8.6 消息 API 封装
 
@@ -724,6 +743,38 @@ sequenceDiagram
 - 更新内容时尽可能保留滚动位置。
 - 文件删除时显示文档不可用状态。
 - 未保存文档优先使用 VS Code TextDocument 当前内容。
+
+### 9.4 编辑写回（就地编辑，1.3.0 新增）
+
+ARC-009 的写回不另开一条同步链路，而是接在本节已有机制的**上游**：
+
+```mermaid
+sequenceDiagram
+    participant W as Webview
+    participant H as Host
+    participant D as TextDocument
+    participant V as VS Code
+
+    W->>H: document.edit（range + newText + baseVersion）
+    H->>D: 乐观锁校 version
+    alt 不匹配
+        H-->>W: readora.edit.stale
+    else 匹配
+        H->>D: WorkspaceEdit.replace（行范围）
+        D-->>H: onDidChangeTextDocument
+        H->>W: document.update（新快照）
+        W->>W: 阅读态全量重渲染 + 按区块锚点保持位置
+        D->>V: 脏态标记 / Ctrl+S / Ctrl+Z
+    end
+```
+
+五条约束：
+
+1. **Provider 形态不变**：仍用 `CustomReadonlyEditorProvider`。写回目标是宿主已有的 `TextDocument` 模型，撤销 / 脏态 / 保存归宿主，不切 `CustomTextEditorProvider`（见 §4.4 决策修订与 ADR-004-005）。
+2. **乐观锁是强制的**：`baseVersion` 不等于当前模型 `version` 即拒收。两个窗口（Readora + 内置文本编辑器）同时改同一文件时，迟到的那一方必须被挡下而不是默默覆盖。
+3. **不写盘**：`WorkspaceEdit` 只改模型。落盘始经宿主的 `Ctrl+S`，因此编辑模式不新增任何「扩展替用户写文件」的路径（与 ARC-008 §14.4 导出写盘的授权边界同口径）。
+4. **不防抖**：写回是低频、用户显式提交的动作（blur / `Ctrl+Enter`），与 §9.3 第一条说的「文件变化防抖」不是同一回事 —— 后者防的是高频变更事件风暴。
+5. **拒收不得丢输入**：`readora.edit.stale` 时 View 必须保留用户已输入的文本并进入 conflict 态（ARC-009 §5.4）。静默丢弃用户输入是不可接受的失败模式。
 
 ---
 
@@ -1042,6 +1093,18 @@ flowchart TD
 - 与 `state.save` / `state.restore` 共同构成会话级状态的两层保障（AUD-001 §4.4 F05-010 已实现）。
 - 内存成本通过会话数量与生命周期释放控制（§13）；跨会话记忆仍不实现（F05-008，P1）。
 
+### ADR-004-005：就地编辑用 WorkspaceEdit 写回宿主模型（1.3.0）
+
+**决策：** 编辑写回走 `vscode.workspace.applyEdit` 作用在 `TextDocument` 上，provider 保
+持 `CustomReadonlyEditorProvider`；不引入 `CustomTextEditorProvider`，不自建文档模型与撤销栈。
+
+原因：
+
+- 撤销栈、脏态、保存、git 装饰、保存冲突提示都是宿主已有能力，自建是净亏（与 §4.4 只选 option、M6 选原生面包屑同一条取舍逻辑）。
+- 避开 backup / revert / saveAs 整套自定义编辑器生命周期，不改变已交付的只读形态。外部写盘（磁盘变化）能力仍只属于未来的 watcher（§9.1 偏差注记），编辑写回不越界、不新增落盘路径。
+- `TextDocument` 已经是自动刷新链路的现有源头（§9.3 最后一条），写回模型等于直接复用整条已验证的同步链路，不新增第二份「当前正文」真相。
+- **代价**：编辑面板的撤销历史与文本编辑器共享（一次区块提交 = 一个撤销步骤），粒度不由我们定。这是有意接受的 —— 换来的是 `Ctrl+Z` 在两个视图里行为一致。
+
 ---
 
 ## 17. 文档冻结范围
@@ -1059,6 +1122,8 @@ ARC-004 负责：
 - 配置读取。
 - 状态恢复。
 - 生命周期管理。
+- **编辑写回的 Host 侧机制**（§9.4：乐观锁、范围合法性、`WorkspaceEdit` 应用）。1.3.0 新增；
+  但**编辑语义本身（哪些区块可编、如何映射回源）归 ARC-009**，本篇只管通道。
 
 不负责：
 
@@ -1079,6 +1144,7 @@ ARC-004 负责：
 | 1.0.0 | 初始集成架构基线 |
 | 1.1.0 | 文档治理修订：依据 AUD-001（含 §13 处置跟踪）与 BRAND-001 补全入口设计、登记实现偏差、修订与实现不符的决策，状态转为 Final（IMP-003 §10.5） |
 | 1.2.0 | M11 导出链路：§8.3 消息表补齐到与实现一致的 17 条并逐条登记补设依据，§8.5 新增第 8 条写盘授权约束 |
+| 1.3.0 | F12 就地编辑集成：§8.3 新增 `document.edit`（17 → 18 条）、§8.5 新增第 9 条写回校验约束、新增 §9.4 编辑写回时序与五条约束、§4.4 provider 决策加 1.3.0 注记、新增 ADR-004-005。关键结论：**`CustomReadonlyEditorProvider` 选型不变** |
 
 ### 18.2 1.1.0 修订内容
 
@@ -1100,5 +1166,24 @@ ARC-004 负责：
 2. §8.5 消息处理约束新增第 8 条：`export.data` 载荷不参与授权判断。本轮新增的威胁面是
    「Webview 触发 Host 写文件」，该条把唯一授权边界固定在保存对话框上，与 ARC-008
    「导出与写盘」一节同源。
+
+### 18.4 1.3.0 修订内容
+
+1. §8.3 新增 `document.edit`（View → Host，请求型），17 条 → 18 条；并说明它为何只需
+   一条消息（复用 §8.4 的 id 关联与 §8.5 的统一错误响应），以及为何不需要新的刷新
+   通道（写回改的是 `TextDocument`，§9.1 已在监听的 `onDidChangeTextDocument` 会把新快照推回）。
+2. 新增 §9.4「编辑写回」：时序图 + 五条约束（provider 形态不变、乐观锁强制、不写盘、
+   不防抖、拒收不得丢输入）。关键判断：写回接在 §9.1 既有监听机制的**上游**，不另开同步链路。
+3. §8.5 新增第 9 条：写回的 `range` / `newText` 不得直接信任。与第 7 条明确分工 ——
+   第 7 条管「能不能写这个文件」，第 9 条管「能不能按对方给的坐标写」。
+4. §4.4 F10-004 决策第 2 条加 1.3.0 注记：`CustomReadonlyEditorProvider` 选型**维持不变**，
+   并说清它与新增编辑能力的关系（只读 provider + `WorkspaceEdit`）。
+5. 新增 ADR-004-005，登记这一选型、四条理由与已知的代价（撤销粒度归宿主）。
+6. 产品定位从「纯阅读器」扩展为「阅读器 + 就地编辑」，但边界受 PRD-001 §2.2 的澄清约束：
+   「不建独立 Markdown 编辑器」这条非目标仍然有效。完整设计见 ARC-009。
+7. §17 负责清单新增「编辑写回的 Host 侧机制」，并同时划清与 ARC-009 的边界：本篇管
+   通道，ARC-009 管编辑语义。
+8. §8.3 的 M6 复核注记（「消息总数回到 17 条」）加**时点限定**：该数字是 1.2.0 的叙述，
+   不随本表增长。历史修订记录不回溯修改，以免读者把旧时点数字当成当前口径。
 
 **文档状态：Final。**
