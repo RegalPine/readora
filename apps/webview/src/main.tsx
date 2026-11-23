@@ -24,6 +24,7 @@ import "./styles/markdown.css";
 import "./styles/components.css";
 import "./styles/shell.css";
 import "./styles/lightbox-search.css";
+import "./styles/edit-help.css";
 
 const container = document.getElementById("root");
 if (!container) {

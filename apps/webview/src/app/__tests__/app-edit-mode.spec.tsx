@@ -1,14 +1,16 @@
 /**
  * 编辑模式的装配取证（ARC-009 §7.2 / §7.3 / §8，E2）。
  *
- * 这里只测**接线上才会成立**的四件事：
+ * 这里只测**接线上才会成立**的五件事：
  * 1. 顶栏那枚开关改的是 App 的**本地 state**，一条 view→host 消息都不发
  *    （§7.2 原文「editMode 走 `reader.viewState` 通道」不可实现，本条把它钉成契约：
  *    将来谁想从这里补一条消息，得先改掉这条断言与它背后的理由）；
  * 2. 编辑 × 专注互斥（§7.3）：专注模式整段不渲染顶栏，所以互斥必须做在入口上，
  *    不能留一个「开着但看不见」的开关；
  * 3. `suspend` 随 `searchOpen`：搜索打开期间把手撤下、编辑单元挂起，关掉搜索回到原状；
- * 4. 导出取帧前先 `suspend()`：正在输入的草稿不得跟着克隆进交付物（ARC-008 §16.1）。
+ * 4. 导出取帧前先 `suspend()`：正在输入的草稿不得跟着克隆进交付物（ARC-008 §16.1）；
+ * 5. 编辑手册（§7.5）入口只在编辑模式开着时存在，`?` 只叫手册不写字，
+ *    退出编辑与点 Help 这两条路径各自兑现「不留浮层」与「不误提交」。
  *
  * 单元内部的键盘与冲突行为在 `content/edit/__tests__/edit-layer.spec.ts`，
  * 逐字节写回在 `tests/e2e/edit.spec.ts`，这里不重复。
@@ -28,6 +30,7 @@ import {
   EDIT_STATE_ATTRIBUTE
 } from "../../content/edit/edit-unit";
 import { EDIT_UNAVAILABLE_TITLE } from "../../content/edit/limits";
+import { EDIT_HELP_DIALOG_CLASS } from "../../content/interactions";
 import { App } from "../App";
 
 const FILE_URI = "file:///vault/notes/edit-mode.md";
@@ -87,6 +90,26 @@ function activate(block: HTMLElement): void {
 function searchPressed(): string | null {
   const trigger = document.querySelector<HTMLElement>('[aria-label="Search in document"]');
   return trigger ? trigger.getAttribute("aria-pressed") : null;
+}
+
+function helpTrigger(): HTMLButtonElement | null {
+  return document.querySelector<HTMLButtonElement>('button[aria-label="Editing guide"]');
+}
+
+function helpPanel(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`.${EDIT_HELP_DIALOG_CLASS}`);
+}
+
+/**
+ * 点开手册，并把焦点交给触发器 —— jsdom 的合成 click 不移动焦点，
+ * 真实点击会（与 `app-navigation.spec.tsx` 那条 Settings 弹层用例同一条口径），
+ * 不这么做「弹层挂载时记下的触发器」就不是我们点的那一枚。
+ */
+function openHelp(): HTMLButtonElement {
+  const trigger = helpTrigger() as HTMLButtonElement;
+  trigger.focus();
+  fireEvent.click(trigger);
+  return trigger;
 }
 
 describe("开关 = 本地 state（§7.2）", () => {
@@ -367,5 +390,150 @@ describe("大纲结构菜单接线（E7）", () => {
     expect(
       host.posted.map((entry) => entry.type).filter((type) => type !== "metrics.report")
     ).toEqual(before);
+  });
+});
+
+/**
+ * 编辑手册（ARC-009 §7.5）：产品诉求「进入编辑模式能有地方看帮助」的接线取证。
+ * 弹层自己的键盘与内容契约在 `edit-help-dialog.spec.tsx`，这里只钉四条
+ * 跨组件才成立的事：入口可见性、`?` 不写字、点 Help 不误提交、退出编辑不留浮层。
+ */
+describe("编辑手册入口（§7.5）", () => {
+  test("只读态 DOM 里没有这一枚；开了编辑才出现", () => {
+    setup();
+    expect(helpTrigger()).toBeNull();
+    fireEvent.click(editButton());
+    expect(helpTrigger()).not.toBeNull();
+  });
+
+  test("点 Help 只开弹层：一条消息都不发，开关状态不被碰", () => {
+    const host = setup();
+    fireEvent.click(editButton());
+    const before = host.posted.map((entry) => entry.type);
+    openHelp();
+    expect(helpPanel()).not.toBeNull();
+    expect(helpTrigger()?.getAttribute("aria-expanded")).toBe("true");
+    expect(pressed(editButton())).toBe("true");
+    expect(host.sent("document.edit")).toHaveLength(0);
+    expect(
+      host.posted.map((entry) => entry.type).filter((type) => type !== "metrics.report")
+    ).toEqual(before.filter((type) => type !== "metrics.report"));
+  });
+
+  test("Escape 先收手册：焦点归位触发器，编辑模式与把手原地不动", () => {
+    setup();
+    fireEvent.click(editButton());
+    const trigger = openHelp();
+    // Escape 落在弹层自己的焦点链上（真浏览器里弹层拿到焦点）；从 document 直发
+    // 不经过容器，那一次按键根本不会达到面板的监听。
+    const event = new KeyboardEvent("keydown", {
+      key: "Escape",
+      bubbles: true,
+      cancelable: true
+    });
+    act(() => {
+      helpPanel()?.dispatchEvent(event);
+    });
+    // 那一次 Escape 归弹层自己接（它 `preventDefault` + `stopPropagation`）：
+    // 只收手册，不得连带退出编辑模式。
+    expect(event.defaultPrevented).toBe(true);
+    expect(helpPanel()).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(pressed(editButton())).toBe("true");
+    expect(handles().length).toBeGreaterThan(0);
+  });
+
+  test("活动单元的焦点交给手册：不算离开，不发出提交（§7.4 focusout 是提交）", () => {
+    const host = setup();
+    fireEvent.click(editButton());
+    const block = paragraph(0);
+    activate(block);
+    block.textContent = "还没提交的输入";
+    const trigger = helpTrigger() as HTMLButtonElement;
+    // 两条路径都钉下来：
+    // 1. 触发器自己标了 `data-readora-keep-editing` —— 焦点从单元走进它时
+    //    不算「离开单元」（否则点一下 Help 就是一次失焦提交）；
+    trigger.focus();
+    expect(host.sent("document.edit")).toHaveLength(0);
+    expect(block.getAttribute("contenteditable")).toBe("true");
+    fireEvent.click(trigger);
+    // 2. 弹层带 `role="dialog"`，已在 `edit-unit` 的 `KEEP_EDITING_SELECTOR` 里。
+    const dialog = helpPanel() as HTMLElement;
+    block.dispatchEvent(
+      new FocusEvent("focusout", { bubbles: true, relatedTarget: dialog.querySelector("button") })
+    );
+    expect(host.sent("document.edit")).toHaveLength(0);
+    expect(block.getAttribute("contenteditable")).toBe("true");
+    expect(block.textContent).toBe("还没提交的输入");
+    // 手册里没有第二套焦点陷阱把用户困住：Close 就在里面。
+    expect(dialog.querySelector('button[aria-label="Close editing guide"]')).not.toBeNull();
+  });
+
+  /**
+   * 从指定落点发出一次 `?` 并冒泡到 document。
+   * 为什么不直接 `document.dispatchEvent`：真浏览器里 keydown 的 `event.target`
+   * 就是焦点元素，判据（`shouldOpenEditHelp`）读的是落点；从 document 直发等于
+   * 造一个浏览器里发不出的事件，那条落点护栏就被绕过了。
+   */
+  function pressQuestion(at: Element): KeyboardEvent {
+    const event = new KeyboardEvent("keydown", { key: "?", bubbles: true, cancelable: true });
+    act(() => {
+      at.dispatchEvent(event);
+    });
+    return event;
+  }
+
+  test("`?` 只在编辑模式里叫出手册；单元里敲 `?` 是打一个字", () => {
+    const host = setup();
+    // 只读态：监听未注册，`?` 不产生任何界面变化。
+    expect(pressQuestion(paragraph(0)).defaultPrevented).toBe(false);
+    expect(helpPanel()).toBeNull();
+
+    fireEvent.click(editButton());
+    // 落点在正文段落上（idle，不是输入件）：`?` 叫出手册。
+    const idle = paragraph(0);
+    expect(pressQuestion(idle).defaultPrevented).toBe(true);
+    expect(helpPanel()).not.toBeNull();
+    // 键位不进协议：叫手册与点按钮同一条本地通道，不发 `document.edit`。
+    expect(host.sent("document.edit")).toHaveLength(0);
+    // 手册开着时再按一次：监听已不注册，面板节点不得因此重挂。
+    const mounted = helpPanel();
+    expect(pressQuestion(idle).defaultPrevented).toBe(false);
+    expect(helpPanel()).toBe(mounted);
+
+    // 手册先收掉（否则监听本就不注册，测不到那一条护栏）。
+    fireEvent.keyDown(helpPanel() as HTMLElement, { key: "Escape" });
+    expect(helpPanel()).toBeNull();
+    // 落点在正在编辑的单元里：那里挨一个 `?` 是打一个字，不是叫手册。
+    const block = paragraph(1);
+    activate(block);
+    expect(block.getAttribute("contenteditable")).toBe("true");
+    const typed = pressQuestion(block);
+    expect(helpPanel()).toBeNull();
+    expect(typed.defaultPrevented).toBe(false);
+    // 上面那一次敲字没有顺手提交（护栏只看落点，不停在手上的草稿）。
+    expect(host.sent("document.edit")).toHaveLength(0);
+  });
+
+  test("退出编辑同时收掉手册（不留一个关不掉的浮层）", () => {
+    setup();
+    fireEvent.click(editButton());
+    openHelp();
+    expect(helpPanel()).not.toBeNull();
+    fireEvent.click(editButton());
+    expect(helpPanel()).toBeNull();
+    expect(helpTrigger()).toBeNull();
+    expect(handles()).toHaveLength(0);
+  });
+
+  test("开着编辑进专注：手册与顶栏一起收，不留一个没得点的浮层", () => {
+    setup();
+    fireEvent.click(editButton());
+    openHelp();
+    expect(helpPanel()).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Enter focus mode" }));
+    expect(helpPanel()).toBeNull();
+    expect(document.querySelector('[aria-label="Editing guide"]')).toBeNull();
   });
 });

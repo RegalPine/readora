@@ -4,7 +4,7 @@
 |---|---|
 | 文档编号 | PRD-003 |
 | 文档名称 | 视觉设计规范 |
-| 文档版本 | 1.8.1 |
+| 文档版本 | 1.8.4 |
 | 文档状态 | Draft |
 | 所属产品 | Readora |
 | 关联文档 | PRD-001、PRD-002 |
@@ -676,7 +676,7 @@ Primary 仅用于明确的主要操作。
 - **pill**：`radius-full` + `shadow-pill` + `font-xs` + `tracking-label`，用于阅读时长与模式标签。
 - **缩放组**：`−` `100%` `+` 三枚连排，点百分号复位；字号 50%–200%，步长 10%。
 - **开合 toggle（Outline / Search）**：用 `aria-pressed` 表达当前开合。顶栏 Outline 使用双态侧栏图标：大纲显示时箭头向左（收起），隐藏时箭头向右（展开），`title` 对应 `Hide outline` / `Show outline`；两态均无常驻灰底，保留通用悬停反馈与键盘焦点环。Search 仍用淡底（`--readora-outline-active-bg`）+ 加粗（600）表达按下态，不上 accent 紫描边、不改文字色。
-- **纯图标控件（1.7.2）**：顶栏的 Outline 开合与大纲面板头部的「展开全部 / 过滤」只给图标不给文字（产品要求：三枚控件只要图标；位置常驻的开关本就不需要文字自证）。它们仍分别带 `aria-label`（`Toggle outline` / 动态的 `Collapse all`–`Expand all` / `Filter`）与 `title` 悬停文案，**可读名称不因去文字而丢失**（§10.6：图标只是装饰）。内边距由 `.readora-toolbar-button--icon` / `.readora-outline-action--icon` 收成与图标等宽的定量；点击区实测 34×24（旧「图标+文字」82×29）与 22×18（旧 91×24）—— 确实随文字一同收窄，量级对齐 VS Code 侧栏图标按钮。顶栏其余四个动作仍图标 + 文字。
+- **纯图标控件（1.7.2，1.8.3 改大纲头部）**：顶栏的 Outline 开合与大纲面板头部的「展开全部 / 折叠全部 / 过滤」只给图标不给文字（产品要求：只要图标；位置常驻的开关本就不需要文字自证）。大纲头部原来是**一枚**双向箭头靠状态换 `aria-label`（`Collapse all` ↔ `Expand all`），图形不变、标签又读不到，用户实测反馈「点了样式没变化」，1.8.3 拆成**两枚**常驻按钮，每枚只做一件事、每个图形只说一个方向。它们仍分别带 `aria-label`（`Toggle outline` / `Expand all` / `Collapse all` / `Filter`）与 `title` 悬停文案，**可读名称不因去文字而丢失**（§10.6：图标只是装饰）。头部三枚图标由 12px 调到 **16px**（与顶栏基准图标同尺寸），内边距改 `4px var(--readora-space-1)`，点击区实测 **26×26**（旧 22×18）；顶栏 Outline 实测 34×24（旧「图标+文字」82×29）。量级对齐 VS Code 侧栏图标按钮。展开/折叠两枚的当前态由 `aria-pressed` 的淡底（`surface-raised`）表达——按下折叠全部，底色就从折叠那枚换到展开那枚；禁用那枚不上底色，只留 `text-muted` 前景。顶栏其余四个动作仍图标 + 文字。
 - **Reader Settings 触发器**：它是弹层触发器不是路由，`aria-haspopup="dialog"` + `aria-expanded`。
 - **Export 下拉（M11）**：动作区里排在缩放组之后、Reader Settings 之前（导出是动作，
   Settings 恒为末位）。触发器复用同一枚 `.readora-toolbar-button`，额外带
@@ -703,20 +703,29 @@ Outline 图形在 1.7.2 由「三个项目点 + 三条右对齐横线」（与�
 
 ### 10.7 大纲面板
 
-在既有的树/折叠/active 之上扩展以下三块，前两块的数全部来自真实数据源（1.2.0
-起进度块与源行号标签下线，阅读进度只由 §10.5 的浮动快速条一处报告）：
+在既有的树/折叠/active 之上，下表三行的取舍如下（1.2.0 起进度块下线，1.8.3 起行内标签
+也下线，只剩头部这一块是扩展；阅读信息只由 §10.5 的浮动快速条与 §4.6 的状态条各一处报告）：
 
 | 区块 | 数据源 |
 |---|---|
-| 头部（展开全部 / 过滤）+ heading 过滤输入框 | 本地状态；两枚**纯图标靠右排列**（见 §10.5 / §10.6）；过滤按 `title` 子串并自动展开命中项，`Escape` 清空 |
-| 行内标签 | 只给 H1 显示分节字数（`840w`，`section-metrics.ts`）。`position` 缺失则不显示该标签；更深层级不配标签——源行号是编辑器坐标而不是阅读信息，读者据此无法定位自己在正文里的位置 |
+| 头部（展开全部 / 折叠全部 / 过滤）+ heading 过滤输入框 | 本地状态；三枚**纯图标 16px 靠右排列**（见 §10.5 / §10.6），展开与折叠拆两枚而不是共用一枚双向箭头；过滤按 `title` 子串并自动展开命中项，`Escape` 清空；过滤中展开/折叠没有可见效果，两枚同时禁用并把 `title` 写成原因（§4.6 诚实性） |
+| 行内标签 | **1.8.3 起全部下线**：H1 的分节字数（旧 `93w` / `840w`）是估读的体量、更深层级的源行号（旧 `L28`）是编辑器坐标，都不是阅读信息；字数在状态条已有一份（§4.6），节数读者在目录自己数得出来 |
 | 底部 | 不摆统计：面板内没有 footer，也没有 `Sections` / `Depth` 两个口子。节数连 §4.6 状态条那一份也在 1.7.2 删掉了，不再在任何地方重复报 |
 
 列表使用 **3px 极细滚动条**（Chromium / VS Code），轨道透明、滑块使用 `border-strong`，悬停使用 `text-muted`；不支持 WebKit 滚动条伪元素的引擎回退到标准 `thin`。仅列表滚动，头部图标常驻，正文滚动与活动项跟随逻辑不变。
 
-活动条目（active）的高亮在 1.7.2 由「强调色 + `inset 2px` 左侧指示条」改为**强调色 + 淡底背景**（`--readora-outline-active-bg`，产品反馈）：旧那根指示条跟着 `.readora-outline-link` 的 padding 走，而条目按层级缩进，于是它停在标题左侧的空档里，读者要顺着它去找「是哪一行」；背景铺在标题那一块上，不需要解释就能看出当前在读哪一节。加粗（600）与 accent 文字色保留。
+活动条目（active）的高亮在 1.7.2 由「强调色 + `inset 2px` 左侧指示条」改为**强调色 + 淡底背景**（`--readora-outline-active-bg`，产品反馈）：旧那根指示条跟着 `.readora-outline-link` 的 padding 走，而条目按层级缩进，于是它停在标题左侧的空档里，读者要顺着它去找「是哪一行」；背景铺在标题那一块上，不需要解释就能看出当前在读哪一节。
 
-分节字数按 outline 顺序取相邻标题之间的源行区间计数，`useMemo` 依赖 `[text, outline]`——每次渲染一次，不是每次滚动一次。行号不上 UI，但 `OutlineItem.position.startLine` 仍是切区间的边界，继续在数据结构里。区间按 **0 基**行号算（与 `docs/ARC-002` §4.3 的 `SourcePosition` 同基），左闭右开：第 i 节是 `[startLine_i, startLine_{i+1})`，最后一节到文件末尾——把行号当 1 基算会把首行的 H1 整条判成没有区间而丢标签。
+加粗（600）保留，**文字色在 1.8.4 由 accent 改为中性 `text-primary`**（用户实测「激活状态字体白里透紫、不够清爽」）：暗色旧档 `#d2ccf0` 的通道差（max − min）是 36，新档 `#dfe2eb` 是 12，这一把尺直接量得出紫味被消掉。当前条目的辨识本来就有三重线索 —— 比常规行更亮的一档（暗色 `#dfe2eb` 对 link 的 `#c2c8d2`）、600 加粗、整块淡底，不需要再叠一层品牌色相；这与 §10.5 顶栏 toggle 在 1.4.1 立的「按下态只留淡底 + 加粗，紫与焦点环撞色」是同一条口径。`--readora-outline-active-color` 不删：快速条、设置选项、搜索工具三枚按下态仍吃它做点睛（那是瞬时控件，不是读者一路跟着走的当前节）。
+
+**高对比预设的一处副作用（实测登记）**：预设刻意把文字三档压成两档（`text-secondary` 取 `text-primary` 的 Primitive，见 `tokens.css` 高对比块注释第 3 条「高对比要的是可读性而不是层级感」），且不覆写 `text-primary`；于是 `high-contrast` 下活动条目与常规行读到**同一档文字色**（暗色两档都是 `#dfe2eb`，亮色都是 `#0b1c30`），区分只剩 600 加粗与淡底。这不是无障碍回归 —— WCAG 1.4.1 本就要求不得靠颜色单独传递信息，`tests/e2e/outline.spec.ts` 有一条用例把这一形态钉住；旧实现在那一档靠 `accent-text` 的 hc 值（`#eeebff` / `#3f2279`）拉开的差也只有 12 个通道单位。
+
+分节字数与它那套「相邻标题源行区间」的算法（`content/section-metrics.ts`，`useMemo` 依赖
+`[text, outline]`）随行内标签一起在 1.8.3 删掉，`formatSectionUnits`（`Nw` formatter）同时移除。
+行号与 `OutlineItem.position.startLine` 仍在数据结构里：它是 §16 / E7 章节结构菜单切写回区间的
+边界（`outline-section-ops.ts` 的 `bodyLineOffsetOf` 补偿 frontmatter）。区间口径仍是 **0 基**、
+左闭右开：第 i 节是 `[startLine_i, startLine_{i+1})`，最后一节到文件末尾——把行号当 1 基算会把
+首行的 H1 整条判成没有区间。
 
 **行尾章节结构菜单（1.8.0，E7）**：只在编辑模式下的本地文件上存在，形态三句话：
 
@@ -983,6 +992,31 @@ KaTeX 样式必须在最前、阅读器覆盖在后，这是既有不变量（IM
 
 四类源码型区块（codeBlock / diagramBlock / table / mathBlock）在 idle 态统一设置 `cursor: pointer`，暗示「可点击 / 可双击」。
 
+### 16.7 编辑手册弹层（随 ARC-009 1.7.0 / E9）
+
+入口是顶栏一枚纯图标 `?`（`.readora-toolbar-edit-help`），复用 `.readora-toolbar-button` + `--icon` 两档，因此**不新增尺寸变量也不改 44px 顶栏高度**；它只在 `editMode` 为真时渲染进 DOM，阅读态下顶栏宽度与旧版逐字节一致。
+
+弹层（`.readora-edit-help-dialog`）**不自己发明一套弹层视觉**：backdrop、header、title、close、note 五个类直接复用 Settings 弹层那一份定义，本层只补它特有的两列行与键帽。
+
+| 项 | 取值 |
+|---|---|
+| 宽度 | `min(560px, 100%)` —— 比 Settings 宽一档（键位列要留够），但仍收在 `min()` 里，窄窗口不越界 |
+| 高度 | `max-height: calc(100vh − space-16)` + `overflow-y: auto`（手册是一页读完的东西，不得撑出窗口） |
+| 表面 | `panel-background` + `panel-border`（hairline）+ `radius-lg` + `shadow-lg`，与 Settings 弹层同档 |
+| 字号 / 行高 | `font-sm` / `line-height: 1.5` —— 与 `shell.css` 里 Settings 弹层同一条钉法（不写这一行就继承 body 的 `--readora-line-height`，实测拖 Line height 滑杆会把面板从 529px 顶到 690px） |
+| 行 | `grid-template-columns: minmax(120px, 32%) 1fr`，`align-items: baseline`，键位右对齐 |
+| 小节标题 | `font-xs` + `font-weight: 600` + `uppercase` + `tracking-label` + `text-secondary`，字族取 `font-family-body` —— 手册标题不是文档标题，不进大纲也不继承正文行衬线字族 |
+| 键帽 `<kbd>` | `hairline` + `button-border` 描边、`radius-sm`、`canvas` 底、`font-family-mono` + `font-xs`，内边距 `0 4px`，`white-space: nowrap`。一眼看出是「按的」而不是「读的」 |
+| 字面标记 `<code>` | 取 `code-background` + `radius-sm`，与 §8.6.1 行内代码同一块底（但不拿它做对比度验收 —— 手册里的标记是举例，不是正文） |
+| 尾注 / 提示 | `font-xs` + `text-muted`，与 Settings 的 note 同档 |
+| 窄窗口 | `@media (max-width: 560px)` 收为单列、键位改左对齐 —— 两列在这种宽度下都会挤到不可读 |
+
+**零新增颜色 Token**：描边 / 底 / 前景全部取已有的 `panel-border`、`canvas`、`button-border`、`code-background`、`text-secondary`、`text-muted`。
+
+为什么本节不往 §10.5 顶栏控件清单加一行：那一节定的是**阅读态常驻**控件（Outline / Search / Export / Settings），而 `?` 与 §16.5 那枚工具条同属「只在编辑态存在」的一类。写进 §10.5 就会让人以为它在阅读态也占一位，而那是实测不成立的事实（只读态 DOM 里根本没有这一枚，`app-edit-mode.spec.tsx` 与 `tests/e2e/edit-help.spec.ts` 各钉了一条）。
+
+视觉基线：`edit-help.css` 只进 `main.tsx` 与 `dev/e2e.tsx`，**不进 `dev/visual.tsx`**（它固定 `editMode={false}`，而入口与弹层都只活在编辑态），所以 10 档基线不需重采也不会变。
+
 ---
 
 ## 17. 文档结论
@@ -1057,3 +1091,6 @@ Markdown、代码块、Mermaid 图表和辅助面板必须使用统一的设计�
 | 1.7.4 | **新增 §16 编辑态视觉规范**（随 ARC-009 E4–E6 收尾补章）：16.1 把手角标（8px 圆点、`:after` 绝对定位）、16.2 活动单元、16.3 形态 A/B 字体区分、16.4 冲突态（warning 描边 + 冲突卡片）、16.5 格式化工具条、16.6 源码型区块 `cursor: pointer`。未新增颜色 Token（描边/背景/前景均取已有的 `border-strong` / `accent-soft` / `warning` / `danger`）；编辑态元素只在 `editMode` 为真时存在，而 `dev/visual.tsx` 固定 `editMode={false}`，故 10 档基线不受影响。**补记说明**：本行是 1.8.0 编辑时补登的 —— §16 落地当时只改了正文没写修订行，附录 B 停在 1.7.3 而元数据表已写 1.5.0，两处都已脱节 |
 | 1.8.0 | §10.7 新增**行尾章节结构菜单**三句口径（随 ARC-009 1.5.0 / E7）：`⋯` 用 `opacity: 0` + transition 而非 `visibility`（一直占宽，行不抖、鼠标不丢命中）；菜单**行内展开**而不是浮层（`margin-left: 18px` 与标题文本左对齐，不做定位计算）；零新增颜色 Token（删除那枚只换前景 `danger`，失败提示用 `text-muted`）。另补一段 e2e 取证口径：`opacity: 0` 对 Playwright role 引擎不可见。元数据表 1.5.0→1.8.0 是**追平**（见 1.7.4 行的脱节说明）。本轮面板 DOM 有新增元素，10 档基线需 `visual:update` 重采（已核：差异只落在大纲行右侧新增的隐形按钮占位） |
 | 1.8.1 | §16.5 格式化工具条补**取消出口**一句（随 ARC-009 1.6.0 / E8）：末尾一枚 `Cancel`，与动作组之间一条 hairline 分隔线（复用级别组 `__levels` 前那道的手法），不参与可点性三档（永远可点，故 CSS 不多写一档状态）、不进 tab 序列（`tabIndex` 恒 -1）。零新增颜色 Token。同时**纠正 1.7.4 遗留的一处与实现不符的口径**：原首条写「仅形态 A 且选区非空时显示」，实测为「有活动单元就显示，选区只决定按钮可不可点」（ARC-009 §6.3.4）。编辑态元素仍只在 `editMode` 为真时存在而 `dev/visual.tsx` 固定 `editMode={false}`，10 档基线预期不受影响（已跑 `visual:check` 证实未刷） |
+| 1.8.2 | 新增 §16.7 **编辑手册弹层**（随 ARC-009 1.7.0 / E9）：顶栏一枚纯图标 `?`（复用 `.readora-toolbar-button` + `--icon`，不改 44px 顶栏高度）+ 一块复用 Settings 弹层五个类的 `min(560px, 100%)` 面板，本层只补两列行、`<kbd>` 键帽与字面标记三样。零新增颜色 Token 与尺寸变量。同时明记两条口径：① 手册入口**不进 §10.5 常驻控件清单**（只读态 DOM 里没有这一枚，写进去就是一句不成立的事实）；② `edit-help.css` 不进 `dev/visual.tsx`，10 档基线不需重采 |
+| 1.8.3 | §10.7 行内标签**全部下线**（产品反馈「这个 93w 是什么，去掉」）：H1 的分节字数不再上 UI，`content/section-metrics.ts`、`formatSectionUnits` 与 `.readora-outline-meta` 样式一并删除（`position.startLine` 仍供 E7 章节结构菜单切区间，口径搬进 `outline-section-ops.ts` 注释）。§10.5 大纲头部**展开/折叠拆成两枚常驻图标**（原一枚双向箭头靠状态换标签，用户实测「点了样式没变化」），新增 `CollapseIcon`（朝中间收拢）与 `ExpandIcon`（朝外张开）成对，当前态由 `aria-pressed` 的淡底表达；三枚图标 12px→**16px**，内边距 `2px`→`4px`，点击区实测 22×18→**26×26**。零新增颜色 Token；头部按钮不在视觉基线的 `SELECTORS × STYLE_PROPS` 覆盖面内，10 档取值未变（已跑 `visual:update` + `visual:check` 证实全等） |
+| 1.8.4 | §10.7 大纲**活动条目文字去 accent 取中性**（用户反馈「激活状态字体白里透紫、不够清爽」）：`.readora-outline-link[aria-current="location"]` 的 `color` 由 `--readora-outline-active-color`（= `accent-text`）改为 `--readora-color-text-primary`，加粗与淡底不变；`--readora-outline-active-color` 保留给快速条 / 设置选项 / 搜索工具三枚按下态。零 Token 取值变化：10 档基线只改该选择器的 computed `color` / `borderTopColor` / `borderLeftColor`（后两条默认取 `currentColor` 因此跟着变）与像素，暗色 `rgb(210,204,240)→rgb(223,226,235)`、亮色 `rgb(89,45,172)→rgb(11,28,48)`，需 `visual:update` 重采。`contrast.spec.ts` 那条「活动条目文字」断言同时修正：旧写法拿 `accent-soft` 当底色，而暗色那档在 1.6.0 已解耦成 `text-primary` 掺 12%，量的并不是用户看到的落点；现按 `--readora-outline-active-bg` 真值合成，并拆成大纲（`text-primary`）与按下态（`accent-text`）两档。**副作用登记**：`high-contrast` 预设不覆写 `text-primary`，该档下活动条目与常规行同文字色，区分只剩 600 加粗 + 淡底（符合 1.4.1，`outline.spec.ts` 有用例钉住这一形态） |

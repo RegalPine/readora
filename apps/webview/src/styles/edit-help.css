@@ -1,0 +1,101 @@
+/* ---------- 编辑手册弹层（ARC-009 §7.5，编辑模式的界面内说明） ---------- */
+
+/* 版式与 Settings 弹层同族：backdrop、header、title、close、note 五个类直接复用
+ * 上面那一段的定义，这里只补这份手册特有的两列行与 `<kbd>`。宽度比 Settings 宽
+ * 一档（键位列要留够），但仍收在 `min()` 里，窄窗口不越界。 */
+.readora-edit-help-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--readora-space-3);
+  width: min(560px, 100%);
+  max-height: calc(100vh - var(--readora-space-16));
+  overflow-y: auto;
+  padding: var(--readora-space-4);
+  border: var(--readora-hairline) solid var(--readora-panel-border);
+  border-radius: var(--readora-radius-lg);
+  box-shadow: var(--readora-shadow-lg);
+  background: var(--readora-panel-background);
+  color: var(--readora-color-text-primary);
+  font-size: var(--readora-font-sm);
+  /* 同 Settings：外壳控件不跟正文 Line height 滑杆走（那一条被实测踩过）。 */
+  line-height: 1.5;
+}
+
+.readora-edit-help-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--readora-space-1);
+}
+
+.readora-edit-help-section-title {
+  margin: 0;
+  font-size: var(--readora-font-xs);
+  font-weight: 600;
+  letter-spacing: var(--readora-tracking-label);
+  text-transform: uppercase;
+  color: var(--readora-color-text-secondary);
+  /* 手册标题不是文档标题：不进大纲、不继承正文衬线字族（与 Settings 标题同理）。 */
+  font-family: var(--readora-font-family-body);
+}
+
+.readora-edit-help-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.readora-edit-help-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 32%) 1fr;
+  gap: var(--readora-space-2);
+  align-items: baseline;
+}
+
+.readora-edit-help-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: flex-end;
+}
+
+/* 键帽：hairline 边框 + 面板底，一眼看出是「按的」而不是「读的」。 */
+.readora-edit-help-key {
+  padding: 0 4px;
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-color-canvas);
+  color: var(--readora-color-text-primary);
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-xs);
+  white-space: nowrap;
+}
+
+.readora-edit-help-text b {
+  font-weight: 600;
+}
+
+.readora-edit-help-code {
+  padding: 0 3px;
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-code-background);
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-xs);
+}
+
+.readora-edit-help-hint {
+  margin: 0;
+  font-size: var(--readora-font-xs);
+  color: var(--readora-color-text-muted);
+}
+
+@media (max-width: 560px) {
+  /* 窄窗口不再分两列：键位换行到上一行，说明跟在后头，两列都会挤到不可读。 */
+  .readora-edit-help-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .readora-edit-help-keys {
+    justify-content: flex-start;
+  }
+}

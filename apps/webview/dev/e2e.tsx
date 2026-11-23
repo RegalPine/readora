@@ -55,6 +55,7 @@ import "../src/styles/markdown.css";
 import "../src/styles/components.css";
 import "../src/styles/shell.css";
 import "../src/styles/lightbox-search.css";
+import "../src/styles/edit-help.css";
 
 /** View 发来的一条消息（含信封 id，便于用例断言请求-响应确实配对）。 */
 export interface ViewMessage {

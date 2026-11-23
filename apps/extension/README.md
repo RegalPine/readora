@@ -10,7 +10,18 @@ navigation, focus mode, and one-click export to HTML / PDF / PNG.
 
 ## Getting started
 
-Open a Markdown file, then start the reader in any of these ways:
+Since **0.13.1**, Readora is the default editor for `.md` / `.markdown`: double-clicking
+a Markdown file (or picking it in the Explorer) opens the reader straight away, and
+switching to a sibling file from the native breadcrumb keeps you in the reader.
+
+Prefer the raw source? Right-click the file → **Open With…** → *Text Editor*, or pin
+it permanently with:
+
+```json
+{ "workbench.editorAssociations": { "*.md": "default" } }
+```
+
+You can also start the reader explicitly from anywhere:
 
 - **Command Palette** → `Readora: Open Reader` (default keybinding `⌘⌥R` / `Ctrl+Alt+R`)
 - **Editor context menu** → *Readora: Open Reader* / *Readora: Open to the Side*

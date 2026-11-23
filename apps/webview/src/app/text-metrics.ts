@@ -1,8 +1,9 @@
 /**
  * 阅读时长与字数口径（PRD-003 §5.6）。
  *
- * 状态条右端的 `N min read` pill、状态条的字数、大纲行内的 `840w` 共用这一个计数函数：
- * 三个地方各数一遍迟早会数出三个答案，而它们并排显示在同一屏里。
+ * 时长 pill 与状态条字数共用这一个计数函数：两处各数一遍迟早数出两个答案，
+ * 而它们并排显示在同一屏里。（大纲 H1 的行内分节字数 `93w` 已按产品要求下掉，
+ * 同一份 `countTextUnits` 不再有三处读数。）
  *
  * 之所以要专门的函数，是 §5.6 点名的那个可感知错误：`text.split(/\s+/).length`
  * 对中文按空白切分，一整段汉字算 1 个词，一篇 3000 字的中文笔记会被报成
@@ -12,9 +13,8 @@
  * 3. 标点、空白、Markdown 语法字符不计。
  *
  * 数据源是 `DocumentSnapshot.text`（Markdown 源文，不是渲染后的 DOM 文本）：
- * 口径要能在渲染之前算出来（首帧的 pill 不该等 DOM），也让 §3 的分节字数可以
- * 直接按源行区间切同一份文本。代价是语法字符会混进来，规则 3 正是为它写的 ——
- * `#`、`*`、`` ` ``、`|`、`>` 都不是字母数字，天然落不进任何单元。
+ * 口径要能在渲染之前算出来（首帧的 pill 不该等 DOM）。代价是语法字符会混进来，
+ * 规则 3 正是为它写的 —— `#`、`*`、`` ` ``、`|`、`>` 都不是字母数字，天然落不进任何单元。
  *
  * 已知未覆盖：谚文（한글）与阿拉伯字母走规则 2 的「一串算一个」，对纯韩文档会
  * 明显低估；§5.6 的口径只承诺中日韩表意字符，这里不擅自扩面（README 登记）。
@@ -71,12 +71,7 @@ export function formatReadingTime(metrics: TextMetrics): string {
   return `${metrics.minutes} min read`;
 }
 
-/** 状态条的字数文案（大纲底部统计已下掉，节数只剩状态条这一处）。 */
+/** 状态条的字数文案（大纲底部统计与行内分节字数都已下掉，节数只剩这一处口径）。 */
 export function formatUnitCount(units: number): string {
   return `${units.toLocaleString("en-US")} words`;
-}
-
-/** 大纲行内的分节字数标签 `840w`（PRD-003 §10.7）。 */
-export function formatSectionUnits(units: number): string {
-  return `${units}w`;
 }

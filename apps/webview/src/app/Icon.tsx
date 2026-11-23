@@ -244,11 +244,26 @@ export function ChevronRightIcon(props: IconProps) {
   );
 }
 
-/** 展开全部 / 收起全部：双向箭头。 */
+/** 展开全部：上下两撇朝外张开的箭头（与 `CollapseIcon` 成对，方向即动作）。 */
 export function ExpandIcon(props: IconProps) {
   return (
     <Icon {...props}>
       <path d="M8 10l4-4 4 4M8 14l4 4 4-4" />
+    </Icon>
+  );
+}
+
+/**
+ * 折叠全部：上下两撇朝中间收拢的箭头。
+ *
+ * 头部不再用一枚「展开/折叠」复用同一个图形靠状态换标签 —— 双向箭头静止时
+ * 读不出这一次点下去是展开还是折叠（用户实测「点了没变化」），拆成两枚后
+ * 每枚图标自己的形状就说清了动作方向。
+ */
+export function CollapseIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8 6l4 4 4-4M8 18l4-4 4 4" />
     </Icon>
   );
 }

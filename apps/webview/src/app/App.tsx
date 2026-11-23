@@ -30,7 +30,7 @@ import { READORA_ERROR_CODES } from "@readora/contracts";
 import type { OutlineItem } from "@readora/markdown-core";
 import type { HostBridge } from "../bridge/host-bridge";
 import { bridgeErrorParts } from "../bridge/bridge-error";
-import { useSearchShortcuts } from "../content/interactions";
+import { useSearchShortcuts, useEditHelpShortcut } from "../content/interactions";
 import { documentRoot } from "../content/heading-query";
 import { exportDocumentRoot, serializeExportDocument } from "../content/export-document";
 import type { EditLayer } from "../content/edit/edit-layer";
@@ -43,6 +43,7 @@ import { SearchPanel } from "../content/SearchPanel";
 import { useActiveHeading } from "../content/use-active-heading";
 import { QuickBar, activeHeadingTitleOf } from "./QuickBar";
 import { ReadingCanvas } from "./ReadingCanvas";
+import { EditHelpDialog } from "./EditHelpDialog";
 import { ReaderSettingsDialog } from "./ReaderSettingsDialog";
 import { ReaderShell } from "./ReaderShell";
 import { StatusBar } from "./StatusBar";
@@ -158,6 +159,13 @@ export function App({ bridge }: AppProps) {
    * 默认 `false` 天然兑现「不持久化、每次开面板默认只读」。
    */
   const [editMode, setEditMode] = useState(false);
+  /**
+   * 编辑手册弹层（ARC-009 §7.5）：与 `editMode` 同一个本地通道 —— 会话内视图状态，
+   * 不持久化，也不发任何 view→host 消息。它只在 `editMode` 为真时渲染（退出编辑
+   * 自己收掉，不留一个讲用不上的键位的浮层），换文档不需要额外处理：那一类
+   * 会话临时态本来就跟着面板活。
+   */
+  const [editHelpOpen, setEditHelpOpen] = useState(false);
   /** 接管层的向上出口：导出取帧前要先挂起编辑（ARC-008 §16.1）。 */
   const editLayerRef = useRef<EditLayer | null>(null);
   /**
@@ -497,6 +505,13 @@ export function App({ bridge }: AppProps) {
     }
   });
 
+  // `?` 只给一个动作：叫出手册。收掉它靠面板自己的 Escape / 点外面 / Close，
+  // 不做「再按一次切换」；手册已经开着时干脆不注册这一支监听 —— 弹层里的
+  // 焦点不在输入件上，不收掉这条入口会让 `?` 变成「按下去面板自己重挂」。
+  useEditHelpShortcut(editMode && !editHelpOpen, () => {
+    setEditHelpOpen(true);
+  });
+
   /**
    * 时长 pill、状态条字数与大纲分节字数共用这一份计量（PRD-003 §5.6）：
    * 三处并排显示在同一屏，各数一遍迟早数出三个答案。
@@ -609,6 +624,9 @@ export function App({ bridge }: AppProps) {
       // 专注与编辑互斥（ARC-009 §7.3）：专注模式不渲染顶栏，进去以后
       // 那个开关根本点不到，所以必须在入口上就把它关掉，不留「开着但看不见」。
       setEditMode(false);
+      // 手册也一起收：它只在 `editMode` 为真时渲染，但触发器住在顶栏、面板住在
+      // body，不一起收就会留一个「找不到关闭按钮」的浮层。
+      setEditHelpOpen(false);
     }
     setOverride({ focusMode: !shell.focusMode });
   };
@@ -625,6 +643,11 @@ export function App({ bridge }: AppProps) {
     if (next && shell.focusMode) {
       // 互斥的另一头：开编辑先退专注（与上面一条对称）。
       setOverride({ focusMode: false });
+    }
+    if (!next) {
+      // 退出编辑先收手册：顶栏触发器随之从 DOM 消失，留着浮层就是
+      // 「关不掉的帮助」（它自己的 `aria-labelledby` 倒指着一个没得点的按钮）。
+      setEditHelpOpen(false);
     }
     setEditMode(next);
   };
@@ -649,10 +672,14 @@ export function App({ bridge }: AppProps) {
             exportOpen={exportOpen}
             editMode={editMode}
             editAvailable={isFileSchemeUri(payload.documentUri)}
+            editHelpOpen={editHelpOpen}
             zoom={zoom}
             onToggleOutline={toggleOutline}
             onToggleFocusMode={toggleFocusMode}
             onToggleEditMode={toggleEditMode}
+            onToggleEditHelp={() => {
+              setEditHelpOpen((open) => !open);
+            }}
             onToggleSearch={() => {
               setSearchOpen((open) => !open);
             }}
@@ -747,6 +774,16 @@ export function App({ bridge }: AppProps) {
           onPatch={patchConfig}
           onClose={() => {
             setSettingsOpen(false);
+          }}
+        />
+      ) : null}
+      {/* 手册与 Reader Settings 同一形态（backdrop + `role="dialog"`）：同一个焦点
+          契约只有一份实现，`edit-unit` 的 `KEEP_EDITING` 名单也因此天然覆盖它 ——
+          正改着的块不会因为点 Help 被失焦提交（§7.4）。 */}
+      {editMode && editHelpOpen ? (
+        <EditHelpDialog
+          onClose={() => {
+            setEditHelpOpen(false);
           }}
         />
       ) : null}

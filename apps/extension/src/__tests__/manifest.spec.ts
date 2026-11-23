@@ -115,15 +115,16 @@ describe("manifest 护栏", () => {
    * 自定义编辑器声明（ARC-004 §4.2，M6 起改为原生面包屑依赖的前提）：
    * readora 以 CustomEditorProvider 形态接管 Markdown，宿主才会在编辑器上方
    * 画出原生面包屑与「打开方式」切换。viewType 必须与代码常量一致，priority
-   * 必须是 option（文本编辑器仍是 .md 默认，readora 只是候选，行为最保守）。
+   * 必须是 default（0.13.1 起 readora 是 .md / .markdown 的默认打开方式，双击
+   * 直接进阅读器；文本编辑器仍可经「打开方式」与 editorAssociations 拿回）。
    */
-  test("customEditors 声明只读编辑器形态，priority=option 且选择器覆盖 .md/.markdown", () => {
+  test("customEditors 声明只读编辑器形态，priority=default 且选择器覆盖 .md/.markdown", () => {
     const editors = manifest.contributes.customEditors;
     expect(editors).toHaveLength(1);
     const [editor] = editors;
     expect(editor?.viewType).toBe(READORA_VIEW_TYPE);
     expect(editor?.displayName).toBe("Readora");
-    expect(editor?.priority).toBe("option");
+    expect(editor?.priority).toBe("default");
     expect(editor?.selector.map((item) => item.filenamePattern).sort()).toEqual([
       "*.markdown",
       "*.md"

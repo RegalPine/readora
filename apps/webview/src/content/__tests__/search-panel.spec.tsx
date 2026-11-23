@@ -12,7 +12,7 @@ import {
   clearHighlights,
   highlightVersion
 } from "../search-engine";
-import { TOP_OVERLAY_SELECTOR, useSearchShortcuts } from "../interactions";
+import { EDIT_HELP_DIALOG_CLASS, TOP_OVERLAY_SELECTOR, useSearchShortcuts } from "../interactions";
 
 const PROSE =
   '<h2 id="overview" data-readora-heading="overview">Overview</h2>' +
@@ -347,8 +347,12 @@ describe("文档级快捷键（ARC-004 §4.5）", () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  test("Lightbox 或全屏图表在场时 Escape 让路（优先级：浮层 > 搜索）", () => {
-    expect(TOP_OVERLAY_SELECTOR).toBe(".readora-lightbox, .readora-diagram--fullscreen");
+  test("Lightbox、全屏图表或编辑手册在场时 Escape 让路（优先级：浮层 > 搜索）", () => {
+    // 名单不逐字写死（每新增一类顶层浮层就要坏一次），断言的是「这三类都在名单里」，
+    // 再各自造一次现场证明让路真的发生。
+    expect(TOP_OVERLAY_SELECTOR).toContain(".readora-lightbox");
+    expect(TOP_OVERLAY_SELECTOR).toContain(".readora-diagram--fullscreen");
+    expect(TOP_OVERLAY_SELECTOR).toContain(`.${EDIT_HELP_DIALOG_CLASS}`);
     const close = vi.fn();
     render(<Shortcuts open={vi.fn()} close={close} />);
     const overlay = document.createElement("div");
@@ -359,6 +363,16 @@ describe("文档级快捷键（ARC-004 §4.5）", () => {
     overlay.remove();
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(close).toHaveBeenCalledTimes(1);
+
+    // 手册挂在 `body` 上（与 Lightbox 同一形态），所以它必须在 document 这一层
+    // 就被认出：否则一次 Escape 会同时收掉手册与搜索面板。
+    close.mockClear();
+    const help = document.createElement("div");
+    help.className = EDIT_HELP_DIALOG_CLASS;
+    document.body.append(help);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(close).not.toHaveBeenCalled();
+    help.remove();
   });
 
   test("卸载后不再响应快捷键", () => {

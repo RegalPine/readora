@@ -249,7 +249,7 @@ type MarkdownNodeType =
 
 interface SourcePosition {
   // 行与列一律 0 基：值直接取自 markdown-it `token.map`（`ast.ts` 不做 +1 换算）。
-  // 消费方（分节字数、诊断定位）不得按 1 基解释，否则源文件首行标题会被当成
+  // 消费方（章节结构写回区间、诊断定位）不得按 1 基解释，否则源文件首行标题会被当成
   // 「没有位置」而整条丢弃，每一节的区间也会少算自己最后一行。
   startLine: number;
   startColumn?: number;
@@ -979,6 +979,7 @@ ARC-002 只定义 Markdown 内容处理架构。
 1. §4.3 `SourcePosition` 增加基序注记：`startLine` / `endLine` 为 0 基，由 `ast.ts` 直接透传 markdown-it `token.map`，不做 +1 换算。
 2. 触发条件：下游 `apps/webview/src/content/section-metrics.ts` 曾按 1 基解释该字段，导致源文件首行标题被误判为「无位置」、其余各节区间少算一行；原文只写了字段名与类型，没写基序，两个消费方各猜一套。
 3. 不改变 AST 节点形态、锚点规则（§7.1）与管线阶段划分；`packages/markdown-core` 的实现与测试本来就以 0 基为准（`__tests__/outline.spec.ts` 断言首条大纲 `startLine === 0`），本次只把既有事实写进权威文档。
+   （追记：该消费方 `content/section-metrics.ts` 已随 PRD-003 1.8.3 删掉行内字数标签时一并移除，同一基序现在由 `content/outline-section-ops.ts` 与 §12.3 的写回路径继承。）
 
 ### 17.4 1.3.0 修订内容
 

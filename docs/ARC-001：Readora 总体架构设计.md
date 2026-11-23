@@ -252,7 +252,8 @@ Webview 负责：
 ## 4. Application Layer
 
 
-应用层负责协调用户操作与底层模块。
+应用层负责协调用户操作与底层**模块**。
+
 
 ### 4.1 Reader Application
 
@@ -423,6 +424,8 @@ interface RenderDiagnostic {
 ```
 
 不同渲染器不得自行修改全局阅读器状态。
+
+
 
 ---
 

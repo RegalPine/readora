@@ -3,15 +3,21 @@
  *
  * 通过 MarkdownContent 走真实链路：渲染产物 → 容器委托 → 行为断言。
  * 产物里没有内联脚本，所有交互只能由 interactions.ts 承担。
+ * 末尾那一组是纯函数用例：`shouldOpenEditHelp` 把判据抽成函数，正是为了能在
+ * 这里逐条取证 —— jsdom 不实现 `isContentEditable`，判据写在监听里就测不到。
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { READORA_ERROR_CODES } from "@readora/contracts";
 import { BLOCKED_REMOTE_REASON } from "../image-layer";
+import { EDITABLE_ATTRIBUTE } from "../edit/edit-unit";
 import { MarkdownContent } from "../MarkdownContent";
 import {
   attachContentInteractions,
+  EDIT_HELP_DIALOG_CLASS,
   RELATIVE_LINK_NOTE,
+  shouldOpenEditHelp,
+  TOP_OVERLAY_SELECTOR,
   WIKI_LINK_MISSING_NOTE,
   WIKI_LINK_SELECTOR,
   type ContentInteractionHandlers
@@ -416,5 +422,91 @@ describe("脚注跳转（M10）", () => {
     const { container } = setup("文字[^missing]。\n");
     expect(container.querySelector("a.readora-footnote-ref")).toBeNull();
     expect(container.textContent).toContain("[^missing]");
+  });
+});
+
+/**
+ * `?` 叫手册的四条让路判据（ARC-009 §7.5）。
+ *
+ * 这一组不渲染组件，只钉那个纯函数本身：App 侧的接线（开了编辑才注册监听、
+ * 手册开着不重挂）在 `app-edit-mode.spec.tsx`，那里只能拿到「一条成功路径 +
+ * 一条落点护栏」，剩下的分支只有抽成函数才能逐个取证。
+ */
+describe("shouldOpenEditHelp", () => {
+  const bare = {
+    key: "?",
+    ctrlKey: false,
+    metaKey: false,
+    altKey: false,
+    defaultPrevented: false
+  } as const;
+
+  function node(html: string): HTMLElement {
+    const host = document.createElement("div");
+    host.innerHTML = html;
+    return host.firstElementChild as HTMLElement;
+  }
+
+  const paragraphNode = node("<p>第一段。</p>");
+
+  it("正文里的裸按 = 叫手册", () => {
+    expect(shouldOpenEditHelp(bare, paragraphNode, false)).toBe(true);
+  });
+
+  it("非 `?` 键不参与", () => {
+    // Shift 态下的 `/` 在某些布局上 key 就是 `?`，那条归本键位；其余一律不管。
+    for (const key of ["/", "h", "Enter", "Escape"]) {
+      expect(shouldOpenEditHelp({ ...bare, key }, paragraphNode, false)).toBe(false);
+    }
+  });
+
+  it("带修饰键不算本键位", () => {
+    for (const mod of ["ctrlKey", "metaKey", "altKey"] as const) {
+      expect(shouldOpenEditHelp({ ...bare, [mod]: true }, paragraphNode, false)).toBe(false);
+    }
+    // Shift 是打出 `?` 本身所需的修饰键，不得把它当成组合键排除。
+    expect(
+      shouldOpenEditHelp({ ...bare, shiftKey: true } as typeof bare, paragraphNode, false)
+    ).toBe(true);
+  });
+
+  it("已被先拿到的监听 preventDefault 过 = 让路", () => {
+    expect(
+      shouldOpenEditHelp({ ...bare, defaultPrevented: true }, paragraphNode, false)
+    ).toBe(false);
+  });
+
+  it("更上层的浮层开着 = 让路（Lightbox / 图表全屏 / 手册自己）", () => {
+    expect(shouldOpenEditHelp(bare, paragraphNode, true)).toBe(false);
+    // 手册自己必须在这份优先级名单里，否则它的 Escape 会与搜索面板抢同一次按键。
+    expect(TOP_OVERLAY_SELECTOR).toContain(`.${EDIT_HELP_DIALOG_CLASS}`);
+  });
+
+  it("落点在输入件里 = 打一个字，不是叫手册", () => {
+    for (const html of ['<input type="text">', "<textarea></textarea>", "<select></select>"]) {
+      expect(shouldOpenEditHelp(bare, node(html), false)).toBe(false);
+    }
+  });
+
+  it("落点在 contenteditable 自身或它的子孙里 = 打一个字", () => {
+    // 正在改的那一块：接管层写的是 contenteditable="true"（edit-unit activate）。
+    expect(shouldOpenEditHelp(bare, node('<p contenteditable="true">草稿</p>'), false)).toBe(false);
+    // 空值写法（浏览器会原样保留 `contenteditable=""`）同样算输入区。
+    expect(shouldOpenEditHelp(bare, node('<p contenteditable="">草稿</p>'), false)).toBe(false);
+    // 子节点（行内加粗、光标所在的 text node 父级）得靠 closest 往上找到单元。
+    const inner = node('<div contenteditable="true"><p><b>草稿</b></p></div>');
+    expect(shouldOpenEditHelp(bare, inner.querySelector("b"), false)).toBe(false);
+    // 反向护栏：只带把手标记、没进激活态的区块不是输入区。
+    const idleBlock = node("<p>原文</p>");
+    idleBlock.setAttribute(EDITABLE_ATTRIBUTE, "paragraph");
+    expect(shouldOpenEditHelp(bare, idleBlock, false)).toBe(true);
+  });
+
+  it("事件源不在文档里 = 不猜，让路", () => {
+    expect(shouldOpenEditHelp(bare, null, false)).toBe(false);
+    // 文本节点（真浏览器里 contenteditable 的光标场合会落在 text node 上）：
+    // 取它的 parentElement 再判，不能因为 target 不是 Element 就当成正文。
+    const host = node('<div contenteditable="true">草稿</div>');
+    expect(shouldOpenEditHelp(bare, host.firstChild, false)).toBe(false);
   });
 });

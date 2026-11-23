@@ -124,15 +124,23 @@ describe("弱文字与容器边界的固化断言", () => {
     }
   });
 
-  it("半透明的强调底必须先合成再算：活动条目文字过 AA", () => {
+  it("半透明的强调底必须先合成再算：两套按下态文字各自过 AA", () => {
     for (const scheme of SCHEMES) {
-      // accent-soft 是叠在面板底色上的半透明层，直接用原色会系统性高估对比度。
-      const soft = color("accent-soft", scheme);
+      const scopes = SCOPES[scheme];
+      // 淡底是叠在面板底色上的半透明层，直接用原色会系统性高估对比度。
+      const layer = activeLayer(scopes);
       const panel = color("surface", scheme);
-      const composited = contrastRatio(soft, panel);
-      expect(composited).toBeLessThan(21);
-      const value = Number(contrastRatio(color("accent-text", scheme), soft, panel).toFixed(2));
-      expect(meetsTextAA(value), `${scheme} 活动条目文字 = ${value}:1`).toBe(true);
+      expect(contrastRatio(layer, panel)).toBeLessThan(21);
+      // 大纲活动条目（1.8.4 起走 text-primary）。
+      const outline = Number(
+        contrastRatio(resolveLiteral("--readora-color-text-primary", scopes), layer, panel).toFixed(2)
+      );
+      expect(meetsTextAA(outline), `${scheme} 大纲活动条目文字 = ${outline}:1`).toBe(true);
+      // 其余三枚按下态（快速条 / 设置选项 / 搜索工具）仍用强调文字。
+      const pressed = Number(
+        contrastRatio(color("accent-text", scheme), layer, panel).toFixed(2)
+      );
+      expect(meetsTextAA(pressed), `${scheme} 按下态强调文字 = ${pressed}:1`).toBe(true);
     }
   });
 });
@@ -183,13 +191,41 @@ const CHIP_BASES = [
 /** 色块与容器的区分度下限：低于这个值就量不出「这里有个物件」。 */
 const CHIP_FLOOR = 1.15;
 
-const CHIP_DECL_RE =
+/**
+ * 「语义色掺透明」那一类组件层声明的形态。行内代码色块与大纲/按下态的
+ * 淡底都是这一形，所以正则只留一份。
+ */
+const TINT_MIX_RE =
   /^color-mix\(in srgb, var\(--readora-color-([\w-]+)\) ([\d.]+)%, transparent\)$/u;
+
+/**
+ * 把组件层声明换成带 alpha 的十六进制层：取值从 CSS 现场解析，不在这儿抄第二份。
+ * 已经是 `rgb(… / α)` 那一类的字面值原样返回，两者都交给 `contrastRatio` 合成。
+ */
+function tintLayer(declared: string, scopes: Array<Map<string, string>>): string {
+  const mix = TINT_MIX_RE.exec(declared);
+  if (!mix) {
+    return declared;
+  }
+  const [, tint = "", percent = "0"] = mix;
+  const alpha = Math.round((Number(percent) / 100) * 255)
+    .toString(16)
+    .padStart(2, "0");
+  return `${resolveLiteral(`--readora-color-${tint}`, scopes)}${alpha}`;
+}
+
+/**
+ * 大纲淡底的真实取值：亮色沿用 accent-soft 那档中性柔光，暗色在去光晕时已解耦成
+ * text-primary 掺 12%。旧断言只拿 accent-soft 算，暗色下量的并不是用户看到的那层底。
+ */
+function activeLayer(scopes: Array<Map<string, string>>): string {
+  return tintLayer(resolveLiteral("--readora-outline-active-bg", scopes), scopes);
+}
 
 /** 从组件层声明里读出色块的着色 token 与掺量，不在测试里抄第二份。 */
 function chipDeclaration(): { tint: string; percent: number } {
   const value = ROOT.get("--readora-inline-code-background") ?? "";
-  const mix = CHIP_DECL_RE.exec(value);
+  const mix = TINT_MIX_RE.exec(value);
   if (!mix) {
     throw new Error(`--readora-inline-code-background 不是「语义色掺透明」的写法：${value}`);
   }
@@ -334,15 +370,20 @@ describe("high-contrast 把文字抬到 AAA（≥ 7:1）", () => {
     }
   }
 
-  it("活动条目的强调文字（半透明强调底要先合成再算）", () => {
+  it("活动条目与按下态的文字（半透明淡底要先合成再算）", () => {
     for (const scheme of SCHEMES) {
+      const scopes = PRESET_SCOPES["high-contrast"][scheme];
+      const layer = activeLayer(scopes);
       for (const surface of SURFACES) {
-        const soft = presetColor("accent-soft", scheme, "high-contrast");
         const panel = presetColor(surface, scheme, "high-contrast");
-        const value = Number(
-          contrastRatio(presetColor("accent-text", scheme, "high-contrast"), soft, panel).toFixed(2)
-        );
-        expect(value, `${scheme} 高对比活动条目文字 = ${value}:1`).toBeGreaterThanOrEqual(7);
+        const pairs = [
+          ["大纲活动条目", resolveLiteral("--readora-color-text-primary", scopes)],
+          ["按下态强调文字", presetColor("accent-text", scheme, "high-contrast")]
+        ] as const;
+        for (const [label, foreground] of pairs) {
+          const value = Number(contrastRatio(foreground, layer, panel).toFixed(2));
+          expect(value, `${scheme} 高对比${label} = ${value}:1`).toBeGreaterThanOrEqual(7);
+        }
       }
     }
   });

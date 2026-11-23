@@ -261,10 +261,12 @@ function Fixture() {
               // 于是阅读态的 rect 仍是「静态产物」那一件东西。
               editMode={false}
               editAvailable
+              editHelpOpen={false}
               zoom={BASE_ZOOM}
               onToggleOutline={() => undefined}
               onToggleFocusMode={() => undefined}
               onToggleEditMode={() => undefined}
+              onToggleEditHelp={() => undefined}
               onToggleSearch={() => undefined}
               onToggleSettings={() => undefined}
               onToggleExport={() => undefined}

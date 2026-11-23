@@ -1,5 +1,5 @@
 /**
- * 目录面板（ARC-007 §6.1 / PRD-002 §5.1 + PRD-003 §10.7 四块扩展）。
+ * 目录面板（ARC-007 §6.1 / PRD-002 §5.1 + PRD-003 §10.7）。
  *
  * 六条展示要求在这里逐条落地：层级缩进（padding-left 按 depth）、活动高亮
  * （aria-current="location"）、父级折叠（aria-expanded + 隐藏后代而不删数据）、
@@ -9,19 +9,21 @@
  * 折叠与活动状态都是 UI 态，由上层持有（§6.2 OutlineViewState），面板不改
  * Outline 原始数据；点击只上报锚点，定位交给 HeadingLocator（§5.3）。
  *
- * §10.7 的区块按「全部有真实数据源」取舍，进度块、源行号标签与底部统计已按用户要求撤下：
- * - 头部（展开全部 / 过滤）+ 过滤输入：过滤是面板内的临时视图态，不进上层，
- *   也不写 Host —— 一次检索不该污染恢复出来的会话状态；
- * - 行内标签：只给 H1 显示分节字数，`position` 缺失就不显示 —— 没有源行就没有
- *   区间，猜出来的字数比不写更误导。更深层级原先显示源行号（`L28`），行号是编辑
- *   器坐标而不是阅读信息，于是整条链路一并去掉，
- *   进度只在快速条一处出现，不再在两栏各读一遍；
+ * §10.7 的区块按「全部有真实数据源」取舍，进度块、源行号标签、分节字数标签
+ * 与底部统计已按用户要求撤下：
+ * - 头部（展开全部 / 折叠全部 / 过滤）+ 过滤输入：展开与折叠拆成两枚图标，
+ *   各自只干一件事 —— 一枚靠状态换标签的双向箭头点了看不出变化（用户反馈）；
+ *   过滤是面板内的临时视图态，不进上层，也不写 Host —— 一次检索不该污染恢复
+ *   出来的会话状态；
+ * - 行内标签全部下掉：H1 的分节字数（`93w`）与更深层级的源行号（`L28`）同理，
+ *   前者是估读的体量、后者是编辑器坐标，都不是阅读信息，进度只在快速条一处出现，
+ *   不再在两栏各读一遍；
  * - 底部的 `N Sections` + `Depth: H1–H{max}` 不再输出：节数在状态条已有（同一份
  *   outline 数出来的数），层级跨度读者用不上。
  *
  * 「自动展开命中」的实现口径：过滤时命中项一律可见，即折叠状态不参与过滤视图，
  * 这一行的折叠按钮也一并收掉（改了状态却看不出变化的开关就是 §4.6 要剔除的假
- * affordance），头部「展开全部」同步禁用并说明原因。清空过滤即回到原样。
+ * affordance），头部两枚展开/折叠按钮同步禁用并说明原因。清空过滤即回到原样。
  *
  * E7 新增：行尾的「⋯」章节结构菜单（在其后新增 / 新增子节 / 删除本节）。
  * 三条形态规矩：
@@ -42,15 +44,14 @@ import {
   type KeyboardEvent
 } from "react";
 import type { OutlineItem } from "@readora/markdown-core";
-import { formatSectionUnits } from "../app/text-metrics";
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  CollapseIcon,
   ExpandIcon,
   FilterIcon,
   MoreIcon
 } from "../app/Icon";
-import { useSectionMetrics, type SectionMetricsMap } from "./section-metrics";
 import {
   sectionOpPreview,
   type SectionOpAction,
@@ -68,7 +69,7 @@ import {
 
 export const OUTLINE_PANEL_CLASS = "readora-outline-panel";
 export const COLLAPSED_CLASS = "readora-outline-item--collapsed";
-/** 头部纯图标动作的修饰类：左右内边距改成与图标等宽的定量（点击区 22×18，细节见 shell.css）。 */
+/** 头部纯图标动作的修饰类：四周留 4px 定量内边距（16px 图标 → 点击区 26×26，细节见 shell.css）。 */
 export const OUTLINE_ACTION_ICON_CLASS = "readora-outline-action--icon";
 export const OUTLINE_FILTER_INPUT_ID = "readora-outline-filter-input";
 /** 活动条目标记的属性与值：焦点跟随靠它找到要滚到哪个条目，不靠高亮样式反推。*/
@@ -82,10 +83,10 @@ export interface OutlinePanelProps {
   items: readonly OutlineItem[];
   activeHeadingId: string | null;
   collapsedIds: ReadonlySet<string>;
-  /** Markdown 源文：分节字数按相邻标题的源行区间计数（§10.7）。 */
+  /** Markdown 源文：章节结构菜单按源行区间算写回预览（E7）。 */
   text: string;
   onToggleCollapse(key: string): void;
-  /** 展开全部 / 折叠全部：整串 key 交回上层，折叠态仍由上层持有（§6.2）。 */
+  /** 展开全部交空集合 / 折叠全部交整串 key：折叠态仍由上层持有（§6.2）。 */
   onCollapsedChange(keys: readonly string[]): void;
   onSelect(anchor: string): void;
   /** 章节结构菜单的总开关（E7）：App 按「编辑模式 × `file:` 文档」门控。 */
@@ -109,18 +110,6 @@ function itemStyle(node: OutlineNode): CSSProperties {
   };
 }
 
-/**
- * 行内标签：只有 H1 给分节字数 → `840w`（§10.7）。
- * 拿不到分节度量（条目没有 `position`）就返回 null，不编一个 0w。
- */
-function inlineLabelOf(node: OutlineNode, metrics: SectionMetricsMap): string | null {
-  if (node.level !== 1) {
-    return null;
-  }
-  const section = metrics.get(node.item);
-  return section ? formatSectionUnits(section.units) : null;
-}
-
 export function OutlinePanel({
   items,
   activeHeadingId,
@@ -135,7 +124,6 @@ export function OutlinePanel({
   const tree = useMemo(() => buildOutlineTree(items), [items]);
   const foldable = useMemo(() => collapsibleKeys(tree), [tree]);
   const activeKey = useMemo(() => activeKeyOf(tree, activeHeadingId), [tree, activeHeadingId]);
-  const metrics = useSectionMetrics(text, items);
 
   const listRef = useRef<HTMLUListElement | null>(null);
 
@@ -276,7 +264,13 @@ export function OutlinePanel({
 
   const allCollapsed =
     foldable.size > 0 && [...foldable].every((key) => collapsedIds.has(key));
-  const expandLabel = allCollapsed ? "Expand all" : "Collapse all";
+  const anyCollapsed = [...foldable].some((key) => collapsedIds.has(key));
+  // 按下态读法：各自回答「这一枚现在有没有事可做」—— 展开枚看有没有折叠项，
+  // 折叠枚看还有没有什么可折。点一下至少有一枚的底色跟着换，不会再出现
+  // 「点了看不出变化」（用户反馈）。禁用那枚不上底色，交给 muted 前景色。
+  const canCollapse = foldable.size > 0 && !allCollapsed;
+  // 过滤中折叠态看不见效果，两枚按钮就该说它做不到的话别说（§4.6 诚实性）。
+  const filterNote = "过滤中：命中项始终展开";
 
   /** 菜单内的 Escape 只关菜单：不顺手把搜索浮层/过滤 disclosure 一起关掉。 */
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -297,23 +291,42 @@ export function OutlinePanel({
 
   return (
     <nav className={OUTLINE_PANEL_CLASS} aria-label="Document outline">
-      {/* 头部两枚只给图标（产品反馈）：这一栏本身就是窄列，「Collapse all / Filter」
-          两串英文会把头部撑到换行，而图标位置常驻就不需要文字复述。可读名称全部
-          留在 `aria-label`，`title` 给悬停解释（§10.6：图标只是控件的装饰）。 */}
+      {/* 头部三枚只给图标（产品反馈）：这一栏本身就是窄列，「Expand all / Collapse all /
+          Filter」三串英文会把头部撑到换行，而图标位置常驻就不需要文字复述。可读名称
+          全部留在 `aria-label`，`title` 给悬停解释（§10.6：图标只是控件的装饰）。
+          展开与折叠拆成两枚而不是一枚靠状态换标签：双向箭头静止时读不出这一次点下去
+          是展开还是折叠（用户实测「点了样式没变化」）；两枚各自常驻，淡底落在「现在
+          有事可做」那一枚上 —— 全展开时底色在折叠枚，点下去折叠后就换到展开枚。 */}
       <div className="readora-outline-header">
         <button
           type="button"
           className={`readora-outline-action ${OUTLINE_ACTION_ICON_CLASS}`}
           data-readora-outline-action="expand-all"
-          aria-label={expandLabel}
-          // 过滤中折叠态看不见效果，按钮就该说它做不到的话别说（§4.6 诚实性）。
-          disabled={filtering}
-          title={filtering ? "过滤中：命中项始终展开" : expandLabel}
+          aria-label="Expand all"
+          aria-pressed={anyCollapsed}
+          disabled={filtering || !anyCollapsed}
+          title={filtering ? filterNote : "展开全部折叠的章节"}
           onClick={() => {
-            onCollapsedChange(allCollapsed ? [] : [...foldable]);
+            onCollapsedChange([]);
           }}
         >
-          <ExpandIcon size={12} />
+          <ExpandIcon size={16} />
+        </button>
+        <button
+          type="button"
+          className={`readora-outline-action ${OUTLINE_ACTION_ICON_CLASS}`}
+          data-readora-outline-action="collapse-all"
+          aria-label="Collapse all"
+          aria-pressed={canCollapse}
+          disabled={filtering || !canCollapse}
+          title={
+            filtering ? filterNote : foldable.size === 0 ? "没有可折叠的章节" : "折叠全部章节"
+          }
+          onClick={() => {
+            onCollapsedChange([...foldable]);
+          }}
+        >
+          <CollapseIcon size={16} />
         </button>
         <button
           type="button"
@@ -331,7 +344,7 @@ export function OutlinePanel({
             }
           }}
         >
-          <FilterIcon size={12} />
+          <FilterIcon size={16} />
         </button>
       </div>
 
@@ -376,8 +389,7 @@ export function OutlinePanel({
           const collapsible = foldable.has(node.key) && !filtering;
           const collapsed = collapsedIds.has(node.key);
           const label = outlineLabelOf(node.item);
-          const inline = inlineLabelOf(node, metrics);
-          // 没有 `position` 的行不给菜单：与内联标签「拿不到源行就不编」同一条诚实性。
+          // 没有 `position` 的行不给菜单：拿不到源行就没有区间，编出来的写回计划更误导。
           const actionable = sectionOpsEnabled && node.item.position !== undefined;
           const menuOpen = actionable && menuKey === node.key;
           // 确认文案里的行数与子节数现场从纯函数预览拿：菜单开着的那几帧里
@@ -423,15 +435,6 @@ export function OutlinePanel({
                 >
                   {label}
                 </a>
-                {inline ? (
-                  <span
-                    className="readora-outline-meta"
-                    // 行内标签是补充信息，读屏器不该把它念成标题的一部分。
-                    aria-hidden="true"
-                  >
-                    {inline}
-                  </span>
-                ) : null}
                 {actionable ? (
                   <button
                     type="button"

@@ -1,6 +1,6 @@
 {
   "name": "@readora/design-tokens",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "private": true,
   "type": "module",
   "description": "设计令牌与主题系统（ARC-006 / PRD-003；M5 落地）",

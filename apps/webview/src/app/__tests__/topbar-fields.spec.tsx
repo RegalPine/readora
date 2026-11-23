@@ -37,11 +37,13 @@ function bar(overrides: {
   outlineVisible?: boolean;
   editMode?: boolean;
   editAvailable?: boolean;
+  editHelpOpen?: boolean;
 } = {}) {
   const handlers = {
     onToggleOutline: vi.fn(),
     onToggleFocusMode: vi.fn(),
     onToggleEditMode: vi.fn(),
+    onToggleEditHelp: vi.fn(),
     onToggleSearch: vi.fn(),
     onToggleSettings: vi.fn(),
     onToggleExport: vi.fn(),
@@ -56,6 +58,7 @@ function bar(overrides: {
       exportOpen={false}
       editMode={overrides.editMode ?? false}
       editAvailable={overrides.editAvailable ?? true}
+      editHelpOpen={overrides.editHelpOpen ?? false}
       zoom={overrides.zoom ?? zoomApi()}
       {...handlers}
     />
@@ -209,5 +212,39 @@ describe("Edit 开关（ARC-009 §7.2 / PRD-002 UX-008，E2）", () => {
     expect(button?.disabled).toBe(false);
     fireEvent.click(button as HTMLButtonElement);
     expect(handlers.onToggleEditMode).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("编辑手册入口（ARC-009 §7.5）", () => {
+  function helpButton(container: HTMLElement): HTMLButtonElement | null {
+    return container.querySelector<HTMLButtonElement>('button[aria-label="Editing guide"]');
+  }
+
+  test("只读态不输出这一枚：手册讲的键位那时一条都不成立", () => {
+    const { view } = bar({ editMode: false });
+    expect(helpButton(view.container)).toBeNull();
+  });
+
+  test("编辑模式开着时它紧跟 Edit，点击落到 onToggleEditHelp", () => {
+    const { view, handlers } = bar({ editMode: true });
+    const labels = [...view.container.querySelectorAll<HTMLButtonElement>(`.${TOOLBAR_CLASS}-actions button`)].map(
+      (button) => button.getAttribute("aria-label")
+    );
+    expect(labels.slice(0, 3)).toEqual(["Edit mode", "Editing guide", "Enter focus mode"]);
+    const button = helpButton(view.container);
+    expect(button?.disabled).toBe(false);
+    fireEvent.click(button as HTMLButtonElement);
+    expect(handlers.onToggleEditHelp).toHaveBeenCalledTimes(1);
+  });
+
+  test("aria-expanded 跟弹层开合走（触发器只报告图，状态归 App）", () => {
+    expect(
+      helpButton(bar({ editMode: true }).view.container)?.getAttribute("aria-expanded")
+    ).toBe("false");
+    expect(
+      helpButton(bar({ editMode: true, editHelpOpen: true }).view.container)?.getAttribute(
+        "aria-expanded"
+      )
+    ).toBe("true");
   });
 });

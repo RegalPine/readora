@@ -9,11 +9,12 @@ import { expect, test } from "@playwright/test";
 import { longDoc, openReader, scrollTo } from "../helpers/reader";
 
 test.describe("大纲导航", () => {
-  test("头部图标靠右，3px 滚动条仍能独立滚动长目录", async ({ page }) => {
+  test("头部图标靠右且只给图标，3px 滚动条仍能独立滚动长目录", async ({ page }) => {
     await openReader(page, { text: longDoc(60) });
     const header = page.locator(".readora-outline-header");
     const actions = header.locator("button");
-    await expect(actions).toHaveCount(2);
+    // 展开与折叠拆成两枚常驻图标，加过滤一共三枚。
+    await expect(actions).toHaveCount(3);
     await expect(header).toHaveCSS("justify-content", "flex-end");
     const headerBox = await header.boundingBox();
     const lastBox = await actions.last().boundingBox();
@@ -23,7 +24,19 @@ test.describe("大纲导航", () => {
     for (const action of await actions.all()) {
       await expect(action).toHaveText("");
       await expect(action.locator("svg")).toHaveCount(1);
+      // 图标调大（产品反馈）：从 12px 撑到 16px，与顶栏基准图标同尺寸。
+      await expect(action.locator("svg")).toHaveCSS("width", "16px");
     }
+    // 两枚展开/折叠的形状必须不同，否则“看不出点的是哪一枚”又回来了。
+    const expandShape = await page
+      .locator('[data-readora-outline-action="expand-all"] path')
+      .getAttribute("d");
+    const collapseShape = await page
+      .locator('[data-readora-outline-action="collapse-all"] path')
+      .getAttribute("d");
+    expect(expandShape).not.toBeNull();
+    expect(collapseShape).not.toBeNull();
+    expect(expandShape).not.toBe(collapseShape);
 
     const list = page.locator(".readora-outline-list");
     const size = await list.evaluate((node) => ({
@@ -104,6 +117,100 @@ test.describe("大纲导航", () => {
     const active = page.locator('.readora-outline-link[aria-current="location"]');
     await expect(active).toHaveCount(1);
     await expect(active).not.toContainText("Reader Guide");
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`${theme}：活动条目文字走中性正文色，不再吃强调色`, async ({ page }) => {
+      await openReader(page);
+      await page.evaluate((value) => window.__readora.setTheme(value), theme);
+      await scrollTo(page, 1_200);
+
+      const active = page.locator('.readora-outline-link[aria-current="location"]');
+      await expect(active).toHaveCount(1);
+      // 色值不写死在这里：两边都从运行时取，比的是「活动条目等于哪一档」。
+      // 旧实现吃 `--readora-outline-active-color`（= accent-text），用户实测
+      // 「白里透紫、不够清爽」；现在走 text-primary，层级靠更亮的一档 + 600 + 淡底。
+      const read = await active.evaluate((node) => {
+        const toRgb = (value: string): readonly [number, number, number] | null => {
+          const text = value.trim();
+          const hex = /^#([\da-f]{6})$/iu.exec(text);
+          if (hex?.[1]) {
+            const digits = hex[1];
+            return [
+              Number.parseInt(digits.slice(0, 2), 16),
+              Number.parseInt(digits.slice(2, 4), 16),
+              Number.parseInt(digits.slice(4, 6), 16)
+            ];
+          }
+          const rgb = /rgba?\((\d+), (\d+), (\d+)/u.exec(text);
+          if (!rgb) {
+            return null;
+          }
+          return [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])];
+        };
+        const root = getComputedStyle(document.documentElement);
+        const style = getComputedStyle(node);
+        const plain = document.querySelector<HTMLElement>(
+          '.readora-outline-link:not([aria-current])'
+        );
+        const [red, green, blue] = toRgb(style.color) ?? [0, 0, 0];
+        return {
+          active: toRgb(style.color),
+          textPrimary: toRgb(root.getPropertyValue("--readora-color-text-primary")),
+          accentText: toRgb(root.getPropertyValue("--readora-outline-active-color")),
+          plain: plain ? toRgb(getComputedStyle(plain).color) : null,
+          // 通道差是「有没有透色相」的量尺：旧值 #d2ccf0 为 36，新值 #dfe2eb 为 12。
+          spread: Math.max(red, green, blue) - Math.min(red, green, blue),
+          weight: style.fontWeight,
+          raw: style.color
+        };
+      });
+
+      expect(read.active, `${theme} 活动条目文字读不出色值：${read.raw}`).not.toBeNull();
+      expect(read.textPrimary).not.toBeNull();
+      expect(read.plain).not.toBeNull();
+      expect(read.active).toEqual(read.textPrimary);
+      // 与强调色那档必须拉开：否则「去紫」只是改了个名字。
+      expect(read.accentText).not.toBeNull();
+      expect(read.active).not.toEqual(read.accentText);
+      // 层级线索仍在：活动项与常规行是两档文字。
+      expect(read.active).not.toEqual(read.plain);
+      expect(read.weight).toBe("600");
+      if (theme === "dark") {
+        // 暗色那档的正文色本身就是中性灰白，紫味能直接被量出来；亮色的
+        // text-primary 是正文同相深藏青（PRD-003 §4.2），不适用这一把尺。
+        expect(read.spread, `暗色活动条目文字仍带色相：${read.raw}`).toBeLessThanOrEqual(16);
+      }
+    });
+  }
+
+  test("高对比预设把文字压成两档：活动条目与常规行同色时，区分靠字重与淡底", async ({ page }) => {
+    await openReader(page);
+    await page.evaluate(() =>
+      window.__readora.setPreferences({ theme: "dark", themePreset: "high-contrast" })
+    );
+    await scrollTo(page, 1_200);
+    const read = await page
+      .locator('.readora-outline-link[aria-current="location"]')
+      .evaluate((node) => {
+        const style = getComputedStyle(node);
+        const plain = document.querySelector<HTMLElement>(
+          '.readora-outline-link:not([aria-current])'
+        );
+        return {
+          activeColor: style.color,
+          plainColor: plain ? getComputedStyle(plain).color : null,
+          weight: style.fontWeight,
+          background: style.backgroundColor
+        };
+      });
+    // 预设刻意把 text-secondary 压成 text-primary（tokens.css 高对比注释第 3 条：
+    // 「高对比要的是可读性而不是层级感」），常规行因此与活动条目读到同一档文字色。
+    // 区分没有丢，只是不再靠颜色 —— 字重 600 + 一层淡底，正是 1.4.1 要的线索。
+    expect(read.plainColor).not.toBeNull();
+    expect(read.activeColor).toBe(read.plainColor);
+    expect(read.weight).toBe("600");
+    expect(read.background).not.toBe("rgba(0, 0, 0, 0)");
   });
 
   test("标题过滤按子串收窄，命中项自动展开；清空后恢复全量", async ({ page }) => {
@@ -194,19 +301,50 @@ test.describe("大纲导航", () => {
   });
 
   // 就用 RICH_DOC：它的 H1 正好落在源文件首行，而 markdown-core 的 `startLine` 是
-  // 0 基 —— 按 1 基解释时这一条区间切不出来，字数标签会静默不显示。拿最常见的
-  // 文档形状取证，才能同时验住「只剩字数」与「首行标题也有字数」。
-  test("大纲不报进度也不排行号：行内标签只剩字数这一种形态", async ({ page }) => {
+  // 0 基 —— 按 1 基解释时这一条区间切不出来，字数标签会静默不显示。
+  test("大纲不报进度也不排行内标签：字数与行号都不上 UI", async ({ page }) => {
     await openReader(page);
     // 进度只属于快速条（PRD-003 §10.5）；面板里再放一条就是两个数各说各话。
     await expect(page.locator('[data-readora-outline="progress"]')).toHaveCount(0);
     await expect(page.locator(".readora-outline-progress")).toHaveCount(0);
 
-    const meta = page.locator(".readora-outline-meta");
-    await expect(meta).toHaveCount(1);
-    await expect(meta.first()).toHaveText(/^\d+w$/u);
-    // 行号形态（`L12`）一律不再出现：它是编辑器坐标，不是阅读信息。
-    const texts = await meta.allTextContents();
-    expect(texts.filter((value) => /^L\d+$/u.test(value))).toEqual([]);
+    // 行内标签整条链路已按产品要求下掉：`93w` 这类分节字数与 `L12` 那类源行号都不出现。
+    await expect(page.locator(".readora-outline-meta")).toHaveCount(0);
+    await expect(page.locator(".readora-outline-item").first()).not.toContainText(/\d+w/u);
+  });
+
+  test("折叠全部只换那一枚的按下态，列表真的收起来；展开全部再恢复", async ({ page }) => {
+    await openReader(page, { text: longDoc(12) });
+    const items = page.locator(".readora-outline-item");
+    const total = await items.count();
+    expect(total).toBeGreaterThan(2);
+
+    const expand = page.locator('[data-readora-outline-action="expand-all"]');
+    const collapse = page.locator('[data-readora-outline-action="collapse-all"]');
+    // 全展开时展开那枚禁用（没东西可展开），淡底挂在折叠那枚上。
+    await expect(expand).toBeDisabled();
+    await expect(expand).toHaveAttribute("aria-pressed", "false");
+    await expect(collapse).toBeEnabled();
+    await expect(collapse).toHaveAttribute("aria-pressed", "true");
+    const expandBg = await expand.evaluate((node) => getComputedStyle(node).backgroundColor);
+    const collapseBg = await collapse.evaluate((node) => getComputedStyle(node).backgroundColor);
+
+    await collapse.click();
+    await expect(page.locator(".readora-outline-item")).toHaveCount(1);
+    await expect(expand).toHaveAttribute("aria-pressed", "true");
+    await expect(collapse).toHaveAttribute("aria-pressed", "false");
+    await expect(expand).toBeEnabled();
+    await expect(collapse).toBeDisabled();
+    // 样式真的变了：高亮从折叠那枚移到展开那枚（用户报的“点了没变化”就是这一条）。
+    await expect
+      .poll(() => expand.evaluate((node) => getComputedStyle(node).backgroundColor))
+      .not.toBe(expandBg);
+    await expect
+      .poll(() => collapse.evaluate((node) => getComputedStyle(node).backgroundColor))
+      .not.toBe(collapseBg);
+
+    await expand.click();
+    await expect(page.locator(".readora-outline-item")).toHaveCount(total);
+    await expect(expand).toHaveAttribute("aria-pressed", "false");
   });
 });

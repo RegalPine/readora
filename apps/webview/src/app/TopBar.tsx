@@ -21,6 +21,7 @@
 import type { ExportFormat } from "@readora/contracts";
 import type { ZoomApi } from "./zoom";
 import { EDIT_UNAVAILABLE_TITLE } from "../content/edit/limits";
+import { KEEP_EDITING_ATTRIBUTE } from "../content/edit/edit-unit";
 import { ExportMenu } from "./ExportMenu";
 import { EditIcon, ExportIcon, FocusIcon, MinusIcon, OutlineToggleIcon, PlusIcon, SearchIcon, SettingsIcon } from "./Icon";
 
@@ -29,6 +30,8 @@ export const TOOLBAR_ACTIONS_CLASS = "readora-toolbar-actions";
 export const ZOOM_GROUP_CLASS = "readora-zoom";
 /** M11：导出触发器与它的下拉菜单需要一个定位上下文，菜单是触发器的绝对定位子层。 */
 export const EXPORT_GROUP_CLASS = "readora-toolbar-export-group";
+/** 编辑手册触发器：只在编辑模式开着时出现在 DOM（见 `TopBar` 里那一段注释）。 */
+export const TOOLBAR_EDIT_HELP_CLASS = `${TOOLBAR_CLASS}-edit-help`;
 
 export interface TopBarProps {
   outlineVisible: boolean;
@@ -41,10 +44,13 @@ export interface TopBarProps {
   settingsOpen: boolean;
   /** Export 下拉菜单的开合（M11）：状态在 App，触发器只报告图。 */
   exportOpen: boolean;
+  /** 编辑手册弹层的开合，落到触发器的 `aria-expanded`。 */
+  editHelpOpen: boolean;
   zoom: ZoomApi;
   onToggleOutline(): void;
   onToggleFocusMode(): void;
   onToggleEditMode(): void;
+  onToggleEditHelp(): void;
   onToggleSearch(): void;
   onToggleSettings(): void;
   onToggleExport(): void;
@@ -60,10 +66,12 @@ export function TopBar({
   exportOpen,
   editMode,
   editAvailable,
+  editHelpOpen,
   zoom,
   onToggleOutline,
   onToggleFocusMode,
   onToggleEditMode,
+  onToggleEditHelp,
   onToggleSearch,
   onToggleSettings,
   onToggleExport,
@@ -104,6 +112,28 @@ export function TopBar({
           <EditIcon />
           Edit
         </button>
+        {/* 编辑手册只在**编辑模式开着**时输出（产品诉求「进入编辑模式能有地方看帮助」）：
+            只读态供出一份用不上的键位说明，等于在顶栏摆一个空动作；而把手是 hover
+            显形的，用户最需要的正是「这一屏到底能干什么」那一句。可见内容是字面
+            字形 `?`（同 `format-toolbar` 的 B / I / <> 口径：不新增 Icon 组件），
+            紧跟 Edit 之后：说明的是刚打开的那个模式。只读态它不在 DOM，而不是
+            摆在那儿禁用 —— 因为那时整套键位都不成立，没有「按不动但说得清」的形态。
+            `KEEP_EDITING` 那一句是必要的，不是锦上添花：真实 Chromium 里点它会先把
+            焦点从正改着的单元抢走，不标就是「看一眼手册 = 提交一份草稿」（§7.4）。 */}
+        {editMode ? (
+          <button
+            type="button"
+            className={`readora-toolbar-button ${TOOLBAR_CLASS}-button--icon ${TOOLBAR_EDIT_HELP_CLASS}`}
+            aria-haspopup="dialog"
+            aria-expanded={editHelpOpen}
+            aria-label="Editing guide"
+            title="Editing shortcuts and rules (?)"
+            {...{ [KEEP_EDITING_ATTRIBUTE]: "true" }}
+            onClick={onToggleEditHelp}
+          >
+            ?
+          </button>
+        ) : null}
         <button
           type="button"
           className="readora-toolbar-button"

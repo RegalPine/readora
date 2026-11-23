@@ -283,18 +283,39 @@ function action(view: ReturnType<typeof panel>["view"], name: string): HTMLButto
 /** 只有「有后代的节点」才配折叠：这一篇里是 overview 与 architecture。 */
 const FULLY_COLLAPSED = new Set(["overview", "architecture"]);
 
-describe("头部动作：展开全部 / 过滤（§10.7）", () => {
-  test("两个动作都在，标签说的是按下之后的动作本身", () => {
+describe("头部动作：展开全部 / 折叠全部 / 过滤（§10.7）", () => {
+  test("展开与折叠是两枚常驻图标，按下态跟着当前折叠情况走", () => {
     const { view } = panel({ items: PLACED });
-    // 没有任何条目被折叠时，可做的动作是全部折叠，标签就不该写 Expand all。
-    expect(action(view, "Collapse all")).toBeTruthy();
+    // 没有任何条目被折叠时：展开那枚点了也没东西可展开，所以禁用；
+    // 折叠那枚有事可做，按下态（淡底）就挂在它身上。
+    expect(action(view, "Expand all").disabled).toBe(true);
+    expect(action(view, "Expand all").getAttribute("aria-pressed")).toBe("false");
+    expect(action(view, "Collapse all").disabled).toBe(false);
+    expect(action(view, "Collapse all").getAttribute("aria-pressed")).toBe("true");
     expect(action(view, "Filter").getAttribute("aria-expanded")).toBe("false");
 
+    // 全折叠：底色从折叠那枚换到展开那枚 —— 这就是用户要的「点了有变化」。
     const folded = panel({ items: PLACED, collapsedIds: FULLY_COLLAPSED });
-    expect(action(folded.view, "Expand all")).toBeTruthy();
+    expect(action(folded.view, "Expand all").disabled).toBe(false);
+    expect(action(folded.view, "Expand all").getAttribute("aria-pressed")).toBe("true");
+    expect(action(folded.view, "Collapse all").disabled).toBe(true);
+    expect(action(folded.view, "Collapse all").getAttribute("aria-pressed")).toBe("false");
 
+    // 部分折叠：两枚都可用，也都还有事可做，按下态同时在两枚上。
     const partial = panel({ items: PLACED, collapsedIds: new Set(["overview"]) });
-    expect(action(partial.view, "Collapse all")).toBeTruthy();
+    expect(action(partial.view, "Expand all").disabled).toBe(false);
+    expect(action(partial.view, "Expand all").getAttribute("aria-pressed")).toBe("true");
+    expect(action(partial.view, "Collapse all").disabled).toBe(false);
+    expect(action(partial.view, "Collapse all").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  test("两枚图标形状不同：展开朝外张开、折叠朝中间收拢", () => {
+    const { view } = panel({ items: PLACED });
+    const shape = (name: string): string =>
+      action(view, name).querySelector("path")?.getAttribute("d") ?? "";
+    expect(shape("Expand all")).not.toBe(shape("Collapse all"));
+    expect(shape("Expand all")).toContain("l4-4");
+    expect(shape("Collapse all")).toContain("l4 4");
   });
 
   test("展开全部交回空集合，折叠全部交回所有可折叠 key 的名单", () => {
@@ -364,12 +385,14 @@ describe("过滤命中（§10.7：按 title 子串并自动展开命中项）", 
     ]);
   });
 
-  test("过滤视图里不摆折叠按钮，「展开全部」禁用并说明原因", () => {
+  test("过滤视图里不摆折叠按钮，展开/折叠两枚都禁用并说明原因", () => {
     const { view } = filtered("a");
     expect(view.container.querySelectorAll(".readora-outline-toggle")).toHaveLength(0);
-    const expand = action(view, "Collapse all");
-    expect(expand.disabled).toBe(true);
-    expect(expand.getAttribute("title")).toContain("过滤中");
+    for (const name of ["Expand all", "Collapse all"]) {
+      const button = action(view, name);
+      expect(button.disabled).toBe(true);
+      expect(button.getAttribute("title")).toContain("过滤中");
+    }
   });
 
   test("命中计数如实报「N of M」，零命中带上查询词而不是「没有内容」", () => {
@@ -422,21 +445,11 @@ describe("行内标签（§10.7）", () => {
     expect(view.container.querySelectorAll('[role="progressbar"]')).toHaveLength(0);
   });
 
-  test("行内标签只剩一条：H1 的字数，更深层级不再排行号", () => {
+  test("行内标签全部下掉：不报分节字数，也不报源行号", () => {
     const { view } = panel({ items: PLACED, text: SOURCE });
-    const marks = [...view.container.querySelectorAll<HTMLElement>(".readora-outline-meta")];
-    expect(marks.map((node) => node.textContent)).toEqual(["5w"]);
-  });
-
-  test("拿不到 position 就不出行内标签，不编一个 0w", () => {
-    const { view } = panel({ text: SOURCE });
     expect(view.container.querySelectorAll(".readora-outline-meta")).toHaveLength(0);
-  });
-
-  test("行内标签不进可读名称：标题念一遍就够", () => {
-    const { view } = panel({ items: PLACED, text: SOURCE });
-    const meta = view.container.querySelector(".readora-outline-meta");
-    expect(meta?.getAttribute("aria-hidden")).toBe("true");
+    expect(view.container.textContent).not.toMatch(/\d+w/u);
+    expect(view.container.textContent).not.toMatch(/L\d+/u);
   });
 
   // 底部统计已按产品要求下掉：节数在状态条已有（同一份 outline 数出来的），

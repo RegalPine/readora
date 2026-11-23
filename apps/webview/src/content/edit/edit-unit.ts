@@ -69,15 +69,28 @@ export const EDIT_DOM_ATTRIBUTES = [
 
 const PASTE_PLAIN_ONLY_NOTE = "Only plain text can be pasted here.";
 
+/**
+ * 一个控件自己声明「把焦点给我不算离开单元」（ARC-009 §7.3）。
+ *
+ * 为什么需要一个属性而不是在名单里逐个写选择器：接管层不该去认 app 层的类名
+ * （那会把 content → app 的引用方向上打开）。顶栏那枚手册 `?` 是第一个声明者：
+ * 它住在顶栏、属于编辑模式自己的控件，真实 Chromium 里点它会先把焦点从单元抢
+ * 走 —— 不在名单里就是「改一下 Help 就失焦提交一份草稿」。
+ */
+export const KEEP_EDITING_ATTRIBUTE = "data-readora-keep-editing";
+
 /** 失焦后要把焦点交给这些东西时不算「离开单元」（ARC-009 §7.3）。
  *
  * `.readora-edit-toolbar` 是 E3 加的：工具条挂在 `body` 上，点了按钮就是
  * 一次焦点转移，不在名单里会把「点加粗」变成「失焦提交 + 退出编辑」。
+ * `[role="dialog"]` 一个就涵盖了所有弹层本体（Settings、编辑手册）；弹层内部的
+ * 按钮由 `closest` 向上命中那一层，不需要逐个标。
  */
-const KEEP_EDITING_SELECTOR = [
+export const KEEP_EDITING_SELECTOR = [
   ".readora-lightbox",
   ".readora-diagram--fullscreen",
   ".readora-edit-toolbar",
+  `[${KEEP_EDITING_ATTRIBUTE}]`,
   '[role="dialog"]'
 ].join(", ");
 

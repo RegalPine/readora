@@ -331,10 +331,23 @@ export function attachContentInteractions(
 }
 
 /**
- * 比搜索浮层更靠上的覆盖层（PRD-002 §10.3 的关闭优先级：Lightbox > 搜索）。
- * 它们各自监听 Escape，搜索必须让路，否则一次 Escape 会同时关掉两层。
+ * 编辑手册弹层面板的类名（常量定在这一侧，因为 `TOP_OVERLAY_SELECTOR` 要用它）：
+ * `app/EditHelpDialog.tsx` 反过来 import 本模块，常量不能让组件那份做权威，
+ * 否则 content → app → content 就是一个环。
  */
-export const TOP_OVERLAY_SELECTOR = ".readora-lightbox, .readora-diagram--fullscreen";
+export const EDIT_HELP_DIALOG_CLASS = "readora-edit-help-dialog";
+
+/**
+ * 比搜索浮层更靠上的覆盖层。PRD-002 §10.3 只写了搜索「支持 Escape 关闭」，
+ * §9.2 的 Lightbox 也各自收一次 Escape —— 两层都监听就会一次按键收两层，
+ * 所以关闭优先级定在这一层：Lightbox / 图表全屏 / 手册 > 搜索。
+ *
+ * `.readora-edit-help-dialog` 是编辑手册弹层（ARC-009 §7.5）：它自己收 Escape 并
+ * `preventDefault`，这一项只是双保险 —— 挂在 body 上的浮层收不到正文容器里的
+ * 快捷键委托，优先级得在 document 这一层说清。
+ */
+export const TOP_OVERLAY_SELECTOR =
+  `.readora-lightbox, .readora-diagram--fullscreen, .${EDIT_HELP_DIALOG_CLASS}`;
 
 export interface SearchShortcutHandlers {
   /** cmd/ctrl+f：打开搜索浮层（PRD-002 §10.2 的两条入口之一）。 */
@@ -372,4 +385,81 @@ export function useSearchShortcuts(handlers: SearchShortcutHandlers): void {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, []);
+}
+
+/**
+ * `?` 该不该叫出手册（纯函数，无 DOM 假设）。
+ *
+ * 为什么不把判据就写在监听里：jsdom 不实现 `isContentEditable`（实测恒为
+ * `undefined`），拿它做的护栏在单测里永远为假 —— 「单元里敲 `?` 是打一个字」
+ * 就只能靠浏览器测。把判据抽成纯函数后，`contenteditable` 这一项改按事件目标
+ * 自己的属性判（真浏览器里 `event.target` 就是焦点的那个元素），两种环境同
+ * 一个答案；四条让路判据每一条对应一个「按了不该做事」的场合：
+ * - `defaultPrevented`：单元里、工具条里、搜索面板里的监听先拿到了这一键；
+ * - 更上层的浮层开着（Lightbox / 图表全屏）：那里有自己的键位；
+ * - 修饰键：`Ctrl+Shift+/` 一类组合不属于本键位；
+ * - 落点在输入件里（`input` / `textarea` / `select` / `contenteditable`）：在那里
+ *   打出一个 `?` 比叫出手册才是预期，尤其是正在改的那一块。
+ */
+export function shouldOpenEditHelp(
+  event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "defaultPrevented">,
+  target: EventTarget | null,
+  topOverlayOpen: boolean
+): boolean {
+  if (event.key !== "?") {
+    return false;
+  }
+  if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) {
+    return false;
+  }
+  if (topOverlayOpen) {
+    return false;
+  }
+  const node =
+    target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
+  if (!node) {
+    // 事件源不在文档里（窗口自身等）：不猜，让路。
+    return false;
+  }
+  const tag = node.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+    return false;
+  }
+  if (node.closest('[contenteditable="true"], [contenteditable=""]') !== null) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * 编辑手册的键盘入口 `?`（ARC-009 §7.5）：只在编辑模式开着、且手册自己还没开着时注册。
+ *
+ * 为什么挂 document 而不是接管的正文容器：把手的激活委托在容器上（§6.3.7 那把
+ * `Ctrl` / `Meta` / `Alt` 让路护栏也在那里），但手册这个浮层本身在 `body` 上 ——
+ * 挂 body 的浮层收不到容器委托，键位若也挂容器，浮层打开后再按 `?` 就是死区。
+ *
+ * 键位不进 `contributes.keybindings`，与 `E` / `Ctrl+F` 同一条理由（ARC-004 §4.5）。
+ */
+export function useEditHelpShortcut(enabled: boolean, onOpen: () => void): void {
+  const ref = useRef(onOpen);
+  ref.current = onOpen;
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (
+        !shouldOpenEditHelp(event, event.target, document.querySelector(TOP_OVERLAY_SELECTOR) !== null)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      ref.current();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [enabled]);
 }

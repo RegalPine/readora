@@ -7,8 +7,11 @@
  * 原生 Quick Pick（点目录段列同级文件、带 git 装饰、Ctrl+Click 等），我们不再自绘
  * 那套目录切换 UI —— 「用 VS Code 的，不用自己实现」。
  *
- * priority 取 "option"：文本编辑器仍是 .md 的默认打开方式，readora 作为「打开方式」
- * 候选，行为最保守，不改变用户既有习惯。
+ * priority 取 "default"（0.13.1 起）：双击 / 资源管理器打开 .md 直接进阅读器，宿主在
+ * 原生面包屑里切同级文件也随之走 readora —— 那正是 "option" 时代修不掉的一条限制
+ * （面包屑走宿主 editorService.openEditor，不继承当前编辑器类型，公开 API 无接管点）。
+ * 文本编辑器没有被剥夺：右键「打开方式」随时可切回，用户自己配的
+ * `workbench.editorAssociations` 优先级高于本声明。
  *
  * 面板装配（HTML、首帧暂存、reader.ready 门控、消息接线、释放清理）全部复用
  * WebviewManager.configure，与历史 createWebviewPanel 路径逐字段同源；本文件只负责

@@ -1,6 +1,6 @@
 {
   "name": "@readora/webview",
-  "version": "0.13.0",
+  "version": "0.13.1",
   "private": true,
   "type": "module",
   "description": "Readora Webview 前端（ARC-005；M1 最小 React 入口 + Host Bridge）",

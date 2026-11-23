@@ -10,7 +10,6 @@ import {
   READING_UNITS_PER_MINUTE,
   countTextUnits,
   formatReadingTime,
-  formatSectionUnits,
   formatUnitCount,
   measureText,
   readingMinutesOf
@@ -98,10 +97,5 @@ describe("文案 formatter（顶栏 / 状态条 / 大纲共用一处措辞）", 
     expect(formatUnitCount(840)).toBe("840 words");
     expect(formatUnitCount(12_345)).toBe("12,345 words");
     expect(formatUnitCount(0)).toBe("0 words");
-  });
-
-  test("大纲行内标签只有字数一路（源行号 formatter 已移除）", () => {
-    expect(formatSectionUnits(840)).toBe("840w");
-    expect(formatSectionUnits(0)).toBe("0w");
   });
 });

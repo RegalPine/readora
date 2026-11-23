@@ -4,7 +4,7 @@
 |---|---|
 | 文档编号 | ARC-009 |
 | 文档名称 | 编辑模式架构设计 |
-| 文档版本 | 1.5.0 |
+| 文档版本 | 1.7.0 |
 | 文档状态 | Draft |
 | 所属产品 | Readora |
 | 关联文档 | PRD-001（F12）、ARC-002（§4 / §11 / §13）、ARC-004（§4.4 / §8 / §9）、ARC-005（§9）、ARC-008（§9 / §11） |
@@ -89,7 +89,7 @@ flowchart LR
 2. **静态产物是真相**：延续 `code-editor-layer.ts` 与 `diagram-layer.ts` 的设计线，markdown-core 的输出始终是权威，编辑层只做接管与降级，不反向持有内容。
 3. **单活动单元**：同时最多一个编辑单元处于激活态。
 4. **失败只降级一块**：任一区块无法锚定、无法编辑、写回失败，只影响该区块，不影响整篇渲染（与 code / diagram 层同口径）。
-5. **无虚假 affordance**：不能真编辑的地方不摆编辑把手。与 PRD-003「没有实现就不给开关」、`section-metrics.ts`「position 缺失则不显示标签」同一条诚实性规则。
+5. **无虚假 affordance**：不能真编辑的地方不摆编辑把手。与 PRD-003「没有实现就不给开关」、大纲侧「拿不到源行就没有区间，不给结构菜单」（`outline-section-ops.ts`）同一条诚实性规则（原先挂在 `section-metrics.ts` 的行内字数标签已在 PRD-003 1.8.3 下线）。
 
 ---
 
@@ -501,6 +501,31 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 
 **不做 debounce 实时写回。** 每次击键都改宿主模型会让撤销栈碎成单字符（宿主 `applyEdit` 粒度即撤销粒度），并触发全量重渲染打断输入。提交粒度 = 用户的一次编辑意图 = 一个撤销步骤。
 
+### 7.5 界面内帮助手册（Editing guide）
+
+用户诉求只有一句：「进入编辑模式，能有地方展示帮助手册」。它值得单开一节的理由是编辑模式身上的一条**结构性不对称**：专注模式点错了，用户至少知道自己看不见顶栏了；编辑模式点错了，只是正文多了些选不中的角标 —— 把手靠 `:hover` / `:focus-visible` 显形，而 `Ctrl+Enter` / `Escape` / 双击这些与宿主编辑器习惯不同的键位，不读代码就猜不出来。§7.1 那张入口表此前只服务实现者，这一节把它变成用户可随时调出的界面内说明。
+
+| 项 | 口径 |
+|---|---|
+| 两个入口 | 顶栏一枚 `?`（`.readora-toolbar-edit-help`，**仅 `editMode` 为真时才渲染进 DOM**）+ 键盘 `?`。放在顶栏而不是正文，是因为正文每一处都可能是一段未提交的草稿，不该再多接一层点击语义 |
+| 状态归属 | `App` 本地 state `editHelpOpen`，与 `editMode` 同族 —— §7.2 那整条理由原样适用：不进 `ViewStatePayload`、不新增消息、不持久化、不改宿主 |
+| 渲染条件 | `editMode && editHelpOpen` 才挂载。两条退出路径都主动清除：`toggleEditMode` 关编辑、`toggleFocusMode` 进专注（§7.3 互斥）。留一个关不掉的浮层比不留更糟 |
+| 焦点契约 | 与 `ReaderSettingsDialog` 同一套：挂载记下 `document.activeElement` → 焦点收拢进面板 → `Tab` 环 → `Escape` 关闭 → 卸载归位触发器。`focusableWithin` 直接复用那份实现，不在同一仓库里养出第二套弹层键盘行为 |
+| 模态 | `role="dialog"` + `aria-modal="true"` + 全屏 backdrop。代价是**开着手册时顶栏点不到**（backdrop 拦指针事件）—— 这与 Settings 弹层同形，是既有契约而不是新缺陷；`tests/e2e/edit-help.spec.ts` 最后一条把这条实测写成了断言 |
+| 内容边界 | **只讲已实现的行为**：手册里每一条键位都要能在 `edit-layer.spec.ts` / `edit-inline.spec.ts` / `edit.spec.ts` 里找到对应断言。§16.6 登记过「文档写得比代码多」那一类缺陷，手册是它的产品化形态 —— 多说一句就是在教用户按一个没有的键 |
+
+两处机制是本轮新长的，都不属于「弹层」本身：
+
+**一、`?` 的让路判据**（`interactions.ts` 的 `shouldOpenEditHelp`）。四条判据各自对应一个「按了不该做事」的场合：`defaultPrevented`（单元 / 工具条 / 搜索面板里的监听先拿到了这一键）、更上层浮层在场（Lightbox / 图表全屏）、修饰键（`Ctrl+Shift+/` 不是本键位）、**落点是输入件**（`input` / `textarea` / `select` / `contenteditable` 自身或其子孙）。
+
+判据抽成纯函数不是风格选择：jsdom **不实现** `isContentEditable`（实测恒为 `undefined`），拿它做的护栏在单测里永远为假，「正在改的那一块里按 `?` 是打出一个字符」就只能去浏览器里测。抽出来之后落点改按 `event.target` 自己的 `closest('[contenteditable="true"], [contenteditable=""]')` 判（真浏览器里 keydown 的 target 就是焦点元素），两种环境同一个答案。取证分三层：纯函数六条在 `interactions.spec.tsx`，接线在 `app-edit-mode.spec.tsx`，真键盘在 `tests/e2e/edit-help.spec.ts`。
+
+**二、`KEEP_EDITING_ATTRIBUTE`**（`edit-unit.ts`，`data-readora-keep-editing`）。§7.4 那条「`focusout` 是提交不是取消」的直接推论是：任何把焦点从单元抢走的控件都必须先声明「把焦点给我不算离开」。顶栏那枚 `?` 是第一个声明者 —— 真实 Chromium 里点它会先 `focus()` 再 `click()`，不在名单里就是「看一眼帮助就提交了一份草稿」。用属性而不是往 `KEEP_EDITING_SELECTOR` 里追加 app 层类名，是为了不让接管层去认识 `TopBar`：`content → app` 的引用方向一开，`interactions.ts` 与 `edit-unit.ts` 之间的类名常量就会变成循环 import。
+
+> 反向护栏同样存在：弹层自己带 `role="dialog"`，本就在 `KEEP_EDITING_SELECTOR` 里（§7.4 第二条判据的既有形态），所以「焦点从单元交给手册面板」这一跳不需要新代码。真正需要新代码的只有那个**触发按钮**，它不属于任何 dialog。
+
+键位登记：`?` 已进 ARC-004 §4.5 的键位表（§7.1 当年给 `E` 键写的那条前置条件对 `?` 同样成立 —— 不登记就不能做这个键位）。Escape 优先级由两层变三层：Lightbox / 图表全屏 / **手册** > 搜索，实现在 `TOP_OVERLAY_SELECTOR`（手册挂 `body`，收不到正文容器的委托，优先级必须在 document 这一层说清），回归防串在 `search-panel.spec.tsx`。
+
 ---
 
 ## 8. 与既有子系统的影响面
@@ -517,6 +542,9 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 | 性能门槛（F11） | 编辑把手是 hover/focus 伪类，无监听器风暴 | 把手用**事件委托**（`interactions.ts` 已有同形态），不按区块绑监听；`perf-report` 门槛不变 |
 | 导出 / 搜索 × 工具条（E3） | 工具条是一块浮在正文之上的 UI，里面还有一个 `<input>`（链接 URL）与十六枚按钮 | **不需要新增任何剥离规则或排除项** —— 因为它挂在 `ownerDocument.body` 而不是正文子树（§6.3.4）。这与 E2 的冲突卡片不同形：卡片 append 在正文里，所以上一轮必须显式剔属性 + `remove()` + 进搜索排除集。本轮是**结构性**进不去，不是靠代码剔干净；护栏在 `format-toolbar.spec.ts`（`hide` / `destroy` 后 `document.body` 上零残留）与 `markdown-content-edit.spec.tsx`（接管层重建路径不残留） |
 | 滚动 / 缩放 × 工具条（E3） | 工具条锚的是选区矩形的**视口坐标**，而正文在滚动上下文里 | 滚动（**捕获阶段**才收得到，正文滚动容器不是 window）与 `resize` 都重取 `anchorRect` 后重新 `show`，而不是收起 —— 收起会让用户以为选区丢了。监听在 `attach` 里注册、`destroy` 里成对移除 |
+| 搜索 × 手册（§7.5） | 手册挂 `body`，与搜索面板的 Escape 监听同一层；两边都听就会一次按键收两层 | 三层都做了：面板自己 `preventDefault` + `stopPropagation`；`TOP_OVERLAY_SELECTOR` 新增 `.readora-edit-help-dialog` 让搜索让路（挂 body 的浮层收不到容器委托，优先级只能在 document 说）；`shouldOpenEditHelp` 反过来查 `topOverlayOpen`。取证：`search-panel.spec.tsx` 那条优先级用例现在为三类浮层各造一次现场 |
+| 顶栏 × 手册（§7.5） | 顶栏多一枚 `?`，但它只在编辑态存在 | 不常驻 ⇒ 不影响阅读态布局；`dev/visual.tsx` 固定 `editMode={false}`，因此本轮**不需要也不能刷视觉基线**（与 E3 / E6 同一条口径：刷了就是越界信号）。`edit-help.css` 只进 `main.tsx` / `dev/e2e.tsx`，不进 `dev/visual.tsx` |
+| 失焦提交 × 手册（§7.5） | 点顶栏 `?` 是一次真实的焦点转移，而 `focusout` 是提交（§7.4） | 新增 `KEEP_EDITING_ATTRIBUTE`，`?` 按钮自己声明；弹层靠已有的 `[role="dialog"]` 一项天然进入名单。取证两层：`app-edit-mode.spec.tsx` 钉「不发消息 + `contenteditable` 仍在」，`tests/e2e/edit-help.spec.ts` 钉真 Chromium 里点完 `?` 后 `document.edit` 为空且草稿逐字节还在 |
 
 ---
 
@@ -563,6 +591,7 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 | ADR-009-09 | 撤销栈 | 不自建，粒度 = 一次提交 = 一个宿主撤销步骤 |
 | ADR-009-10 | 粘贴 | 仅 `text/plain` |
 | ADR-009-11 | 行内格式化的作用空间 | **作用在文本空间而不是源空间**，选区偏移按 `readEditableText` 同一条遍历换算（不新增行内源锚点）；等价性由 §6.2.1 判据 + `composeNewText` 只补 `markers[i]` 两条既有事实保证，并先写成纯字符串证明。**跨行选区逐行包裹**（每行各一对、空行段跳过、形态 B 插在行首 marker 之后），语义从「一个 emphasis 覆盖两行」变成两个，换来的是**源永远平衡**（§6.3.1 / §6.3.2） |
+| ADR-009-12 | 帮助手册的形态 | **界面内弹层（顶栏 `?` + 键位 `?`）**，不是文档外链、不是宿主侧 Markdown 文件、也不是常驻提示条。理由：手册要讲的是「此刻屏幕上那块正在被改的文字该按什么键」，离开了阅读视图就没有参照物；而宿主侧文档需要用户先离开面板再回来，正好错过编辑模式。另三条派生口径：内容**只讲已实现的行为**、焦点契约与 Settings 弹层共用同一份实现、手册自己不得成为第二个写入口（零消息，§7.2） |
 
 ---
 
@@ -581,6 +610,7 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 | **E6 收尾** | 编辑期性能报告、快捷键登记进 manifest、PRD-003 视觉规范补章、README 能力边界 | ✅ 已交付：mathBlock 纳入源码编辑认领（htmlBlock 不可认领，生产 DOM 中 `div.readora-html-block` 不存在，因 parser `html:false` 冻结）；PRD-003 新增 §16 编辑态视觉规范；README 能力边界更新；全量 1006 测试零失败。快捷键登记与编辑期性能报告属后续版本 |
 | **E7 大纲章节结构** | 大纲行尾 `⋯` 菜单三动作：在其后新增章节（平级）/ 新增子节 / 删除本节（两步确认，报行数与子节数） | ✅ 已交付（用户诉求「如何增删平级/下级章节」）：**编辑模式的第二个写入口**，三动作全部折算成一次 `document.edit` 按行区间替换，**零协议变更**（contracts 与 extension 一个字节未改，消息仍 18 条）。取证五层：`outline-section-ops.spec.ts`（纯函数 19 条）+ `outline-panel.spec.tsx` E7 两段（13 条）+ `app-edit-mode.spec.tsx` 接线（5 条）+ `tests/e2e/outline-sections.spec.ts`（6 条**逐字节**断言宿主模型）+ 视觉基线 10 档。门槛 = 编辑模式 × `file:` 文档 × 该条目带 `position`；删除后旧位置残留一个空行是契约固有行为（§16.7 第 3 条），不是缺陷 |
 | **E8 取消出口** | 工具条末尾一枚常驻 `Cancel` + 工具条内 `Escape`（补上 §6.3.7 从 E3 起就没落地的那句承诺） | ✅ 已交付（用户诉求「文本编辑样式后没法取消」）：**零协议变更**（contracts 与 extension 一个字节未改，消息仍 18 条），取消复用区块 `Escape` 的同一条 `cancelActive`，不发 `document.edit`。取证三层：`format-toolbar.spec.ts`（4 条：点 Cancel 只回一次 `onCancel`、三档下永远可点且不带 `data-readora-action`、获焦时 Escape 转交且**不冒到 document**、不进 roving）+ `edit-layer.spec.ts`（2 条：取消后 `innerHTML` 逐字节还原、属性回 `idle` 而非摘净、`activeRangeKey` 为空、零请求、工具条从 body 摘掉）+ `tests/e2e/edit-inline.spec.ts`（新增 2 条，其中「焦点真走进工具条后按 Escape」是 jsdom 焦点模型给不出的那一条）。形态取证脚本存档 `.playwright-cli/e8-cancel-probe.mjs`（截图 `e8-toolbar.png`，与 §16.6 第 7 条同一条理由不放 `test-results/`）：真 Chromium 里读 Cancel 的 computed style（`borderLeft` / `tabIndex -1` / `disabled false` / 与前一枚间距 8px）与点击后的归位（文本、`state="idle"`、body 上工具条数、`version`）。四条机制拆开登记于 §6.3.8，未被本轮修的三条边界登记于 §16.8 |
+| **E9 界面内帮助手册** | 顶栏 `?` 入口 + 键盘 `?` + `EditHelpDialog` 弹层（六段：开始 / 提交与取消 / 两种形态 / 工具条 / 章节 / 文件先变了） | ✅ 已交付（用户诉求「进入编辑模式能有地方展示帮助手册」）：**零协议变更**（contracts 与 extension 一个字节未改，消息仍 18 条，无新依赖，CSP 一行未放），`editHelpOpen` 是第 5 个本地视图状态。取证四层：`edit-help-dialog.spec.tsx`（9 条：地标、六段标题逐字节 `toEqual`、焦点收拢与归位、Tab 环、Escape 不外溢、**不承诺没实现的事**）+ `interactions.spec.tsx` 纯函数六条 + `app-edit-mode.spec.tsx` 接线七条 + `topbar-fields.spec.tsx` 入口三条；`tests/e2e/edit-help.spec.ts` 七条只测 jsdom 给不出的那四件事（真焦点转移、真 contenteditable 输入、真 Tab、弹层真的画出来）。本轮唯一真实缺陷（点 `?` 误提交草稿）由单测当场抓住，修法登记于 §16.9 |
 
 E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人读的属性。这是刻意切的 —— 锚定契约的正确性必须能在与编辑无关的前提下独立证明。
 
@@ -596,7 +626,7 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
 | R2 | 用户提交的源存在语法错误（未闭合围栏、坏表格） | 重渲染后区块边界移动，把手范围失效 | 冲突态（`EDIT_STALE`）自然覆盖此情形；重渲染后按新快照重新 scan，不缓存旧范围 |
 | R3 | GFM 表格分隔行 `---` 的列宽对齐不维护 | 观感变差，语义不变 | 明确记为已知限制（PRD-001 F12-006 验收不含格式美化）；不做自动对齐以免引入二阶不一致 |
 | R4 | IME 组合期间提交（中文输入法选词未上屏） | 丢字 | `compositionstart` / `compositionend` 期间屏蔽 `blur` 提交与 `Ctrl+Enter`；e2e 用插入式假事件覆盖 |
-| R5 | 编辑模式与宿主默认编辑器（`priority: option`）并存，同一文件两窗口 | 双模型冲突 | `WorkspaceEdit` 作用在同一 `TextDocument` 上，宿主保证一致；`baseVersion` 乐观锁挡住迟到写回 |
+| R5 | 编辑模式与文本编辑器并存，同一文件两窗口（`priority` 于 0.13.1 由 `option` 改为 `default`，见 ARC-004 §4.4 注记：两窗口从「默认就分开」变成「用户显式切回文本编辑器才有」，风险面收窄但不为零） | 双模型冲突 | `WorkspaceEdit` 作用在同一 `TextDocument` 上，宿主保证一致；`baseVersion` 乐观锁挡住迟到写回 |
 | R6 | PRD-001 §2.2 把「独立 Markdown 编辑器」列为非目标 | 文档与实现冲突 | 已在本轮同步修订：保留「不建独立编辑器」，另立 F12「就地编辑」并明确能力边界（§3.2） |
 | R7 | 选区两端 ↔ 文本下标的映射不足（选区落在遍历未覆盖的节点、节点已 `isConnected === false`、选区跳进嵌套结构） | 包裹位置错 = 写出损坏的 Markdown | 三道护栏：① 映射不出来就**降级**为在可映射那一端插一对字面标记（`degraded`，§6.3.3），不猜位置；② 逐条替换写得下去才写，写不下去就地停在已完成的那几条（每条自己就是一对完整标记，**不会留孤立 `**`**）；③ 与 `readEditableText` 共用同一条遍历并由交叉断言钉住（§6.3.1）。保守的方向永远是「少做一个加粗」而不是「多写一个字节」 |
 
@@ -606,7 +636,7 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
 
 本文档定义：双态分离架构、源位置契约、写回通道、编辑语义矩阵、安全边界、阶段划分。
 
-本文档**不**定义：编辑态视觉规范（PRD-003 在 E6 补章）、除 `E` 以外的快捷键全集（ARC-004 §4.5：`E` 已在 E3 登记 —— §7.1 自己把「键位登记」设成了 `E` 键的前置条件，不登记就不能做这个键；其余键位仍属 E6）、协作与冲突合并（非目标）、块拖拽重排（非目标，见 §1）。
+本文档**不**定义：编辑态视觉规范（PRD-003 在 E6 补章，§7.5 的手册弹层在 §16 那轮同步）、除 `E` / `?` 以外的快捷键全集（ARC-004 §4.5：`E` 已在 E3 登记、`?` 已在 §7.5 这轮登记 —— §7.1 自己把「键位登记」设成了这两个键位的前置条件，不登记就不能做这个键；其余键位仍属后续版本）、协作与冲突合并（非目标）、块拖拽重排（非目标，见 §1）。
 
 ---
 
@@ -622,6 +652,7 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
 7. 全阶段：`contenteditable` 不引入任何 CSP 放宽；粘贴富文本被拒。✅ 前者见上一行与 §8 CSP 行（零例外）；后者见 §9.3 的取证（整条粘贴路径不读 `text/html`）。
 8. E3：行内格式化只作用在文本空间，**偏移不足时降级插入字面标记而不损坏源**。✅ 取证三层：纯函数层 `inline-format.spec.ts`（四类区块 × 包裹/解包幂等、跳空行段、形态 B 插 marker 之后、code span 内 `blocked`、链接与脚注取号、`withHeadingLevel` 保留原空白组）；等价前提层 `source-text.spec.ts` 九例（§6.3.1 那条纯字符串证明）；浏览器层 `tests/e2e/edit-inline.spec.ts` 九条（真选区 + 真像素 + 真 contenteditable + 真键盘）。**未编辑行逐字节不变**依旧是逐行 `toEqual` 而不是「大致相同」（`expectSource` 夹具），本轮九条全走这个夹具。
 9. E8：样式加上去之后，**鼠标路径上必须有一个「什么都不写就退回原样」的出口**。✅ 判据三件事同时成立：正文逐字节等于进入编辑时那一版、`document.edit` 消息为空、模型 `version` 不变 —— 这三条合起来才是「取消」而不是「往后退一步」（后者是撤销，本轮未做，见 §6.3.8 ③）。取证见 §12 的 E8 行；工具条获焦那一条只能真浏览器测（jsdom 的焦点模型不认 `tabIndex = -1`）。
+10. E9：手册开着的时候，**看手册这个动作本身不得改变文档与编辑态**。✅ 四条同时成立才算：`document.edit` 消息为空、模型 `text` / `version` 逐字节等于打开前、正在改的那一块仍带 `contenteditable="true"` 且草稿字面还在、Escape 后焦点回到 `?` 而不是掉回页面顶部。取证：`app-edit-mode.spec.tsx`（点 Help 一条、焦点交给手册两条）+ `tests/e2e/edit-help.spec.ts`（真点击那一条，前面三点在 jsdom 里拿不到真的 `focusout`）。反向护栏：手册**不得教用户按一个没实现的键** —— `edit-help-dialog.spec.tsx` 拿六段标题全等 + `not.toMatch(/cell/iu)` 这一类反向断言钉住（§7.5 内容边界）。
 
 ---
 
@@ -638,6 +669,7 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
 | 1.4.0 | 2026-11-23 | E3 行内格式化落地：§6.3 整节按七条决策改写（新增 §6.3.1–§6.3.7），§6.2 heading 行与 §7.1 的 `E` 键行改为已交付，§8 加两行（工具条的**结构性**隔离、滚动重定位），§9 加第 7 条（只写文本节点 ≠ 第二条 HTML 路径），§11 新增 ADR-009-11 并**补正 ADR-009-07**（1.3.0 漏改的一格，与 §7.2 直接矛盾），§13 加 R7（映射不足），§14 改「`E` 已在 E3 登记」，§15 加第 8 条，并新增 §16.6 登记本轮推翻与收窄的七条口径。两处推翻都是 e2e 实测逼出来的：焦点进 `<input>` 会清掉文档选区（§6.3.4），以及只改级别不改文本时 `dirty()` 会漏判（§6.3.5）。**状态仍为 Draft**，理由再收窄到「§6.2 只剩 E4/E5 行未经执行」 |
 | 1.5.0 | 2026-11-23 | E7 大纲章节结构菜单落地：§12 加 E7 行并声明它不在 EPIC-13 映射内，新增 §16.7 登记七条口径。最重要的一条是**推翻 §6 / `edit-layer.ts` 头注的「只有 edit-layer 会发 `document.edit`」不变量** —— 第二个发送方（大纲菜单经 `App.runSectionOp`）是用户诉求直接带来的，不是实现走样；其余六条是坐标补偿复用、删除残留空行、版本记账、菜单行为契约、hook 声明位置、e2e 定位口径。**状态仍为 Draft**，转 Final 条件不变（§16.2） |
 | 1.6.0 | 2026-11-23 | E8 取消出口落地（用户诉求「文本编辑样式后没法取消」）：§6.3.7 那句从 1.4.0 起就没有对应实现的「工具条按钮获焦时按 Escape 由工具条自己的 `keydown` 转交取消」按实测改写，新开 §6.3.8 拆开四条机制（Escape 死区、鼠标路径无出口、`Ctrl+Z` 撤不动标记、含标记段落回落形态 B），§7.4 补一段「`focusout` 是提交不是取消」的推论，§12 加 E8 行，§15 加第 9 条，新增 §16.8。**零协议变更**：§5 写回契约与 §6.2 语义矩阵一字未动，新增的全在 View 侧工具条与接管层各一个回调。**状态仍为 Draft**，转 Final 条件不变（§16.2） |
+| 1.7.0 | 2026-11-23 | E9 界面内帮助手册落地（用户诉求「进入编辑模式能有地方展示帮助手册」）：新增 §7.5（两个入口 / 状态归属 / 渲染条件 / 焦点契约 / 模态 / 内容边界六条口径 + 两处新机制：`shouldOpenEditHelp` 四条让路、`KEEP_EDITING_ATTRIBUTE`），§8 加三行（搜索 × 手册、顶栏 × 手册、失焦提交 × 手册），§11 新增 ADR-009-12，§12 加 E9 行，§14 改为「除 `E` / `?` 以外」，§15 加第 10 条，新增 §16.9；ARC-004 §4.5 同步登记 `?` 键位（§7.1 给 `E` 写过的那条前置条件对 `?` 同样适用）。**零协议变更**：contracts 与 extension 一个字节未改，消息仍 18 条。本轮唯一真实缺陷是产品级的：点顶栏 `?` 会抢走活动单元的焦点，于是看一眼帮助就交了一份草稿（§16.9 第 1 条）。**状态仍为 Draft**，转 Final 条件不变（§16.2）；属性表的版本补正见 §16.9 第 8 条 |
 
 ### 16.2 状态说明
 
@@ -733,3 +765,23 @@ E7 是编辑模式第一次把写入口开在**正文之外**（大纲面板）�
 6. **本轮未修的三条边界**（与用户当面确认过取向，不是遗漏）。（a）**View 侧无撤销栈**：`Ctrl+Z` 撤不动格式化（标记是 `Range#deleteContents()` + `insertNode()` 写进文本节点的，不进 Chromium 原生 undo 栈，实测正文不变），而 §15-4 那句「撤销归宿主」说的是**文件级** undo，两者不是一回事。（b）**含行内标记的段落永久回落形态 B**：提交加粗后判据不再相等，下次激活必然在 `data-readora-edit="source"` 上，屏上看得见 `**` —— 这是 §9.4「绝不做 DOM→源反解析」的直接后果，e2e 已把它写成预期断言，改它等于改 markdown-core 的判据（未获批）。（c）**冲突卡片的 Escape 要焦点先进卡片才生效**：`showCard` 给卡片挂了 `keydown`→Escape→`abandon`，但卡片不主动 `focus()`、自身不带 `tabindex`，所以刚弹出时按 Escape 无人接。它不是本轮那条路径（卡片里的 `Discard` 鼠标可达，出口存在，只是键盘捷径要 Tab 两步才到），改它要动焦点归属，不夹带。
 
 7. **诊断阶段的方法论：`page.evaluate` 造出来的选区不是用户操作**。首个探针用脚本造 Range + 鼠标点按钮，Escape 与再点 Bold **全部正常**，差点得出「无法复现」而收工。真把焦点走一遍（Tab 进入、URL 输入框、提交后再激活、`Ctrl+Z`）才露出那四条互不相同的机制。本轮还留下两个探针自身的坑（都是同一类：把 DOM 结构写死）：按文本节点序号取内容 —— 夹具落形态 B 后只有一个文本节点，`walk[1]` 直接 `undefined`；游标 `let cursor` 放在函数外 —— 第二次调用从上轮末尾继续累加，下标全错。探针要按「空间下标 + 每次重置游标」写。
+
+### 16.9 1.7.0 修订内容（E9 推翻与新增的八条口径）
+
+本轮的功能面很小（一枚按钮 + 一个弹层），但推翻的东西有一条是产品级缺陷，四条是取证环境的假象，一条是引用方向，一条是定位器碰撞，最后一条是本篇自己的属性表。都不改能力边界：手册不新增写入口，也不新改一种内容。
+
+1. **点顶栏 `?` 会把未提交的草稿交出去**（§7.4 / §7.5）。`KEEP_EDITING_SELECTOR` 从 E2 起只认三类东西：Lightbox、图表全屏、工具条 —— 它们的共同点是「浮层」。顶栏按钮不是浮层，它是**属于编辑模式自己的控件**，于是它不在名单里；真实 Chromium 里 `click()` 先 `focus()`，一次 `focusout` 就是一次提交（§7.4）。单测当场抓住：那条用例只断言「点 Help 后 `document.edit` 为空」，实测收到 1 条。**可复用的教训**：`focusout` 语义存在的那一刻起，每一个新加的编辑态控件都得问一句「它会不会抢焦点」，而不是等下一个人往名单里追加选择器。修法取属性声明（`data-readora-keep-editing`）而不是往名单里写 app 层类名，是为了不打开 `content → app` 的引用方向（第 5 条是同一条理由的另一面）。
+
+2. **jsdom 不实现 `isContentEditable`**（§7.5）。它恒为 `undefined`，所以「焦点在活动单元里时 `?` 该让路」这一条护栏在单测里永不为真 —— 写在那里就是一行永远不被执行的代码，而不是「测不快的安全网」。把判据抽成 `shouldOpenEditHelp(event, target, topOverlayOpen)` 纯函数后，落点改按 `event.target` 自己的 `closest('[contenteditable="true"], [contenteditable=""]')` 判，真浏览器与 jsdom 同一个答案，六条分支全部可在单测里取证。**不是「为了测试改设计」**：那个设计抽出来之前，监听里堆着四条复合判据，谁都数不清它什么时候不该响。
+
+3. **合成 click 不移动焦点，document 上的 dispatch 不命中 React 委托**（取证口径）。两个都是 jsdom 假象，仓库里早就有对应口径，本轮只是复用：（a）点完触发器要自己 `trigger.focus()` 再 `click()`，否则弹层挂载时记下的「归位目标」是 `body`（`app-navigation.spec.tsx` 的 Settings 弹层那条先例已经这么写）；（b）React 的合成键盘监听挂在 root container 上，`document.dispatchEvent` 向下不过去，所以 Escape 用例必须在面板元素上 dispatch，并加一句 `expect(event.defaultPrevented).toBe(true)` 自证这一次派发真的被接住了 —— 不加这句，断言「面板关了」可能是别的东西关的。
+
+4. **弹层是模态的，于是「开着手册退出编辑」在鼠标路径上不可达**（§7.5 / §12 E9）。首版 e2e 直接写「开手册 → 点顶栏 Edit 退出 → 不留浮层」，当场挂在 `backdrop … intercepts pointer events`。这不是缺陷（`aria-modal="true"` 的必然结果，Settings 弹层同形），但它带出一个取证事实：`App` 里那两句 `setEditHelpOpen(false)` **在真实鼠标路径上根本走不到**，只有单测（直调 React `onClick`，不过指针层）能钉。e2e 改成测真会发生的那一段：先收手册再退出，不留孤儿浮层；模态本身则写成一条明说的断言而不是留着下一个人重新踩。
+
+5. **类名常量的定义方向由「谁需要它」定**（§7.5）。`readora-edit-help-dialog` 一度在三处不一致（组件里拼 `${EDIT_HELP_CLASS}-dialog`、测试里写字面串、选择器里又拼一次），而把它定在 `app/EditHelpDialog.tsx` 导出给 `content/interactions.ts` 用就是一个环：`interactions.ts` 需要它是因为 `TOP_OVERLAY_SELECTOR`（Escape 优先级在 document 那一层说），这个依赖方向是反不过去的。常量定在 content 侧，组件反向 import，一次解决两个问题。登记于此是因为这类环只能靠定义位置消除，改 import 顺序改不掉。
+
+6. **`getByRole({ name })` 是子串匹配，会撞上手自己的命名空间**（e2e 定位口径）。大纲每枚 `⋯` 的 accessible name 是 `Section actions for <标题>`（ARC-007），本轮夹具的 H1 取名为 `Editing Guide`，于是 `getByRole("button", { name: "Editing guide" })` 拿到 2 个元素，strict mode 直接拒绝。修法定为：入口定位器一律 `exact: true`，面板内标题一律限定到 `helpPanel(page)` 作用域；**夹具标题不改** —— 它就是那三个定位器碰撞的活样本，改了以后谁把 `exact` 删掉都不会红（单测靠 CSS 类名查，不受这一条影响）。与 §16.7 第 7 条同一条方法论：改定位不改产品。
+
+7. **手册内容反向断言比正向断言更要紧**（§7.5 内容边界）。正向那句「每条键位都实现了」靠人工核对迟早失效，所以单测钉的是反面：六段标题逐字节 `toEqual`（新增一段就必须同时新增取证）、`not.toMatch(/cell/iu)`（表格单元格 WYSIWYG 属后续版本，写进手册就是在教用户做一件做不到的事）、`Replace anyway` 只允许出现在 stale 那一段。§16.6 第 1 条那条缺陷（文档写得比代码多）的教训在这一层直接变成了一条可执行规则。
+
+8. **本篇属性表的版本格从 1.5.0 直接补到 1.7.0**（登记而非静默改）。1.6.0 那一轮加了 §16.1 行、§6.3.8、§15-9 三处，却没回头改头部那张属性表 —— 于是文档自身的两个版本声明不一致，而 §16.2 恰恰把「ARC-009 自己的属性表」当作文档状态的单一来源。本轮一并补正，并把它写进修订记录：一个被引用为「单一来源」的格子，改了正文就得同时改它，否则那条声明本身就是假的。

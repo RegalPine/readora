@@ -191,13 +191,20 @@
   transition: background-color var(--readora-motion-fast) ease;
 }
 
-/* Active：整块淡底 + 强调色（PRD-002 §5.1，产品反馈改背景色）。
+/* Active：整块淡底 + 更亮的一档文字（PRD-002 §5.1，产品反馈改背景色）。
  * 旧实现是一根 `inset 2px` 的左侧指示条，它跟着 `.readora-outline-link` 的
  * padding 走，而条目按层级缩进，于是那根条停在标题左侧的空档里，看着像上一行
- * 漏下的分隔线；背景铺在标题那一块上，「哪一条是当前的」就不用再猜。 */
+ * 漏下的分隔线；背景铺在标题那一块上，「哪一条是当前的」就不用再猜。
+ * 文字在 1.8.4 由 `--readora-outline-active-color`（accent-text）改走 text-primary：
+ * 暗色那档是 `#d2ccf0`，叠在已经中性化的淡底上仍读得出紫味（用户实测「白里透紫、
+ * 不够清爽」）。当前条目本来就有三重线索 —— 比常规行更亮的一档（暗色 `#dfe2eb` 对
+ * link 的 `#c2c8d2`）、`font-weight: 600`、整块淡底，不需要再叠一层品牌色相；与 §10.5
+ * 顶栏 toggle「按下态只留淡底 + 加粗，紫与焦点环撞色」是同一条口径。
+ * `--readora-outline-active-color` 本身留着：快速条、设置选项、搜索工具三枚按下态
+ * 仍用它做点睛（那是瞬时控件，不是读者一路跟着走的当前节）。 */
 .readora-outline-link[aria-current="location"] {
   font-weight: 600;
-  color: var(--readora-outline-active-color);
+  color: var(--readora-color-text-primary);
   background: var(--readora-outline-active-bg);
 }
 
@@ -208,9 +215,9 @@
 }
 
 /* ---------- 目录面板（PRD-003 §10.7） ----------
- * 头部两个动作、过滤输入、行内标签：数据源全部是本地已有的
- * outline / 源文，没有一项需要新协议。进度只住在快速条那一栏，面板不再读它；
- * 底部的 `N Sections` / `Depth` 统计已按产品要求下掉（节数在状态条已有）。
+ * 头部三枚动作（展开全部 / 折叠全部 / 过滤）与过滤输入：数据源全部是本地已有的
+ * outline，没有一项需要新协议。行内标签（H1 的分节字数、更深层级的源行号）
+ * 与底部的 `N Sections` / `Depth` 统计已按产品要求下掉。
  * 宽度用 `--readora-space-1` 的左右 margin 与列表对齐；纵向滚动只属于列表那一段，
  * 头部常驻（见 `.readora-shell-nav` 与 `.readora-outline-panel`）。 */
 
@@ -243,14 +250,22 @@
   color: var(--readora-color-text-primary);
 }
 
-/* 纯图标动作（产品反馈：头部两枚只给图标）：左右内边距收到与图标等宽的定量。
- * 实测点击区从「文字撑开的 91×24」收窄成 22×18 —— 与 VS Code 侧栏图标按钮同量级；
- * 读屏名称与悬停解释已在 `aria-label` / `title` 上，这里不需要为文字留位。 */
+/* 纯图标动作（产品反馈：头部只给图标，且图标调大到 16px）：左右内边距收到与图标
+ * 等宽的定量，上下跟着留 4px，点击区从 22×18 撑到 26×26 —— 与 VS Code 侧栏图标
+ * 按钮同量级；读屏名称与悬停解释已在 `aria-label` / `title` 上，不需要为文字留位。 */
 .readora-outline-action--icon {
-  padding: 2px var(--readora-space-1);
+  padding: 4px var(--readora-space-1);
 }
 
-/* 过滤中「展开全部」没有可见效果（折叠态不参与过滤视图），禁用而不是空转。 */
+/* 展开/折叠两枚常驻，当前全折叠态由 `aria-pressed` 的淡底表达：点一下高亮就从
+ * 这一枚换到那一枚，不再出现「点了看不出变化」（用户反馈）。与顶栏 Outline 开合同一
+ * 口径：只换淡底不加 accent 描边，免得和键盘焦点环（components.css）撞色。 */
+.readora-outline-action[aria-pressed="true"]:not(:disabled) {
+  background: var(--readora-color-surface-raised);
+  color: var(--readora-color-text-primary);
+}
+
+/* 过滤中展开/折叠没有可见效果（折叠态不参与过滤视图），禁用而不是空转。 */
 .readora-outline-action:disabled {
   color: var(--readora-color-text-muted);
   cursor: default;
@@ -275,17 +290,6 @@
   margin: 0 var(--readora-space-1) var(--readora-space-2);
   color: var(--readora-color-text-muted);
   font-size: var(--readora-font-xs);
-}
-
-/* 行内标签（H1 的 `840w`）：等宽数字对齐，颜色让位给标题。 */
-.readora-outline-meta {
-  color: var(--readora-color-text-muted);
-  font-family: var(--readora-font-family-mono);
-  font-size: var(--readora-font-xs);
-  font-variant-numeric: tabular-nums;
-  flex: 0 0 auto;
-  align-self: center;
-  padding-right: var(--readora-space-1);
 }
 
 /* ---------- 章节结构菜单（E7，ARC-009 §12 / PRD-002 UX-010） ----------

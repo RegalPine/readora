@@ -211,6 +211,7 @@ describe("TopBar 工具栏", () => {
     onToggleOutline: vi.fn(),
     onToggleFocusMode: vi.fn(),
     onToggleEditMode: vi.fn(),
+    onToggleEditHelp: vi.fn(),
     onToggleSearch: vi.fn(),
     onToggleSettings: vi.fn(),
     onToggleExport: vi.fn(),
@@ -250,6 +251,7 @@ describe("TopBar 工具栏", () => {
         exportOpen={options.exportOpen ?? false}
         editMode={false}
         editAvailable
+        editHelpOpen={false}
         zoom={options.zoom ?? fakeZoom()}
         {...next}
       />

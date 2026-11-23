@@ -552,7 +552,8 @@ dark, vscode}` 决定语义色从哪里取，明暗轴 `data-readora-scheme ∈ 
 - PRD-003 §10.5 外壳四段中的 StatusBar、面包屑、阅读时长 pill、缩放组、Reader Settings
   弹层、浮动快速条（属组件功能，非主题）
 - PRD-003 §10.7 大纲面板四项扩展（过滤输入、进度块、行内标签、底部统计）
-  —— 0.7.0 后进度块与源行号标签已下线，见下面的「M8 · 归档一」
+  —— 0.7.0 后进度块与源行号标签已下线，见下面的「M8 · 归档一」；M19 后行内标签
+  全部下线（`section-metrics.ts` 已删），见下面的 M19
 - §11.4 页面缩放（50%~200%）与 `readora.typography` 字族切换偏好
 - F08-010 主题预设（P1）、F08-011 自定义 CSS（P2）、主题 `setMode` 写入通道
   （ARC-006 §10.1 没有 View → Host 的主题写回路径，给了就是假开关）
@@ -610,7 +611,9 @@ docs 把这一批记作 **V0.9.0**（§4.7）并把 M7（§4.8）的功能项排
   （`position` 缺失则不显示）；底部 `N Sections` + `Depth: H1–H{max}`。
   新增 `content/section-metrics.ts`（130 行）按 outline 顺序取相邻标题的源行区间计数，
   `useMemo` 依赖 `[text, outline]`，`OutlineItem.position` 早已带 `startLine`，契约不动
-  （0.7.0 后：进度块与 `L{行号}` 标签已下线，只留 H1 字数，见下面的「M8 · 归档一」）
+  （0.7.0 后：进度块与 `L{行号}` 标签已下线，只留 H1 字数，见下面的「M8 · 归档一」；
+  M19 后 H1 字数也下线，`section-metrics.ts` 整个模块删除，头部「展开全部」拆成
+  展开 / 折叠两枚图标）
 - **KaTeX 数学公式**（IMP-001 §10.2 / §10.3，STORY-06-01）：`katex@0.19.1`；
   `parser.ts` 用 `md.inline.ruler.before("escape", …)` 与
   `md.block.ruler.before("paragraph", …)` 装 `readora.math_span` / `readora.math_block`
@@ -1062,7 +1065,8 @@ docs 没有为这一批新增功能项：0.6.0 交付之后是连续三轮**你�
 #### 归档一 · 大纲面板去进度与源行号（用户实测反馈）
 
 左栏目录不再报告阅读进度，也不再在 H2+ 条目右侧排源行号；进度只住在顶部
-快速条一处（PRD-003 §10.5），行内标签只剩 H1 的分节字数。
+快速条一处（PRD-003 §10.5），行内标签只剩 H1 的分节字数。（本行写于当时：那唯一
+剩下的 H1 字数已在 M19 一并下线。）
 
 - `content/OutlinePanel.tsx`：删去进度块（`data-readora-outline="progress"` 整段
   DOM、`role="progressbar"` 与渐变条）与 `progress` 入参；`inlineLabelOf` 现在只会
@@ -2026,6 +2030,8 @@ WCAG 2.2 标准口径自算（工具的交叉矩阵页数值与自算吻合，�
 - **活动项紫色**（产品决策「压淡一档」而非「保留」）：`accent-text #ddd6ff→#d2ccf0`，L 0.895→0.861、
   C 0.056→0.050、**色相 293° 不动** —— 品牌紫仍是点睛位，只是不再在暗底上发光。`accent` / `accent-soft` /
   `accent-on` / `focus` 全部未动（1.4.0 定的「底/边/影中性化、品牌色相保留」切分继续成立）
+  （M20 追记：压淡一档仍不够，用户再反馈「白里透紫」，大纲活动条目文字于 M20 整体改走中性
+  `text-primary`，这一档紫只留给快速条等三枚按下态）
 - **改前预核**（镜像 `contrast.spec.ts` 的全部断言形式，含 alpha 合成）：新值四表面最低对比度逐项
   **不低于**旧值 —— secondary 8.56（旧 8.48）、muted 4.72（旧 4.53）、hc-muted 7.08（旧 7.03）、
   border-strong 1.56（旧 1.54，下限 1.5）、hc-border-strong 3.58（旧 3.54，门槛 3）；`border` 默认档
@@ -2068,7 +2074,8 @@ WCAG 2.2 标准口径自算（工具的交叉矩阵页数值与自算吻合，�
 - **活动条目高亮改背景**：`.readora-outline-link[aria-current="location"]` 去掉 `box-shadow: inset 2px`
   左侧指示条 —— 它跟着条目缩进，一级标题时停在空档里、深处时又贴到文字下，两头都不准。
   改用既有的 `--readora-outline-active-bg` 淡底（该令牌本就存在，取值未动），accent 文字色与
-  `font-weight: 600` 保留。背景落在 **link** 而不是 row 上，是为了让 `visual-baseline.mjs` 的
+  `font-weight: 600` 保留（M20 追记：文字色已改走中性 `text-primary`，加粗保留）。背景落在 **link**
+  而不是 row 上，是为了让 `visual-baseline.mjs` 的
   `SELECTORS × STYLE_PROPS`（含 `backgroundColor`）真正捕获这一档变化。
 - **状态条 `N sections` 字段删除**（§4.6 区块渲染诚实性）：节数目录那一栏直接数得出来，摆在这儿是
   重复播报。`StatusField` 联合类型去 `"sections"`、`StatusBar` 去 `sectionCount` prop，
@@ -2377,6 +2384,173 @@ M14 交付「一块一块地改字」，M15 交付「在一块之内改形状」
 口径登记：ARC-009 1.6.0（§6.3.7 改写 + 新增 §6.3.8 / §7.4 补一段 / §12 E8 行 / §15 第 9 条 / §16.8 七条）、
 PRD-002 1.3.0 §4.3（UX-009 一行 + E8 现状补记）、PRD-003 1.8.1 §16.5。**IMP-002 / IMP-003 本轮未改** ——
 E8 与 E7 同样不在 EPIC-13 的阶段映射里（ARC-009 §12 已声明）。
+
+### M18 · 编辑模式 E9：编辑手册弹层（版本随下一次发布顺延）
+
+用户的原始诉求：「进入编辑模式 能够有地方展示帮助手册」。**零协议变更**：`packages/contracts` 与
+`apps/extension` 一个字节未改；无新依赖，CSP 与 `localResourceRoots` 一行未放。
+
+已实现：
+
+- **顶栏 `?` 按钮**（`.readora-toolbar-edit-help`）：复用 `.readora-toolbar-button` + `--icon` 两档，
+  只在 `editMode` 为真时渲染进 DOM，阅读态下顶栏宽度与旧版逐字节一致；`aria-label="Editing guide"`，
+  `aria-expanded` 联动弹层
+- **键盘 `?` 入口**（`useEditHelpShortcut`）：挂 `document`，四条让路判据封装为纯函数
+  `shouldOpenEditHelp`（`defaultPrevented` / `TOP_OVERLAY_OPEN` / 修饰键 / 落点在输入件或
+  `contenteditable` 里），每条单独断言；编辑态且手册已关时 enabled，关闭后 listener 自动卸载
+- **EditHelpDialog 弹层**（`role="dialog"`, `aria-modal="true"`）：焦点契约直接引
+  `focusableWithin`（与 Settings 弹层同一份实现），Tab 捕获/循环、Escape `stopPropagation` +
+  `preventDefault`、backdrop 点击关闭、打开时记忆 activeElement 并在卸载时还回去
+- **失焦不提交**：`KEEP_EDITING_SELECTOR` 已有 `[role="dialog"]` 一项（E3 加的），手册天然命中，
+  正在编辑的块不会因为「点了 Help」触发 focusout 提交
+- **Escape 三层优先级**：`TOP_OVERLAY_SELECTOR` 新增 `.${EDIT_HELP_DIALOG_CLASS}`，
+  关闭链 Lightbox > 图表全屏 > 手册 > 搜索，一次按键只收一层
+- **六段内容**：Start editing / Submit or cancel / Two shapes / Formatting bar / Sections /
+  When the file changed first —— 只讲已实现行为，每条在代码里有对应断言
+
+未纳入（不得对外宣称）：
+
+- **国际化文案**：手册内容硬编码英文，与顶栏一致；i18n 抽取不夹带在本轮
+- **按区块类型动态内容**：手册是全局入口，不随当前活动单元形态变化
+- **手册内超链接 / 跳转**：纯静态文本 + `<kbd>` + `<code>`，无交互路由
+
+已知限制：
+
+- **模态 backdrop 拦截顶栏**：`aria-modal="true"` 意味着弹层打开时鼠标点不到背后元素 —— 要退出
+  编辑得先关手册（Close / Escape / backdrop），这是模态契约的必然结果，e2e 那条「先收再退」写死了
+- **内容手动同步**：新增键位 / 格式化动作时须同步更新手册段落，无自动化校验
+- **不隐式写盘**：与 M14–M17 同一条
+
+门禁：webview 单测 **45 文件 / 1077 全绿**（较 M17 +27 条：`interactions.spec.tsx` 7 纯函数 +
+`edit-help-dialog.spec.tsx` + `app-edit-mode.spec.tsx` + `topbar-fields.spec.tsx` +
+`search-panel.spec.tsx` 改 toContain + 其余补充）；`pnpm -r typecheck` 七个包 Done；eslint
+`--max-warnings=0` 零输出；`pnpm test:e2e` **161 通过**（新增 `edit-help.spec.ts` 7 条 ——
+首跑有 `outline.spec.ts` 1 条在并发阶段 30s 超时，**单独复跑 1 条通过**，判为并发抖动不是回归，
+同 M17 那条）；编辑相关 e2e 三文件 27 全绿；`visual:check` **十档全等且未跑 `visual:update`** ——
+手册只在 `editMode` 为真时存在，`dev/visual.tsx` 固定 `editMode={false}`，基线无需更新。
+口径登记：ARC-009 1.7.0（新增 §7.5 / §8 三行 / ADR-009-12 / §12 E9 行 / §15 第 10 条 / §16.9 八条）、
+ARC-004 1.5.0（§4.5 键位 `?` 行 + §18.1/18.7 修订）、PRD-003 1.8.2 §16.7。
+**IMP-002 / IMP-003 本轮未改** —— E9 与 E7/E8 同样不在 EPIC-13 的阶段映射里。
+
+### M19 · 大纲头部三处收口：去字数标签 + 展开/折叠拆两枚 + 图标调大（版本随下一次发布顺延）
+
+用户的原始诉求：「这个 93w 是什么 去掉；大纲全部展开图标点击后样式没变化 图标调大
+全部展开 全部折叠 两个图标」。**零协议变更**：`packages/contracts` 与 `apps/extension`
+一个字节未改；无新依赖。
+
+已实现：
+
+- **行内字数标签全部下线**：`.readora-outline-meta` 那段 DOM 与样式、`inlineLabelOf`、
+  `content/section-metrics.ts`（含其单测文件）、`text-metrics.ts` 的 `formatSectionUnits`
+  一并删除。`OutlineItem.position.startLine` 与 `bodyLineOffsetOf` 的 0 基口径**仍在**
+  —— 它是 E7 章节结构菜单切写回区间的边界，口径注释搬进 `outline-section-ops.ts` 头注
+- **展开 / 折叠拆成两枚常驻图标**：原一枚 `ExpandIcon` 靠 `allCollapsed` 换 `aria-label`
+  （`Collapse all` ↔ `Expand all`），图形不变而标签只在读屏器里，于是「点了样式没变化」。
+  现在 `expand-all` 交空集合、`collapse-all` 交整串 foldable key，两枚图形方向相反
+  （`CollapseIcon` 新增：朝中间收拢；`ExpandIcon`：朝外张开）
+- **按下态跟着状态换**：`aria-pressed` 各回答「这一枚现在有没有事可做」—— 展开枚看
+  `anyCollapsed`、折叠枚看 `foldable.size > 0 && !allCollapsed`；`.readora-outline-action[aria-pressed="true"]:not(:disabled)`
+  上 `surface-raised` 淡底（与顶栏 Outline 同一条「不上 accent 描边」口径，避开焦点环撞色），
+  禁用那枚不上底色只留 `text-muted`。实测底色确实从一枚换到另一枚（取证数字见下）
+- **图标 12px → 16px**（与顶栏基准 `ICON_SIZE` 同尺寸），`.readora-outline-action--icon`
+  内边距 `2px` → `4px`，点击区实测 22×18 → **26×26**；过滤那枚一并跟上，三枚同量级
+- **诚实性两条**：文档无可折叠标题时折叠枚禁用并把 `title` 写成「没有可折叠的章节」；
+  过滤中折叠态看不见效果，两枚同时禁用并说明「过滤中：命中项始终展开」
+
+未纳入（不得对外宣称）：
+
+- **分节度量的可恢复入口**：字数若还要回来，得重建 `section-metrics.ts` 那套区间口径
+  （本轮只删不替）
+- **i18n**：`title` 文案中文、`aria-label` 英文，与顶栏既有形态一致
+
+已知限制：
+
+- **`aria-pressed` 用在动作型按钮上是借读法**：严格 ARIA toggle 语义是「开关」，这里借它
+  表达「当前状态落在哪一枚上」；形状差异 + 禁用态 + 列表真的收起，三者叠起来已经能读出
+  发生了什么，读屏器仍先念 `Expand all` / `Collapse all` 这个动作名
+
+门禁（本机当次实跑）：
+
+- webview 单测 **44 文件 / 1065 通过**（较 M18 的 45 / 1077：删 `section-metrics.spec.ts`
+  一文件 10 条、`outline-panel.spec.tsx` 50→50（行内标签 3 条换成 1 条反向断言，新增两枚
+  形状对比 1 条）、`text-metrics.spec.ts` 14→13）；`pnpm -r typecheck` 七包 Done；eslint 零输出
+- `pnpm test:e2e` 全量 **162 条：161 通过 + 1 超时**（`outline-sections.spec.ts` 删除两步确认
+  那一条 30s 超时）；**单独复跑该文件 `--workers=1` 6/6 通过**，判为并发抖动不是回归，
+  与 M17 / M18 登记的是同一条；`outline.spec.ts` 单跑 11/11 通过
+- `visual:update` 自报「取值变化 0 档」、`visual:check` **十档全等** —— 头部按钮不在基线的
+  `SELECTORS × STYLE_PROPS` 覆盖面内（那条盲区已在既有登记里），所以本轮改动量不到取值；
+  删掉的 `.readora-outline-meta` 也不在采样选择器里，因此 211 tokens 一字未动
+- **浏览器取证**（`.playwright-cli/outline-header-evidence.mjs` + `outline-header-{expanded,
+  collapsed}.png`）：三种折叠态下逐枚读 `aria-pressed` / `disabled` / `backgroundColor` /
+  点击区 / 图标宽，实测 `rgba(0, 0, 0, 0)` ↔ `rgb(226, 230, 236)` 随状态互换、
+  图标 `16px`、点击区 `26×26`、`.readora-outline-meta` 命中 0
+  （该会话内 `playwright-cli` 的浏览器被本机系统代理劫持到内网登录页，取证脚本因此
+  自己起 Chromium 并带 `--no-proxy-server` 直连 `127.0.0.1:5199`）
+
+口径登记：PRD-003 **1.8.3**（§10.5 纯图标控件重写、§10.7 表格与段落、附录 B）；ARC-002
+§4.3 代码注释与 §17.3 追记（`section-metrics.ts` 已不存在的消费方同步）；ARC-009 §8
+诚实性第 5 条改挂 `outline-section-ops.ts`。**IMP-002 / IMP-003 本轮未改**。
+
+### M20 · 大纲活动条目文字去紫（版本随下一次发布顺延）
+
+用户的原始诉求：「激活状态字体白里透紫 不够清爽」（附暗色大纲截图，当前节是
+`8.4 Theme Engine`）。**零协议变更**：`packages/contracts` 与 `apps/extension` 一个字节未改；
+无新依赖；**没有改任何一个 Token 取值**。
+
+已实现：
+
+- **活动条目文字改走中性正文色**：`shell.css` 的 `.readora-outline-link[aria-current="location"]`
+  把 `color` 由 `var(--readora-outline-active-color)`（= `accent-text`）改为
+  `var(--readora-color-text-primary)`，`font-weight: 600` 与淡底不动。暗色旧档 `#d2ccf0` 的通道差
+  （max − min）是 **36**，新档 `#dfe2eb` 是 **12** —— 「白里透紫」这把尺量得出来，也就能验
+- **去紫不损辨识**：当前条目本来就有三重线索 —— 比常规行更亮的一档（暗色 `#dfe2eb` 对 link
+  的 `#c2c8d2`）、600 加粗、整块淡底。这与 PRD-003 **1.4.1** 顶栏 toggle「按下态只留淡底 + 加粗，
+  紫与焦点环撞色」是同一条口径，本轮把它从顶栏推到大纲
+- **`--readora-outline-active-color` 不删**：快速条、设置选项、搜索工具三枚按下态仍吃它做点睛
+  （那是瞬时控件，不是读者一路跟着走的当前节），本轮只摘掉大纲这一个消费点
+- **`contrast.spec.ts` 顺手修掉一处量错落点的断言**：旧那条「活动条目文字过 AA」拿 `accent-soft`
+  当底色，而暗色的 `--readora-outline-active-bg` 早在 1.6.0 就解耦成 `text-primary` 掺 12%；现按
+  组件层声明现场解析（新增 `tintLayer` / `activeLayer` 两个 helper，与行内代码色块共用同一条
+  `color-mix` 正则），并拆成大纲（`text-primary`）与按下态（`accent-text`）两档
+
+未纳入（不得对外宣称）：
+
+- **快速条 / 设置选项 / 搜索工具三枚按下态的去紫**：用户只指了大纲活动条目，那三处是瞬时控件的
+  点睛位，M13 定的「品牌紫保留在文字 / 图标 / 细线 / 焦点」切分对它们继续成立
+- **截图里那一圈橙色焦点环**：宿主 `--vscode-focusBorder` 的取色，属主题适配范畴，本轮未动
+
+已知限制（实测登记，不是推测）：
+
+- **`high-contrast` 预设下活动条目与常规行同文字色**：预设刻意把文字三档压成两档
+  （`text-secondary` 取 `text-primary` 的 Primitive）且不覆写 `text-primary`，实测暗色两档都是
+  `#dfe2eb`、亮色都是 `#0b1c30`，区分只剩 600 加粗 + 淡底。这不是无障碍回归 —— WCAG 1.4.1 本就
+  要求不得靠颜色单独传递信息，`outline.spec.ts` 有一条用例把这个形态钉住；旧实现在那一档靠
+  `accent-text` 的 hc 值（`#eeebff` / `#3f2279`）拉开的差也只有 12 个通道单位
+
+门禁（本机当次实跑）：
+
+- webview 单测 **44 文件 / 1065 通过**（与 M19 同数：本轮只改了断言内部的配对与拆档，
+  `contrast.spec.ts` 185 条，条数未增未减（只改了两条的配对与标题）；`pnpm -r test`
+  六包计数与 M19 逐项一致（contracts 47 / design-tokens 63 / diagram-core 119 / markdown-core 342 /
+  extension 367+1 skip）；`pnpm -r typecheck` 七包 Done；eslint `--max-warnings=0` 零输出
+- `outline.spec.ts` 单跑 **14/14**（新增 3 条：light / dark 各一条 computed 读数 —— 活动条目必须
+  等于 `text-primary` 那档、必须不等于 `outline-active-color` 那档、必须不等于常规行，暗色再加一条
+  通道差 ≤ 16 的尺；高对比预设一条形态钉住用例）
+- `visual:update` 逐行核对 diff（`.playwright-cli/diff-baseline.py`）：取值变化只落在
+  `.readora-outline-link[aria-current="location"]` 的 `color` / `borderTopColor` / `borderLeftColor`
+  三行 × 10 档（后两条默认取 `currentColor` 因此跟着走）与截图哈希，暗色
+  `rgb(210,204,240)→rgb(223,226,235)`、亮色 `rgb(89,45,172)→rgb(11,28,48)`；211 个 Token 一字未动；
+  `visual:check` **十档全等**
+- **浏览器取证**（`.playwright-cli/outline-active-color-evidence.mjs` + 四张截图
+  `outline-active-{light,dark}[--high-contrast].png`）：四档各读 active 与常规行的 computed
+  `color` / 通道差 / 字重 / 淡底与四个 Token 值，`matchesTextPrimary` 四档全真、
+  `matchesAccentText` 四档全假、`sameAsPlainRow` 只在两档高对比下为真（即上面那条已知限制）。
+  `playwright-cli` 会话仍被本机系统代理劫持，取证脚本自己起 Chromium 带 `--no-proxy-server`
+
+口径登记：PRD-003 **1.8.4**（§10.7 活动条目改为三段：背景手法 / 文字去紫与三重线索 / 高对比副作用
+登记；附录 B 新增 1.8.4 行）。README 两处历史段落补前向指针：M13「活动项紫色」那条与「外壳细节
+四处收敛」的「accent 文字色与 `font-weight: 600` 保留」—— 历史取证数字不改写。**ARC-002 /
+ARC-006 / ARC-009 本轮未改**（不涉及它们的算法与协议口径）；**IMP-002 / IMP-003 本轮未改**。
 
 ### 发布 · v0.13.0（M13–M15 与六段归档反馈一次出包；编辑模式首次可装）
 
