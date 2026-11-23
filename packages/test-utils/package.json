@@ -1,6 +1,6 @@
 {
   "name": "@readora/test-utils",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "共享测试工具（夹具构造、协议断言；随里程碑按需扩充）",

@@ -27,6 +27,9 @@ export const RENDER_DIAGNOSTIC_CODES = {
   FOOTNOTE_LIMIT: "readora.render.footnote-limit",
   ATTRS_REJECTED: "readora.render.attrs-rejected",
   CSV_NOT_TABULAR: "readora.render.csv-not-tabular",
+  // 源行范围锚点（ARC-002 §12.3）：值形状非法即被剥离。正常渲染不该出现这一条 ——
+  // 属性值是本包自己拼的行号，出现就意味着生成侧写错了，所以是 warning 而不是 info。
+  SOURCE_RANGE_STRIPPED: "readora.render.source-range-stripped",
   SANITIZE_FAILED: "readora.render.sanitize-failed",
   PARSE_FAILED: "readora.render.parse-failed"
 } as const;

@@ -403,3 +403,44 @@ export const ExportDataPayloadSchema = z.strictObject({
   contentHeightPx: z.number().int().nonnegative().max(EXPORT_SIZE_MAX_PX)
 });
 export type ExportDataPayload = z.infer<typeof ExportDataPayloadSchema>;
+
+/**
+ * 编辑写回（F12 / ARC-009 §5.1）。
+ *
+ * **Schema 只管形状，语义判断在 Host**：这里校验整数 / 非负 / 长度，而
+ * `endLine >= startLine` 与「范围是否还在文档行数内」一律不校验。原因是
+ * `parsePayload` 失败只能回 `readora.payload.invalid`，而倒挂范围的用户语义是
+ * 「源结构已变、这个把手作废」（`readora.edit.rangeInvalid`，ARC-009 §6 的
+ * conflict 态要按它分支）。把这条塞进 Schema（`.refine`）会把一个业务终态
+ * 降级成「你发的消息格式不对」，两者不可相互恢复。
+ *
+ * `newText` 只有上限没有 `.min(1)`：删空一个区块是合法编辑。上限直接复用
+ * `DOCUMENT_TEXT_MAX_LENGTH`，不另开一套 —— 一段源文本与整篇源文本同一个量纲
+ * （ARC-008 §14.5 约束 4：不得出现第二份长度权威）。
+ *
+ * `baseVersion` 是乐观锁：View 只能拿它从 `document.load` / `document.update`
+ * 里读到的那个数字，Host 拿它比对**快照空间的版本**（ARC-009 §5.2 第 3 步）。
+ */
+export const DocumentEditRangeSchema = z.strictObject({
+  startLine: z.number().int().nonnegative(),
+  endLine: z.number().int().nonnegative()
+});
+export type DocumentEditRange = z.infer<typeof DocumentEditRangeSchema>;
+
+export const DocumentEditPayloadSchema = z.strictObject({
+  documentUri: z.string().min(1).max(2048),
+  range: DocumentEditRangeSchema,
+  newText: z.string().max(DOCUMENT_TEXT_MAX_LENGTH),
+  baseVersion: z.number().int().nonnegative()
+});
+export type DocumentEditPayload = z.infer<typeof DocumentEditPayloadSchema>;
+
+/**
+ * document.edit 的成功响应：写回后的新快照版本。
+ * View 拿它替换自己手里那份 `baseVersion`，否则紧接的第二笔编辑会被自己
+ * 造成的版本变化判成陈旧。注意回的是**快照空间的版本**，与入站同一个空间。
+ */
+export const DocumentEditResultSchema = z.strictObject({
+  version: z.number().int().nonnegative()
+});
+export type DocumentEditResult = z.infer<typeof DocumentEditResultSchema>;

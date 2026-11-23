@@ -210,6 +210,7 @@ describe("TopBar 工具栏", () => {
   const handlers = () => ({
     onToggleOutline: vi.fn(),
     onToggleFocusMode: vi.fn(),
+    onToggleEditMode: vi.fn(),
     onToggleSearch: vi.fn(),
     onToggleSettings: vi.fn(),
     onToggleExport: vi.fn(),
@@ -247,6 +248,8 @@ describe("TopBar 工具栏", () => {
         searchOpen={searchOpen}
         settingsOpen={options.settingsOpen ?? false}
         exportOpen={options.exportOpen ?? false}
+        editMode={false}
+        editAvailable
         zoom={options.zoom ?? fakeZoom()}
         {...next}
       />
@@ -262,7 +265,7 @@ describe("TopBar 工具栏", () => {
     );
   }
 
-  /** 顶栏动作按钮：三枚常驻切换 + Export 触发器 + Reader Settings 触发器，顺序即视觉顺序。 */
+  /** 顶栏动作按钮：四枚常驻切换 + Export 触发器 + Reader Settings 触发器，顺序即视觉顺序。 */
   function actions(container: HTMLElement): string[] {
     return [...container.querySelectorAll<HTMLElement>(".readora-toolbar-button")].map(
       (button) => button.getAttribute("aria-label") ?? ""
@@ -273,6 +276,7 @@ describe("TopBar 工具栏", () => {
     const { view } = bar();
     expect(actions(view.container)).toEqual([
       "Toggle outline",
+      "Edit mode",
       "Enter focus mode",
       "Search in document",
       "Export document",
@@ -352,6 +356,7 @@ describe("TopBar 工具栏", () => {
     const { view } = bar(true, false, { exportOpen: true });
     expect(actions(view.container)).toEqual([
       "Toggle outline",
+      "Edit mode",
       "Enter focus mode",
       "Search in document",
       "Export document",

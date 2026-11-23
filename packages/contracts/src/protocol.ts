@@ -21,6 +21,8 @@ import {
 import {
   ConfigPatchPayloadSchema,
   ConfigUpdatePayloadSchema,
+  DocumentEditPayloadSchema,
+  DocumentEditResultSchema,
   DocumentLoadPayloadSchema,
   DocumentNavigatePayloadSchema,
   DocumentOpenPayloadSchema,
@@ -45,7 +47,7 @@ export interface MessageDefinition {
   payloadSchema: z.ZodType;
 }
 
-/** 权威注册表：17 条消息（ARC-004 §8.3 的 11 条 + M4/M6 补设 3 条 + M11 补设 3 条）逐一定义方向与 payload Schema。 */
+/** 权威注册表：18 条消息（ARC-004 §8.3 的 11 条 + M4/M6 补设 3 条 + M11 补设 3 条 + F12 补设 1 条）逐一定义方向与 payload Schema。 */
 export const MESSAGE_REGISTRY: Record<MessageType, MessageDefinition> = {
   "reader.ready": {
     direction: MESSAGE_DIRECTIONS["reader.ready"],
@@ -121,6 +123,12 @@ export const MESSAGE_REGISTRY: Record<MessageType, MessageDefinition> = {
   "export.data": {
     direction: MESSAGE_DIRECTIONS["export.data"],
     payloadSchema: ExportDataPayloadSchema
+  },
+  // document.edit：F12 写回链路（ARC-009 §5）。范围语义（倒挂 / 越界）刻意不在
+  // Schema 里判，那决定了用户看到哪个错误码，权威在 EditService。
+  "document.edit": {
+    direction: MESSAGE_DIRECTIONS["document.edit"],
+    payloadSchema: DocumentEditPayloadSchema
   }
 };
 
@@ -202,13 +210,14 @@ export function createErrorResponse(
 }
 
 /**
- * 响应载荷注册表：请求方向的消息里只有 resource.resolve 带结构化
- * 成功载荷，Host 发送前必须过一遍（ARC-008 §16.1 第 10 条：Webview 侧还要再复判一次）。
+ * 响应载荷注册表：请求方向的消息里只有 resource.resolve 与 document.edit 带
+ * 结构化成功载荷，Host 发送前必须过一遍（ARC-008 §16.1 第 10 条：Webview 侧还要再复判一次）。
  */
 export const RESPONSE_PAYLOAD_SCHEMAS: Partial<
   Record<MessageType, z.ZodType>
 > = {
-  "resource.resolve": ResourceResolveResultSchema
+  "resource.resolve": ResourceResolveResultSchema,
+  "document.edit": DocumentEditResultSchema
 };
 
 /**

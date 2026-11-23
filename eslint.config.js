@@ -9,12 +9,17 @@ export default tseslint.config(
     // 不忽略它，任何一次 `pnpm test:e2e` 之后都可能多出一批与产品无关的 lint 报错。
     // `.tmp-evidence/` 同一性质（已在 .gitignore 内）：门禁日志与临时取证脚本落在这里，
     // 不忽略则每次出包都会因为几个 `require()` / `console` 报红。
+    // `.playwright-cli/` 也是 .gitignore 内的工具目录（快照 / 截图 / 日志 / 取证脚本），
+    // 与上面两者同一性质。0.13.0 之前没暴出来只是因为里面始终只有 `.py`/`.log`/`.yml`，
+    // eslint 不收；第一枚 `.mjs` 取证脚本一落地就是 20 条 `window`/`document` is not defined
+    // ——那是 Playwright 序列化进页面执行的回调，本来就不在 node 全局里。
     ignores: [
       "**/dist/**",
       "**/node_modules/**",
       "**/coverage/**",
       "**/test-results/**",
       "**/.tmp-evidence/**",
+      "**/.playwright-cli/**",
       "docs/**",
       "*.vsix"
     ]

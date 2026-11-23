@@ -14,6 +14,7 @@ import {
   type ResourceKind,
   type ResourceResolveResult
 } from "@readora/contracts";
+import { bridgeErrorParts } from "../bridge/bridge-error";
 
 export type ResourceEntry =
   | { ok: true; result: ResourceResolveResult }
@@ -24,20 +25,15 @@ export interface ResourceRequester {
   request(type: "resource.resolve", payload: unknown): Promise<unknown>;
 }
 
-const ERROR_CODE_PATTERN = /^(readora\.[a-zA-Z][a-zA-Z0-9.]*):/;
-
 /**
  * HostBridge 把失败响应 reject 成 `Readora: <code>: <message>`，
  * 这里只认已知前缀，取不到就归 unreadable —— 不猜、不静默成功。
+ *
+ * 前缀解析本身住在 `bridge/bridge-error.ts`（E2 的编辑冲突要按同一个形状取码），
+ * 这里只交出资源侧的兜底码，行为与提出去之前逐字节一致。
  */
 export function parseResourceFailure(error: unknown): { code: string; message: string } {
-  const raw = error instanceof Error ? error.message : String(error ?? "unknown");
-  const withoutPrefix = raw.startsWith("Readora: ") ? raw.slice("Readora: ".length) : raw;
-  const match = ERROR_CODE_PATTERN.exec(withoutPrefix);
-  if (match) {
-    return { code: match[1] ?? READORA_ERROR_CODES.RESOURCE_UNREADABLE, message: withoutPrefix };
-  }
-  return { code: READORA_ERROR_CODES.RESOURCE_UNREADABLE, message: withoutPrefix };
+  return bridgeErrorParts(error, READORA_ERROR_CODES.RESOURCE_UNREADABLE);
 }
 
 function contractViolation(): ResourceEntry {

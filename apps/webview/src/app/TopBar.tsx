@@ -2,8 +2,8 @@
  * 顶栏（PRD-003 §10.5 外壳第一段，UX-001 / UX-003 / UX-006）。
  *
  * 顶栏只留动作控件，分两坨摆：大纲开合**靠左**（紧邻左侧通顶的大纲列），其余
- * 控件（专注、搜索、缩放组、导出、Reader Settings）成组**靠右**（`.readora-toolbar-actions`
- * 的 `margin-left: auto` 撑起中间空白）。
+ * 控件（编辑、专注、搜索、缩放组、导出、Reader Settings）成组**靠右**
+ * （`.readora-toolbar-actions` 的 `margin-left: auto` 撑起中间空白）。
  * 数据源都在组件外部真实存在：
  *
  *  缩放组        会话内 `useZoom`，50%–200% 步长 10%，点百分号复位。
@@ -20,8 +20,9 @@
  */
 import type { ExportFormat } from "@readora/contracts";
 import type { ZoomApi } from "./zoom";
+import { EDIT_UNAVAILABLE_TITLE } from "../content/edit/limits";
 import { ExportMenu } from "./ExportMenu";
-import { ExportIcon, FocusIcon, MinusIcon, OutlineToggleIcon, PlusIcon, SearchIcon, SettingsIcon } from "./Icon";
+import { EditIcon, ExportIcon, FocusIcon, MinusIcon, OutlineToggleIcon, PlusIcon, SearchIcon, SettingsIcon } from "./Icon";
 
 export const TOOLBAR_CLASS = "readora-toolbar";
 export const TOOLBAR_ACTIONS_CLASS = "readora-toolbar-actions";
@@ -32,6 +33,10 @@ export const EXPORT_GROUP_CLASS = "readora-toolbar-export-group";
 export interface TopBarProps {
   outlineVisible: boolean;
   searchOpen: boolean;
+  /** 编辑模式开关（ARC-009 §7.2，E2）：与专注互斥，因此相邻摆放。 */
+  editMode: boolean;
+  /** 只读判据：非 `file:` 文档上这枚按钮禁用（不隐藏）。 */
+  editAvailable: boolean;
   /** Reader Settings 弹层的开合，落到触发器的 `aria-expanded`。 */
   settingsOpen: boolean;
   /** Export 下拉菜单的开合（M11）：状态在 App，触发器只报告图。 */
@@ -39,6 +44,7 @@ export interface TopBarProps {
   zoom: ZoomApi;
   onToggleOutline(): void;
   onToggleFocusMode(): void;
+  onToggleEditMode(): void;
   onToggleSearch(): void;
   onToggleSettings(): void;
   onToggleExport(): void;
@@ -52,9 +58,12 @@ export function TopBar({
   searchOpen,
   settingsOpen,
   exportOpen,
+  editMode,
+  editAvailable,
   zoom,
   onToggleOutline,
   onToggleFocusMode,
+  onToggleEditMode,
   onToggleSearch,
   onToggleSettings,
   onToggleExport,
@@ -81,6 +90,20 @@ export function TopBar({
         <OutlineToggleIcon visible={outlineVisible} />
       </button>
       <div className={TOOLBAR_ACTIONS_CLASS}>
+        {/* Edit 排在 Focus 之前：两个互斥的模式开关相邻摆放，看一眼就知道不能同开
+            （ARC-009 §7.3）。禁用而非隐藏：隐藏会让功能看起来坏了。 */}
+        <button
+          type="button"
+          className="readora-toolbar-button readora-toolbar-edit"
+          aria-pressed={editMode}
+          aria-label="Edit mode"
+          title={editAvailable ? "Edit paragraphs in place" : EDIT_UNAVAILABLE_TITLE}
+          disabled={!editAvailable}
+          onClick={onToggleEditMode}
+        >
+          <EditIcon />
+          Edit
+        </button>
         <button
           type="button"
           className="readora-toolbar-button"

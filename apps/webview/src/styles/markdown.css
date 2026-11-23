@@ -750,3 +750,211 @@
   white-space: nowrap;
   font-family: var(--readora-font-family-mono);
 }
+
+/* ---------- 就地编辑（ARC-009 §7.1 / §5.3，E2）----------
+ *
+ * 三条约束：
+ * 1. 每条规则的前件都是接管层写下的那三枚属性之一 —— 阅读态（没有这些属性）
+ *    一条都不命中，所以视觉基线里正文与各块 rect 必须逐字节不变，
+ *    顶栏多一枚按钮只让 `.readora-toolbar` / `.readora-topbar` 变宽；
+ * 2. 只用存量令牌，不新增颜色变量；
+ * 3. 把手是 `::after` 角标，不新增节点也不改 padding —— 否则「开一下编辑模式」
+ *    本身就会让正文跳位，那比没有把手更糟。
+ */
+
+[data-readora-editable] {
+  position: relative;
+}
+
+[data-readora-editable]::after {
+  content: "";
+  position: absolute;
+  top: 0.35em;
+  left: -0.9em;
+  width: 0.35em;
+  height: 0.35em;
+  border-radius: var(--readora-radius-full);
+  background: var(--readora-color-accent-soft);
+  opacity: 0;
+  transition: opacity var(--readora-motion-fast);
+  pointer-events: none;
+}
+
+[data-readora-editable]:hover::after,
+[data-readora-editable]:focus-visible::after {
+  opacity: 1;
+  background: var(--readora-color-accent);
+}
+
+[data-readora-editable]:focus-visible {
+  outline: 1px solid var(--readora-color-focus);
+  outline-offset: 3px;
+}
+
+/* 活动单元：只加一层内描边，不改宽高与行高（§9.5「不跳动」）。 */
+[data-readora-edit-state="active"] {
+  outline: 1px solid var(--readora-color-focus);
+  outline-offset: 3px;
+  background: var(--readora-color-surface-subtle);
+  cursor: text;
+}
+
+[data-readora-edit-state="active"]::after {
+  opacity: 0;
+}
+
+/* 形态 B（改源）：等宽 + 略小，把「你看到的就是文件里的字节」说出来。 */
+[data-readora-edit="source"] {
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-sm);
+  white-space: pre-wrap;
+}
+
+[data-readora-edit-state="conflict"] {
+  outline: 1px solid var(--readora-color-warning);
+  outline-offset: 3px;
+}
+
+/* 冲突卡片：未提交输入的栖身之处（§5.3）。 */
+.readora-edit-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--readora-space-2);
+  margin: var(--readora-space-2) 0 var(--readora-space-6);
+  padding: var(--readora-space-3);
+  border-left: 3px solid var(--readora-color-warning);
+  border-radius: var(--readora-radius-md);
+  background: var(--readora-color-surface-raised);
+  box-shadow: var(--readora-shadow-sm);
+  font-size: var(--readora-font-sm);
+}
+
+.readora-edit-conflict-reason {
+  margin: 0;
+  color: var(--readora-color-text-secondary);
+}
+
+/* 未提交的输入：可手选、可复制，但不假装它是正文。 */
+.readora-edit-conflict-text {
+  margin: 0;
+  padding: var(--readora-space-2);
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-code-background);
+  color: var(--readora-syntax-foreground);
+  font-family: var(--readora-font-family-mono);
+  font-size: var(--readora-font-xs);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.readora-edit-conflict-action {
+  align-self: flex-start;
+  padding: 1px var(--readora-space-3);
+  border: 1px solid var(--readora-button-border);
+  border-radius: var(--readora-radius-sm);
+  background: transparent;
+  color: var(--readora-button-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.readora-edit-conflict-action:hover {
+  background: var(--readora-button-hover-bg);
+}
+
+/* ---------- 行内格式化工具条（ARC-009 §6.3 / §7.4，E3） ----------
+ *
+ * 它挂在 `document.body` 上而不是正文子树里，两条与样式无关的理由记在
+ * `format-toolbar.ts` 的头注（导出偷不走、搜索不需新增排除项）；这里只记样式面的
+ * 三条：位置由 JS 写 `top/left`（`position: fixed` + 选区视口坐标），所以本块
+ * 不写 `top` / `bottom` / `transform`；**不新增令牌也不新增色值**（对比度与
+ * `no-hardcoded-color` 两道门禁）；不上 `backdrop-filter` —— 毛玻璃是 PRD-003 §7.2
+ * 里登记过的三处，浮层多一处就要重算那一章的口径。
+ *
+ * z-index 取 45：低于 lightbox / 导出菜单 / 设置的 50 与 60（那些是模态，
+ * 它们开着时本工具条已因挂起而收起），高于正文与顶栏浮层。 */
+.readora-edit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--readora-space-1);
+  /* 由 JS 现写：top / left / position */
+  max-width: calc(100vw - var(--readora-space-4));
+  padding: var(--readora-space-1);
+  border: var(--readora-hairline) solid var(--readora-panel-border);
+  border-radius: var(--readora-radius-lg);
+  box-shadow: var(--readora-shadow-pill);
+  background: var(--readora-panel-background);
+  z-index: 45;
+}
+
+/* `hidden` 属性会被上面的 `display: flex` 顶掉，不收回来就是一块看不见但占位的浮层。 */
+.readora-edit-toolbar[hidden] {
+  display: none;
+}
+
+.readora-edit-toolbar__button {
+  min-width: 1.9em;
+  padding: 2px var(--readora-space-2);
+  border: var(--readora-hairline) solid transparent;
+  border-radius: var(--readora-radius-sm);
+  background: transparent;
+  color: var(--readora-color-text-secondary);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  letter-spacing: var(--readora-tracking-label);
+  cursor: pointer;
+}
+
+.readora-edit-toolbar__button:hover:not(:disabled) {
+  background: var(--readora-button-hover-bg);
+}
+
+/* roving tabindex：整条工具条在 tab 序列里只占一格，焦点环只画当前那一枚。 */
+.readora-edit-toolbar__button:focus-visible {
+  outline: var(--readora-hairline) solid var(--readora-color-focus);
+  outline-offset: 1px;
+}
+
+/* 当前 heading 级别：与 hover 底不同一档，用 accent-soft 说「就是它」（决策 5）。 */
+.readora-edit-toolbar__button[aria-pressed="true"] {
+  border-color: var(--readora-button-border);
+  background: var(--readora-color-accent-soft);
+  color: var(--readora-color-accent-text);
+}
+
+.readora-edit-toolbar__button:disabled {
+  cursor: default;
+  color: var(--readora-color-text-muted);
+}
+
+.readora-edit-toolbar__levels {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: var(--readora-space-1);
+  border-left: var(--readora-hairline) solid var(--readora-panel-border);
+}
+
+.readora-edit-toolbar__url {
+  display: flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: var(--readora-space-1);
+}
+
+.readora-edit-toolbar__url[hidden] {
+  display: none;
+}
+
+.readora-edit-toolbar__url-input {
+  flex: 1 1 auto;
+  min-width: 12ch;
+  padding: 2px var(--readora-space-2);
+  border: var(--readora-hairline) solid var(--readora-button-border);
+  border-radius: var(--readora-radius-sm);
+  background: var(--readora-color-canvas);
+  color: inherit;
+  font: inherit;
+  font-size: var(--readora-font-xs);
+}

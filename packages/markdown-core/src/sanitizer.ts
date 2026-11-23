@@ -11,6 +11,7 @@ import DOMPurify from "dompurify";
 import { MATH_CONTAINER_CLASS } from "./math";
 import { escapeHtml } from "./escape";
 import { RENDER_DIAGNOSTIC_CODES } from "./diagnostics";
+import { SOURCE_RANGE_ATTRIBUTE, SOURCE_RANGE_PATTERN } from "./source-range";
 import type {
   HtmlSanitizer,
   RenderDiagnostic,
@@ -85,6 +86,15 @@ const ALLOWED_ATTR = [
   "role",
   "tabindex"
 ];
+
+/*
+ * 【本表不需要加 data-*】`data-readora-width|height`、`data-readora-code-lang`、
+ * `data-readora-source-range` 都不在白名单里却都能活下来，因为下面传的是
+ * `ALLOW_DATA_ATTR: true`：DOMPurify 对匹配 `DATA_ATTR` 的名字直接 `return true`，
+ * 连值都不查（源码注「We don't need to check the value; it's always URI safe」）。
+ * 所以新增一个 `data-readora-*` 属性不需要改本表；需要的是另加值形状校验——
+ * 就是下面那个 stripMalformedSourceRanges，别误以为往白名单里塞一行才是放行。
+ */
 
 /**
  * ── 数学公式标记白名单（IMP-001 §10.3 末段）────────────────────────────
@@ -183,6 +193,40 @@ function restrictMathMarkup(root: Element): number {
   return stripped;
 }
 
+/**
+ * 源行范围锚点的值形状遍历（ARC-002 §12.3 门禁 3）。
+ *
+ * 先说清这不是在堵漏洞：parser 以 `html: false` 运行，文档自带的 HTML 在
+ * `htmlBlockRenderer` 那一层就被转义成可见文本，所以文档侧没有任何能写入自定义
+ * 属性的路径。它防的是**我们自己**：属性值是 `sourceRangeValue` 拼出来的行号，
+ * `NaN:NaN` / `-1:-1` 这类编程错误一旦被下游当成合法范围，后果是按错的行改文件。
+ * 剥掉就是「该区块不可编辑」，留下就是一个可能改错位置的锚点，两者不可同日而语。
+ *
+ * `data-*` 不进 URI 值校验（见 ALLOWED_ATTR 上方注），所以 DOMPurify 本体不会替
+ * 我们校这个形状，必须自己走一遍。
+ *
+ * @returns 被剥掉的条数（命中即记 `source-range-stripped` 诊断，不静默）。
+ */
+function stripMalformedSourceRanges(root: Element): number {
+  let stripped = 0;
+  const elements = Array.from(root.querySelectorAll(`[${SOURCE_RANGE_ATTRIBUTE}]`));
+  for (const element of elements) {
+    const value = element.getAttribute(SOURCE_RANGE_ATTRIBUTE) ?? "";
+    if (!SOURCE_RANGE_PATTERN.test(value)) {
+      element.removeAttribute(SOURCE_RANGE_ATTRIBUTE);
+      stripped += 1;
+      continue;
+    }
+    // 形状对但区间倒挂（`15:12`）同样不可用：写回会拿到一个空反向的 Range。
+    const [start, end] = value.split(":");
+    if (Number(start) > Number(end)) {
+      element.removeAttribute(SOURCE_RANGE_ATTRIBUTE);
+      stripped += 1;
+    }
+  }
+  return stripped;
+}
+
 /** 基础白名单与公式白名单的并集：限域发生在清洗之后，所以这里可以放宽。 */
 const SANITIZE_TAGS = [...ALLOWED_TAGS, ...MATH_MARKUP_TAGS];
 const SANITIZE_ATTR = [...ALLOWED_ATTR, ...MATH_MARKUP_ATTRIBUTES];
@@ -242,6 +286,15 @@ export function sanitizeHtml(html: string, policy: SanitizationPolicy): Sanitize
         code: RENDER_DIAGNOSTIC_CODES.MATH_SCOPE_STRIPPED,
         severity: "warning",
         message: `${stripped} math markup node(s) or attribute(s) outside the formula scope were removed.`
+      });
+    }
+
+    const malformedRanges = stripMalformedSourceRanges(body);
+    if (malformedRanges > 0) {
+      diagnostics.push({
+        code: RENDER_DIAGNOSTIC_CODES.SOURCE_RANGE_STRIPPED,
+        severity: "warning",
+        message: `${malformedRanges} block(s) carried a malformed source line range; the attribute was removed, so those blocks stay uneditable.`
       });
     }
 

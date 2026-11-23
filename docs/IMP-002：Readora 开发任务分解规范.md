@@ -4,7 +4,7 @@
 |---|---|
 | 文档编号 | IMP-002 |
 | 文档名称 | Readora 开发任务分解规范 |
-| 文档版本 | 1.1.0 |
+| 文档版本 | 1.3.0 |
 | 文档状态 | Final |
 | 所属阶段 | Implementation Planning |
 | 上游文档 | PRD-001～003、ARC-001～009、IMP-001 |
@@ -1105,6 +1105,91 @@ Epic 完成条件：
 且它自身带完整门禁（ARC-002 §12.3）可独立验收；未将 P1 升 P0（F12-001/002/003 仍为 P1）；
 未因 CodeMirror 可用就扩大范围（正因为它的存在，反而确认了不需要引入新编辑器库）。
 
+### 19.5 变更记录：§22 STORY-13-01 口径按 E0 实测回写（1.1.1）
+
+E0 实现时推翻了 §22 立项文本里的三条口径。按 §19.2「既有需求细化 → 更新现有 Story」处理（不动 Story 划分、不动
+Task 编号、不新增 Epic），仅把拆解修正到与代码事实一致：
+
+1. **TASK-13-01-03**：原写「Sanitizer 白名单放行该属性并按值形状校验」。实际 `ALLOW_DATA_ATTR` 已对 `data-*` 的名字
+   早退放行且完全不查值，白名单一行都不需要改；需要的是清洗后的后置值形状剥离遍历 + 一枚新诊断码。
+   保留原句会让下一个实现者去加一行无效的白名单。
+2. **新增 TASK-13-01-05**（frontmatter 行偏移补偿）：立项时未意识到提取层是整段切掉 YAML 头的，AST 行号因此相对 body
+   而非文件。本条不做，E1 的写回对任何带 frontmatter 的文档都会改错行 —— 属于遗漏的必要 Task，不是范围扩张。
+3. **TASK-13-01-02 发射点 / TASK-13-01-04 门禁数**：发射点从「顶层区块渲染」改到「管线顶层组装处」（块级渲染器无法自辨
+   层级）；四条门禁扩为六条（原四条盖不住 off-by-one 与偏移错算）。验收标准里「既有 HTML 结构断言无需改动」口径过宽，
+   已改为区分「结构」与「钉住属性全集的精确串断言」（后者放宽 4 处）。
+
+本节不记进度，交付取证见 AUD-001 §13.9。E1～E6 的 Story / Task 划分未动。
+
+### 19.6 变更记录：§22 STORY-13-02 口径按 E1 实测回写（1.1.2）
+
+与 §19.5 同一条处理路径（既有需求细化 → 更新现有 Story：不动 Story 划分、不动已编号的
+Task 编号、不新增 Epic）。E1 实现时推翻四条立项口径，均已按代码事实回写：
+
+1. **TASK-13-02-01**：原写「payload 四字段 + strict Schema」，未区分形状与语义。ARC-009 §5.1
+   原文把 `endLine >= startLine` 列入 Schema 表，照它做会把「把手作废」类拒收退化成
+   `payload.invalid`。现明记 Schema 只管形状，语义归 Host。
+2. **TASK-13-02-03**：原写「Host handler：会话校验 → 乐观锁 → …」五步，实现为八步阶梯（多了
+   面板存在、scheme、打不开、应用失败四道），且乐观锁基准从「当前模型 version」改为
+   **快照空间的版本**。按原口径实现会把每一篇「只在阅读器里打开」的文档的首笔写回误杀；
+   同时新增「判断收在不 import vscode 的 service、端口集合里不得有 save」两条结构约束。
+3. **新增 TASK-13-02-06**（测试替身建模）：与 §19.5 第 2 条同性质 —— 立项时未意识到旧替身把
+   `onDidChangeTextDocument` 的 listener 丢空、且没有 `WorkspaceEdit` / `applyEdit` / `openTextDocument`，
+   于是 E1 的核心判据（回声）在现有基建里无法断言。属遗漏的必要 Task，不是范围扩张。
+4. **验收标准里的「integration」重定义为 extension 侧 wiring 测试**：它不指 e2e 夹具，且本轮
+   故意不动夹具（零 View 代码 = 没有发送者）。原写法会让下一个人去给夹具加一条永远没人调的
+   应答器分支，把「没接发送者」伪装成「已集成」。
+
+E2～E6 的 Story / Task 划分未动。本节不记进度，交付取证见 AUD-001 §13.10。
+
+### 19.7 变更记录：§22 STORY-13-03 拆边界并按 E2 实测回写（1.2.0）
+
+同 §19.5 / §19.6 的处理路径（既有需求细化 → 更新现有 Story：不动 Story 划分、不动已编号的 Task
+编号、不新增 Epic）。E2 交付「段落与行内编辑」的**前半**，本轮改动分三类：
+
+1. **显式拆出 E2 / E3 边界**。1.1.0 把 STORY-13-03 整条标为「ARC-009 E2 + E3」却没说哪几个 Task 属哪一
+   阶段，于是验收标准里「一次 `Ctrl+Z` 回到编辑前」「偏移不足时降级插入字面标记」两条在 E2 无从执行。
+   现按 Task 逐项标阶段：**TASK-13-03-05（浮动工具条与选区→源偏移映射）留 E3**，其余五条本轮交付。
+2. **TASK-13-03-02 的形态按实测改为二分**。原口径等价于「四类区块都做所见即所得」，实现不成立：把渲染
+   文本直接提交就是一次 DOM→源反解析，与 ARC-009 §9.4「不做 Markdown 反解析」互斥。现按 ARC-009 §6.2.1
+   的单条判据二分为形态 A（改字，提交补前缀）/ 形态 B（改源，原样写回），**不写任何类型特判分支**。
+3. **新增两条 Task**（TASK-13-03-07 / 08）。与 §19.5 第 2 条、§19.6 第 3 条同性质：这两件事在 ARC-009 里
+   早就是需求（§7.3 搜索 × 编辑挂起、§8 导出必须发生在静态产物上、§9.3 粘贴白名单、§9.5 超大区块），但
+   1.1.0 的 Task 拆解里没有落点 —— 漏掉任何一条都是可交付的缺陷（未提交草稿会被导出带走、草稿会被搜成
+   命中），属遗漏的必要 Task，不是范围扩张。
+
+另记一条与立项预测相反的实测：**`visual:check` 的差异不在 `rects`**。立项预期「顶栏多一枚按钮必然变宽」，
+实测量到的是十档 `screenshot/sha256` 变化、25 个选择器 × 10 档 `rects` 零差异（`.readora-topbar` 是整宽条带，
+`.readora-toolbar-button` 量的是首枚按钮）。本轮 `visual:update` 因此合法且必要，但这条预测的落空提醒后续
+轮次：基线里 `rects` 覆盖不到顶栏按钮数量变化，靠它当「样式污染」的唯一护栏不够，须与 `shell.spec.ts` 的
+高度断言合起来读。
+
+本节不记进度，交付取证见 AUD-001 §13.11。
+
+### 19.8 变更记录：§22 STORY-13-03 的 E3 半边按实测回写（1.3.0）
+
+同 §19.5～§19.7 的处理路径（既有需求细化 → 更新现有 Story：不动 Story 划分、不动已编号的
+Task 编号、不新增 Epic）。E3 交付 STORY-13-03 的后半，本轮改动分三类：
+
+1. **TASK-13-03-05 的名称按实测拆细**。原一条把「浮动工具条 + 选区→源偏移映射 + 五个动作」并列，
+   实现里这是三层各自可独立断言的东西：映射层（`selection-map.ts`）、纯字符串动作层
+   （`inline-format.ts`）、节点与定位层（`format-toolbar.ts`）。名称改写为已交付形态并交代分层理由 ——
+   前两层在 jsdom 里穷举，只有第三层的真像素留给 e2e 与浏览器取证。
+2. **新增两条 Task**（TASK-13-03-09 / 10）。与 §19.6 第 3 条、§19.7 第 3 条同性质：级别选择器与脚注在
+   ARC-009 §6.3 原文里与六个动作**并列**、看起来已被 05 一条覆盖，实测各有一处必须单独立项的收窄 ——
+   级别改动「只改 marker、不改文本」会让 E2 的 `dirty()` 漏判（不单独立项就没人知道要扩脏判定），
+   脚注定义行则受 ARC-009 §5.1「一次写回只带一个行范围」限制而只能插引用。属遗漏的必要 Task，
+   不是范围扩张。
+3. **1.2.0 划除的那条「无可执行对象」本轮兑现并回填取证**。「偏移不足时降级插入字面标记」从无对象
+   可执行变成有 `applied` / `degraded` / `blocked` 三态与对应用例（见 §22 STORY-13-03 验收标准）。
+
+另记一条实测补充：1.2.0 那条「`visual:check` 靠 `rects` + `shell.spec.ts` 双重护栏」的提醒在 E3 收到
+回报 —— 本轮**必须十档全等**（工具条挂 `body` 不进导出序列化的正文容器，且 `dev/visual.tsx` 固定
+`editMode={false}`，两条叠加才使阅读态零变化）。一旦这一轮出现要 `visual:update` 的情形就是越界信号，
+与 E2 那次「顶栏真多了一枚按钮所以刷新合法」是相反的判据。
+
+本节不记进度，交付取证见 AUD-001 §13.12。
+
 ---
 
 ## 20. 本阶段交付清单
@@ -1177,16 +1262,20 @@ IMP-003 将完成：
 
 | Task | 名称 |
 |---|---|
-| TASK-13-01-01 | 在 `packages/markdown-core` 落地 `SOURCE_RANGE_ATTRIBUTE` 常量与类型 |
-| TASK-13-01-02 | 顶层区块渲染输出 `data-readora-source-range`（0 基闭区间，`position` 缺失即不输出） |
-| TASK-13-01-03 | Sanitizer 白名单放行该属性并按值形状 `^\d+:\d+$` 校验 |
-| TASK-13-01-04 | 新建 `source-range.spec.ts` 四条门禁（存在性 / 基序 / 缺位 / 逐字节回取） |
+| TASK-13-01-01 | 在 `packages/markdown-core` 落地 `SOURCE_RANGE_ATTRIBUTE` / `SOURCE_RANGE_PATTERN` 与取值、装饰函数，并经门面导出（Webview 侧 E2 按同一常量读，不允许两处各写字面量） |
+| TASK-13-01-02 | 在管线**顶层组装处**逐子节点渲染并输出 `data-readora-source-range`（0 基闭区间，`endLine` 收缩到最后一行非空行，`position` 缺失即不输出）。发射点不在块级渲染器：段落渲染器同时服务顶层与嵌套，无法自辨层级（ARC-002 §12.3「发射点」） |
+| TASK-13-01-03 | Sanitizer **后置值形状剥离**：白名单不需要动（`ALLOW_DATA_ATTR` 已放行 `data-*` 且不校验值），改为清洗后遍历元素，值不匹配 `^\d+:\d+$` 或区间倒挂即 `removeAttribute`，并新增诊断码 `readora.render.source-range-stripped`（warning） |
+| TASK-13-01-04 | 新建 `source-range.spec.ts` **六条**门禁（幂等逐字节回取 / 区间不相交且间隙只空行 / 文件绝对行号 / 只标顶层与合成节点缺位 / 后置剥离与诊断 / 只增属性）—— 原列四条不足以拦住 off-by-one 与偏移错算 |
+| TASK-13-01-05 | `FrontmatterOutcome` 交出 `bodyLineOffset`（被剥掉的 frontmatter 行数），锚点行号输出前加回该偏移。**本条是 1.1.0 实现时新增的**：AST 行号相对 body，而契约要的是文件绝对行，不补偿则带 frontmatter 的文档每个区块整体前移，E1 写回直接改错行 |
 
 **验收标准：**
 
-- 任一顶层区块按属性取出的源文本，与该区块参与渲染的源**逐字节一致**（ARC-009 §15-1）。
-- `pnpm visual:check` 10 档基线全等；既有 HTML 结构断言无需改动。
+- 任一顶层区块按属性取出的源文本，与该区块参与渲染的源**逐字节一致**（ARC-009 §15-1）；行号是**文件绝对行**，带 / 不带 frontmatter 的同一文档各区块行号差正好是被剥掉的行数。
+- `pnpm visual:check` 10 档基线全等（含截图与 `getComputedStyle` 采样），真机 DOM 采集的锚点数等于顶层区块数、嵌套层零标。
+- 既有 HTML **结构**断言无需改动；但钉住属性集末尾 `>` 的精确串断言不属于此列 —— 实际放宽了 `renderers.spec.ts` 的 4 处（改为只钉「标签 + class」，与 `renderers.spec.ts` 里 `h1` / `h2` 用例的既有写法一致）。1.1.0 原先写的「既有 HTML 结构断言无需改动」口径过宽，以本条为准。
 - 本阶段交付后**没有任何用户可见变化**——这是刻意的，锚定契约的正确性必须能在与编辑无关的前提下独立证明。
+
+> 交付取证登记于 AUD-001 §13.9；本节只定任务拆解与验收口径，不记进度。
 
 ### STORY-13-02：写回链路
 
@@ -1194,37 +1283,51 @@ IMP-003 将完成：
 
 | Task | 名称 |
 |---|---|
-| TASK-13-02-01 | `document.edit` 契约与 Zod strict Schema（payload 四字段，拒绝未知字段） |
-| TASK-13-02-02 | 注册表登记 + 方向标为 `view-to-host`（消息总数 17 → 18） |
-| TASK-13-02-03 | Host handler：会话校验 → 乐观锁 → 范围合法性 → `WorkspaceEdit.replace` → `applyEdit` |
-| TASK-13-02-04 | 三枚错误码：`readora.edit.stale` / `.rangeInvalid` / `.applyFailed` |
-| TASK-13-02-05 | 更新 `protocol.spec.ts` 的方向计数与命名（现测试名仍写「17 条」口径） |
+| TASK-13-02-01 | `document.edit` 契约与 Zod strict Schema（payload 四字段，拒绝未知字段）。**只管形状**（整数 / 非负 / 长度）：`endLine >= startLine` 与越界不得进 Schema，否则错误码从 `edit.rangeInvalid` 退化成 `payload.invalid`（ARC-009 §5.1）；`newText` 只有上限没有下限（删空一个区块是合法编辑），上限复用 `DOCUMENT_TEXT_MAX_LENGTH` 不开第二套 |
+| TASK-13-02-02 | 注册表登记 + 方向标为 `view-to-host`（消息总数 17 → 18）；同时把 `DocumentEditResultSchema` 挂进 `RESPONSE_PAYLOAD_SCHEMAS` 做出口复判（该注册表的第二个使用者，Host 自己发错在出口就被挡） |
+| TASK-13-02-03 | Host 侧八步阶梯，**判断全部收在 `edit/edit-service.ts`（不 import vscode）**，宿主转译在 `edit/vscode-port.ts`：会话/面板→URI 全等→scheme `file`→取模型→乐观锁（比**快照空间的版本**，`snapshotVersionOf` 抽为单一权威）→范围语义→`WorkspaceEdit.replace` + `applyEdit`→再取一次模型回传版本。端口集合里**不得**出现 `postMessage` / `pushUpdate` / `save`（「不新增刷新」「不隐式写盘」由类型结构保证） |
+| TASK-13-02-04 | 三枚错误码：`readora.edit.stale` / `.rangeInvalid` / `.applyFailed`。三者的**用户动作不同**（重新同步后再改 / 把手作废 / 文件只读或被锁），合成一码会让用户去重试一个重试不了的操作 |
+| TASK-13-02-05 | `protocol.spec.ts` 计数转 18（11 权威 + M4/M6 3 + M11 3 + F12 1）；补 `document.edit` 方向与 payload 用例组（含「倒挂范围 Schema 必须放行」这条契约钉）与响应出口复判用例 |
+| TASK-13-02-06 | **测试替身建模**（本轮新增）：`__stubs__/vscode.ts` 补 `WorkspaceEdit` / `workspace.applyEdit` / 可用的 `onDidChangeTextDocument` / `openTextDocument`（新模型 **version = 1**）与可注入的文档正文；`TextDocument.save()` **故意不建模**。本条不是配套改造而是**前置阻塞**：替身里没有回声，ARC-009 §12 那条 E1 判据根本无从断言 |
 
-**验收标准：**
+**验收标准（1.1.2 按实测重写）：**
 
-- integration 走通「View 发 edit → 宿主模型变更 → `onDidChangeTextDocument` 推回 `document.update`」，**不新增刷新机制**（ARC-004 §9.4）。
-- `baseVersion` 不匹配的写回被拒且返回 `readora.edit.stale`。
-- 无活动文档会话时不写盘；全程不出现隐式 `document.save()`（ARC-008 §14.5）。
+- **回声走通，且走的是既有链路**。这里的「integration」指 `apps/extension/src/__tests__/document-edit-wiring.spec.ts`（真 `createReaderApplication` + 替身），**不是 e2e 夹具**：E1 零 View 代码，没有任何发送者，现在给夹具加 `document.edit` 应答器是一条没人调的分支（等 E2 有真实发送者再加）。断言形式：写回 → `vi.advanceTimersByTimeAsync(FILE_EVENT_DEBOUNCE_MS)` → panel 收到 `document.update`，其 `text` / `version` 与宿主模型一致。
+- `baseVersion` 不匹配的写回被拒且返回 `readora.edit.stale`（`edit-service.spec.ts` 逐码 + wiring 侧用回声带的版本复现）。**首笔写回必须成功**：文档只在阅读器里打开时快照报 `0`、`openTextDocument` 后模型报 `1`，拿后者当基准会误杀（wiring 第一条用例就是这条取证）。
+- 每一条拒收路径都断言 `applyLineReplacement` **零调用**且模型零变化（ARC-008 §16.1 第 16–18 条）：绝不留部分效果。
+- 无活动文档会话时拒收（`RESOURCE_DENIED`）；全程不写盘（ARC-008 §14.5 约束 5）：`writtenFiles` 与 `saveCalls` 恒空、磁盘侧 size / mtime 零变化。本阶段交付后**依旧没有任何用户可见变化** —— 编辑模式到 E2 才可用，这是 ARC-009 §12 刻意切分，不是缺陷。
+
+> 交付取证登记于 AUD-001 §13.10；口径推翻的来龙去脉见本篇 §19.6 与 ARC-009 §16.4。
 
 ### STORY-13-03：段落与行内编辑
 
-**对应阶段：** ARC-009 E2 + E3
+**对应阶段：** ARC-009 E2 + E3（1.2.0 按 Task 拆阶段：E2 = 01/02/03/04/06/07/08，E3 = 05；1.3.0 E3 追加 09/10）
 
 | Task | 名称 |
 |---|---|
-| TASK-13-03-01 | `EditLayer` / `EditUnit` 骨架与单活动单元约束 |
-| TASK-13-03-02 | paragraph / heading / blockquote / list 四类编辑单元 |
-| TASK-13-03-03 | 顶栏编辑开关 + 双击入口 + 把手渲染 |
-| TASK-13-03-04 | 提交 / 取消 / 冲突（`conflict`）三态与用户输入保全 |
-| TASK-13-03-05 | 浮动工具条与选区→源偏移映射（加粗/斜体/删除线/行内代码/链接） |
-| TASK-13-03-06 | IME 组合期屏蔽提交（ARC-009 §13 R4） |
+| TASK-13-03-01 | `EditLayer` / `EditUnit` 骨架与单活动单元约束。**E2 已交付**，落地形状与 ARC-009 §6.1 草图有三处差别（见其 §6.1）：`createEditLayer(options)` / `createEditUnit(options)` 而非接口实现，单元**不发请求**（提交意图经 `onSubmit` 交回接管层），与桥的接口是一个 `EditPort`（`submit` / `documentUri()` / `version()`）而不是一个实例，且取值时机为提交那一刻现读 —— 缓存下来的那两份正是冲突的来源 |
+| TASK-13-03-02 | paragraph / heading / blockquote / list 四类编辑单元。**E2 已交付，但是条件式 WYSIWYG**（1.1.0 的「四类都做所见即所得」口径不成立）：只一条判据 `readEditableText(block, type) === parseBlockSource(source, type).lines.join("\n")`，成立走形态 A（初值渲染文本，提交按 `markers` 逐行补前缀），不成立回落形态 B（初值源文本原样，提交不补前缀）；形态记在 `data-readora-edit="text\|source"`。判定天然回落的情形（行内标记 / 转义 / setext / 任务列表 / 嵌套列表 / 行内组合）全部靠用例而不是特判分支 |
+| TASK-13-03-03 | 顶栏编辑开关 + 把手渲染 + 双击入口。**E2 已交付**：把手形态为 `tabindex="0"` + `data-readora-editable="<type>"` + `data-readora-edit-state="idle"`，CSS 在 `:hover` / `:focus-visible` 显形角标，`Enter` / `Space` 激活（容器事件委托，**不新增每块按钮节点**）；开关是 `App` 本地 state，**不进 `ViewStatePayload`、不新增消息**（ARC-009 §7.2 / §16.5 第 1 条）；只读性判据 `isFileSchemeUri` 为假时按钮 `disabled` 而非隐藏；双击入口与总开关同生同灭 |
+| TASK-13-03-04 | 提交 / 取消 / 冲突（`conflict`）三态与用户输入保全。**E2 已交付**：提交 = `focusout` + `Ctrl+Enter`，取消 = `Escape`；被拒按错误码分派三套文案与动作集（`stale` 给重新编辑 + 强制替换，另两码只给重新编辑），DOM 一律不动，输入进 `parked` 表；新快照到达按「摘节点 → 重写 → 插回同 `rangeKey`」保住输入（**不抑制重写**） |
+| TASK-13-03-05 | 浮动工具条与选区→源偏移映射（加粗/斜体/删除线/行内代码/链接）。**E3 已交付**，实现为三层各一份文件（ARC-009 §6.3.1～§6.3.4）：`selection-map.ts` 做 DOM 点 ↔ 文本下标双向映射，**必须与 `readEditableText` 走同一条遍历**（否则判据读路径 A、选区读路径 B），不新增行内源锚点；`inline-format.ts` 是纯字符串动作层（无 DOM），返回 `applied` / `degraded` / `blocked` 三态；`format-toolbar.ts` 只管节点与定位，**挂 `ownerDocument.body`** —— 导出序列化的是正文容器的克隆件，所以工具条是**结构性**进不了交付物，不需要新增剥离规则。跨行选区按文本行**逐行包裹**并跳过空行段，不视为失败、给一行 `.readora-inline-note`；`role="toolbar"` + roving tabindex 照 `ExportMenu` 的既有键盘模型。**一处被实测推翻的立项假设**：Chromium 的文档选区属于当前焦点控件，URL 输入框 `focus()` 会清掉正文选区，因此 `onUrlOpen` 必须在 `focus()` **之前**把选区换算成下标交给接管层（ARC-009 §16.6 第 1 条） |
+| TASK-13-03-06 | IME 组合期屏蔽提交（ARC-009 §13 R4）。**E2 已交付**：`compositionstart` / `compositionend` 期间屏蔽 `blur` 提交与 `Ctrl+Enter` |
+| TASK-13-03-07 | **编辑态与搜索 / 导出的互斥处置**（1.2.0 新增，本轮已交付）。挂起比冲突多一步「还静态产物」（`deactivate({ restore: true })`），否则导出取帧会把一段未落盘的草稿写进交付物（ARC-008 §16.1）；`.readora-edit-conflict` 加进 `search-engine.ts` 的排除集；「继续编辑」只向上发 `onResume` 请求而不擅自解除挂起，两个挂起信号（宿主 `searchOpen` / 导出一次性）取或得出生效态 |
+| TASK-13-03-08 | **粘贴白名单与超大区块护栏**（1.2.0 新增，本轮已交付）。`paste` 只取 `clipboardData.getData("text/plain")` 并经 `Range#deleteContents()` + `insertNode(createTextNode(...))` 插入（不用 `document.execCommand`，jsdom 无实现），整条路径不读 `text/html`；单区块源超 `EDIT_BLOCK_MAX_SOURCE_LENGTH = 8_000` 不激活，原地走行内提示通道（ARC-009 §9.3 / §9.5） |
+| TASK-13-03-09 | **H1–H6 级别选择器落在工具条、不落把手**（1.3.0 新增，本轮已交付）。ARC-009 §6.2 原写「级别由**把手上**的选择器改」，与 E2 已定的把手形态（只有属性 + 伪类、不新增每块按钮节点）冲突，且级别改动是一次源写回、脱离活动单元就没有提交通路。定为六枚按钮只在活动单元是 heading 时出现在工具条内，当前级别用 `aria-pressed` 标出。两条路径差别很大：形态 A 只换 `markers[0]`（`withHeadingLevel` 保留 `#` 后的原空白组）、**DOM 一个字符都不动** → E2 的 `unit.dirty()`「只比文本」会漏判，**必须扩成「文本变了 或 marker 签名变了」**（本轮最容易漏的缺陷）；形态 B 解析不出 ATX 前缀（setext、`#` 后无空格）时六枚 `disabled` + 一行提示，不猜 |
+| TASK-13-03-10 | **脚注只插引用、不写定义行**（1.3.0 新增，本轮已交付）。ARC-009 §6.3 原文把六个按钮并列，未交代定义从哪来。`[^n]:` 必须是独立顶层区块，而一次 `document.edit` 只带一个行范围（§5.1）：补定义就得发两条写回，并把 `expectedEcho` 从 `{version, rangeKey}` 单值改成集合 —— 属协议外的心智负担。定：只插 `[^n]` 引用，编号由纯函数 `nextFootnoteLabel(documentText)` 从 `options.source()` 现算（**号段含已有定义行**，否则与 `[^1]:` 撞号），另给一行「定义需另起一段」提示。它是六个动作里唯一不受 `canWrap` 约束的一个（光标处即可插入） |
 
-**验收标准：**
+**验收标准（1.2.0 按实测重写，1.3.0 追加 E3 三条）：**
 
-- e2e 覆盖「双击改文字 → 提交 → 静态产物已更新 → **未编辑区块逐字节不变**（逐行 diff，不接受「大致相同」）」。
-- 一次 `Ctrl+Z` 回到编辑前；脏态与 `Ctrl+S` 归宿主。
-- 不可编辑类型（`htmlBlock`、`footnoteSection` 等）**不显示任何编辑 affordance**。
-- 偏移不足时降级插入字面标记，不损坏源文本。
+- e2e 覆盖「双击改文字 → 提交 → 静态产物已更新 → **未编辑区块逐字节不变**（逐行 diff，不接受「大致相同」）」。取证：`tests/e2e/edit.spec.ts` ①（逐字节写回 + `range` / `baseVersion` 取值正确）、②（heading 保留 `##` 与锚点属性）、⑧（清空区块的已知形态：留一个空行、其余字节不变）。
+- **不可编辑类型不显示任何编辑 affordance**：`table` / `hr` / 代码 / 图表 / 公式 / 无 `rangeKey` 的合成区块上既无 `data-readora-editable` 也无 `tabindex`（取证：`edit.spec.ts` ④ + `edit-layer.spec.ts` 认领表一节）。
+- **冲突不丢输入**：`stale` 卡片两动作可见且「强制替换」落进文件（`edit.spec.ts` ⑤），外部快照到达时正在输入的草稿不丢（⑥，jsdom 侧的硬证据是节点身份 `toBe`），`Escape` 放弃后正文回到静态产物且**零消息**（⑦）。
+- **开关不产生任何 view→host 消息**（ARC-009 §7.2 零协议变更的契约钉）：取证 `app-edit-mode.spec.tsx`；反向护栏是「编辑中途下发一次 `reader.viewState` 不清本地开关」（`edit.spec.ts`）。
+- ~~「一次 `Ctrl+Z` 回到编辑前；脏态与 `Ctrl+S` 归宿主」~~ —— 本条**仍不在 E2 取证**：本轮无宿主可测（e2e 夹具的模型在页内，没有撤销栈），取证依旧在 `apps/extension/src/__tests__/document-edit-wiring.spec.ts`（E1），按 §19.6 的写法显式交代而**不当成已验证**（ARC-009 §15-4）。
+- ~~「偏移不足时降级插入字面标记」~~ —— 1.2.0 当时写的是「属 TASK-13-03-05（E3），本轮无选区→源映射代码，本条无可执行对象」；**E3 已交付并有对象可执行**（1.3.0 回填）：取证在 `inline-format.spec.ts` 的 `degraded` 用例组与 `edit-layer.spec.ts` 的选区注入口用例（`EditLayerOptions.selection`）。降级语义 = **不动结构**，只在能映射的那一端插成对标记并把光标落在两个标记之间 + 一行 `.readora-inline-note`；选区跨出本单元则夹回单元内（夹完长度 0 就什么都不做）。映射不出端点的判据是 `charOffsetOf` 返回 `null`。
+- **行内格式化端到端**（1.3.0 新增，TASK-13-03-05 / 09 / 10）：取证 `tests/e2e/edit-inline.spec.ts` **九条**，逐条对应一个决策 —— ①工具条与所选词的框真像素重叠且加粗**只改那一个词**、其余行逐条 `toEqual` 原值；②同一段再选 `**paragraph**` 整段→回到原串（端到端幂等）；③跨两个列表项逐行包裹（标记插在 `- ` / `1. ` 之后）；④引用两行之间那条 `>` 空行没被包成 `**`；⑤URL 输入框展开时单元不销毁、回车写出 `[词](url)`；⑥改级别只动 `##` 那三个字节且 `data-readora-heading` 锚点不变；⑦`E` 键激活 + 活动单元内按 `E` 只是一个字（idle 护栏的浏览器版）；⑧脚注在光标处插 `[^2]` 且模型里不多出行；⑨code span 内加粗 `disabled` 且源里不出现 `` `** ``。反向护栏：**`tests/e2e/edit.spec.ts` 九条一字不改**（它们构成 E3 对 E2 越界的检测器）。
+- **工具条生命周期零残留**（1.3.0 新增）：五种收起场合（单元销毁 / 正文重写 / 挂起 / 换文档 / `destroy()`）后 `document.body` 上**零枚** `.readora-edit-toolbar`（`format-toolbar.spec.ts` + `edit-layer.spec.ts` + `markdown-content-edit.spec.tsx` 重建路径各断言一次）。挂 body 换来的代价必须自己记账。
+
+> 交付取证登记于 AUD-001 §13.11（E2）与 §13.12（E3）；口径推翻的来龙去脉见本篇 §19.7 / §19.8 与 ARC-009 §16.5 / §16.6。
 
 ### STORY-13-04：扩展类型与收尾
 
@@ -1236,8 +1339,8 @@ IMP-003 将完成：
 | TASK-13-04-02 | diagram / math / htmlBlock 展**源码**输入，不做假 WYSIWYG（ARC-009 §6.2） |
 | TASK-13-04-03 | 表格单元格编辑与增删行列 |
 | TASK-13-04-04 | frontmatter 属性卡片逐键编辑与按 kind 序列化 |
-| TASK-13-04-05 | 快捷键登记进 extension manifest |
-| TASK-13-04-06 | 编辑期性能报告 + PRD-003 视觉规范补章 + README 能力边界 |
+| TASK-13-04-05 | 快捷键登记进 extension manifest。**1.3.0 加注**：`E` 键已在 E3 提前登记，但登记地是 **ARC-004 §4.5 的键位表而不是 manifest 的 `contributes.keybindings`** —— 单键 `e` 做成宿主全局键位会吃掉宿主 Markdown 编辑器里的字母 e，实际实现为 Webview 内容器委托 + idle-only 护栏（ARC-009 §6.3.7）。E6 只剩余下键位与 PRD-003 视觉章，本条不得被误读成「已改 manifest」 |
+| TASK-13-04-06 | 编辑期性能报告 + PRD-003 视觉规范补章 + README 能力边界（**注：编辑可见性部分已在 E2 发生** —— 顶栏多一枚 Edit 开关、区块可双击就地改字，README 已按 M14 记录；E6 只补快捷键与 PRD-003 的编辑态视觉章） |
 
 **验收标准：**
 
@@ -1260,5 +1363,5 @@ IMP-003 将完成：
 
 **文档结束**
 
-**版本：1.1.0**  
+**版本：1.3.0**  
 **状态：Final**

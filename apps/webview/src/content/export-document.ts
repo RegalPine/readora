@@ -9,7 +9,8 @@
  * 1. 删节点：只删交互专属层造出来的东西，名单与本层「谁造了这些节点」同源；
  * 2. 删属性：`data-readora-code-editor-state` 一删，markdown.css 那条 `[state="mounted"]
  *    .readora-code-pre{display:none}` 就不成立了，静态 `<pre>` 自己回到可见 ——
- *    代码块的导出不需要第二条渲染路径，也不需要动任何 CSS；
+ *    代码块的导出不需要第二条渲染路径，也不需要动任何 CSS；编辑态的三枚属性
+ *    （E2）走同一条手法，见 `restoreStaticEdit`；
  * 3. 摘引用：`img[src]` 全部摘掉。屏上的 src 是 `vscode-webview://` 的会话内地址，
  *    写进文件就是死链 + 本地结构泄露；Host 侧按 `data-readora-image` 的原始引用
  *    重新走一遍资源策略再内联成 data:，与屏上同源的那道闸门一个都不绕过。
@@ -24,6 +25,7 @@
  */
 import { CONTENT_WIDTH_VARIABLE, FONT_SIZE_VARIABLE, LINE_HEIGHT_VARIABLE } from "../app/theme";
 import { CODE_EDITOR_HOST_CLASS, CODE_EDITOR_STATE_ATTRIBUTE } from "./code-editor/code-editor-layer";
+import { EDIT_CONFLICT_CLASS, EDIT_DOM_ATTRIBUTES } from "./edit/edit-unit";
 import {
   DIAGRAM_ACTION_ATTRIBUTE,
   DIAGRAM_FULLSCREEN_CLASS,
@@ -98,6 +100,29 @@ function restoreStaticCode(root: HTMLElement): void {
 function dropTransientViews(root: HTMLElement): void {
   for (const node of Array.from(root.querySelectorAll(`.${DIAGRAM_FULLSCREEN_CLASS}`))) {
     node.classList.remove(DIAGRAM_FULLSCREEN_CLASS);
+  }
+}
+
+/**
+ * 编辑态回到静态形态（ARC-009 §8 / ARC-008 §16.1，E2）。
+ *
+ * 与 `restoreStaticCode` 同一条手法：**删属性就够**。三枚属性（把手 / 单元状态 /
+ * 形态标记）都在附加层写下，删掉它们 = 「这一屏从没进过编辑模式」，不需要动任何
+ * CSS。冲突卡片则是本层删的第四个东西：它是**未提交的输入**，不是文档内容，
+ * 进文件等于把一段没落盘的草稿冒充成用户的正文。卡片里的文本不会被“揉回”正文 ——
+ * 那个节点整个抬走，底下那块区块保持它在重写后拿到的静态产物。
+ *
+ * 调用前 App 已先 `suspend()` 过接管层（`App.tsx` 的 `export.capture` 分支），
+ * 所以正在输入的那一块已经不是 `contenteditable` 了；这里只兼处理卡片与残留属性。
+ */
+function restoreStaticEdit(root: HTMLElement): void {
+  for (const node of Array.from(root.querySelectorAll(`.${EDIT_CONFLICT_CLASS}`))) {
+    node.remove();
+  }
+  for (const attribute of EDIT_DOM_ATTRIBUTES) {
+    for (const node of Array.from(root.querySelectorAll(`[${attribute}]`))) {
+      node.removeAttribute(attribute);
+    }
   }
 }
 
@@ -180,6 +205,7 @@ export function serializeExportDocument(
   stripInteractive(clone);
   unwrapSearchHits(clone);
   restoreStaticCode(clone);
+  restoreStaticEdit(clone);
   dropTransientViews(clone);
   detachImageSources(clone);
   const host = canvas ?? root.ownerDocument?.querySelector<HTMLElement>(CANVAS_SELECTOR) ?? null;

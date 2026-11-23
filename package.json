@@ -1,6 +1,6 @@
 {
   "name": "readora",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "Readora — a focused Markdown reading experience for VS Code (monorepo root)",

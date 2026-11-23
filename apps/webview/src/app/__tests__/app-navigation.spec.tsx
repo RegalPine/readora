@@ -105,11 +105,13 @@ function canvasMain(): HTMLElement | null {
 /**
  * 顶栏动作按钮的名单（按 DOM 顺序取 aria-label）。
  *
- * 这里刻意不写 `toHaveLength(4)`：M6 的顶栏按 PRD-003 §10.5 扩了面，将来再加动作时
- * 这条断言要说出的是「少了谁 / 多了谁」，而不是一个需要猜的数字。
+ * 这里刻意不写 `toHaveLength(4)`：M6 的顶栏按 PRD-003 §10.5 扩了面，E2 又加了
+ * Edit（UX-008，与 Focus 同排且在它之前），将来再加动作时这条断言要说出的是
+ * 「少了谁 / 多了谁」，而不是一个需要猜的数字。
  */
 const ACTION_BUTTONS = [
   "Toggle outline",
+  "Edit mode",
   "Enter focus mode",
   "Search in document",
   "Export document",

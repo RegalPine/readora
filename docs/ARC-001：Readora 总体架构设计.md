@@ -218,7 +218,8 @@ Webview 负责：
 
 #### 3.1.4 Workspace Service
 
-职责：
+**职责：**
+
 
 - 工作区路径解析。
 - 文档查找。
@@ -249,6 +250,7 @@ Webview 负责：
 ---
 
 ## 4. Application Layer
+
 
 应用层负责协调用户操作与底层模块。
 

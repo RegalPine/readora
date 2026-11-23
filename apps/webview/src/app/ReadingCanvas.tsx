@@ -10,8 +10,9 @@
  * 本层是「能力装配点」：bridge 的请求能力在这里变成正文可用的四个 handler，
  * 资源解析结果的复判与去重由 ResourceRequestCache 承担，Webview 不自拼路径。
  */
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type RefObject } from "react";
 import type {
+  DocumentEditResult,
   DocumentLoadPayload,
   MessageType,
   ResourceKind,
@@ -24,6 +25,7 @@ import { useTheme } from "./theme-context";
 import { MarkdownContent } from "../content/MarkdownContent";
 import type { ImageActivationRequest } from "../content/interactions";
 import { ResourceRequestCache, type ResourceEntry } from "../content/resource-cache";
+import type { EditLayer, EditPort } from "../content/edit/edit-layer";
 
 /** 画布需要通知与请求两种能力，收窄接口以便与 HostBridge 解耦（ARC-005 §6）。 */
 export interface CanvasBridge {
@@ -41,6 +43,13 @@ interface ReadingCanvasProps {
   bridge: CanvasBridge;
   /** 专注模式：只影响布局类名，正文渲染路径不参与（PRD-002 §11.2）。 */
   focusMode?: boolean;
+  /** 编辑模式与它的挂起信号（ARC-009 §7.2 / §7.3）：本层只做装配。 */
+  editMode?: boolean;
+  editSuspended?: boolean;
+  /** 「继续编辑」要关搜索：上面两个信号的反方向，本层仍只装配。 */
+  editResume?: () => void;
+  /** 接管层的向上出口：App 在导出取帧前用它挂起编辑（ARC-008 §16.1）。 */
+  editLayerRef?: RefObject<EditLayer | null>;
   /** 渲染产物里的大纲数据上抛给 App，供 Reader Shell 构树（ARC-007 §4.1）。 */
   onOutline?: (items: readonly OutlineItem[]) => void;
   /** 正文写入完成的通知（ARC-007 §8.2 第 2 步：先渲染后定位）。 */
@@ -62,6 +71,10 @@ export function ReadingCanvas({
   theme: themeOverride,
   bridge,
   focusMode = false,
+  editMode = false,
+  editSuspended = false,
+  editResume,
+  editLayerRef,
   onOutline,
   onRendered
 }: ReadingCanvasProps) {
@@ -86,6 +99,31 @@ export function ReadingCanvas({
   const resources = useMemo(
     () => new ResourceRequestCache(bridge, payload.documentUri),
     [bridge, payload.documentUri, payload.text]
+  );
+
+  /**
+   * 写回端口（ARC-009 §6.1）。
+   *
+   * `payloadRef` 是这里唯一允许的记性，且**只存不读**：`documentUri()` /
+   * `version()` 在提交那一刻现读当下那一帧的 payload，绝不把取出来的值缓存进
+   * 端口对象 —— 陈旧的那两份正是冲突的唯一来源，端口自己先把它扣住就等于
+   * 把乐观锁的锤交给了会过期的一侧。
+   */
+  const payloadRef = useRef(payload);
+  payloadRef.current = payload;
+  const editPort = useMemo<EditPort>(
+    () => ({
+      submit: (request) =>
+        bridge.request<DocumentEditResult>("document.edit", {
+          documentUri: request.documentUri,
+          range: request.range,
+          newText: request.newText,
+          baseVersion: request.baseVersion
+        }),
+      documentUri: () => payloadRef.current.documentUri,
+      version: () => payloadRef.current.version
+    }),
+    [bridge]
   );
 
   const handlers = useMemo(
@@ -179,6 +217,11 @@ export function ReadingCanvas({
           theme={theme}
           handlers={handlers}
           fontSize={preferences.fontSize}
+          editMode={editMode}
+          editSuspended={editSuspended}
+          editResume={editResume}
+          editPort={editPort}
+          editLayerRef={editLayerRef}
           onRendered={handleRendered}
         />
       </main>

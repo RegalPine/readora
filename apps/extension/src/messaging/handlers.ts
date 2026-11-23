@@ -1,11 +1,13 @@
 /**
- * 消息处理器注册（ARC-004 §8.3 中 view-to-host 的 6 条 + M6 补设 2 条 + M11 补设 2 条）。
+ * 消息处理器注册（ARC-004 §8.3 中 view-to-host 的 6 条 + M6 补设 2 条 +
+ * M11 补设 2 条 + F12 补设 1 条）。
  *
  * M1 注册：reader.ready / document.open / document.navigate /
  * state.save / reader.error。M3 补注册 resource.resolve（ARC-008 §7），
  * M6 补注册 config.patch（Reader Settings 写回）与 metrics.report（F11-014），
  * M11 补注册 export.request / export.data（导出链路，依 PRD-003 §10.5 推导补设，
  * 登记见 contracts 的 message-types 头注释与 README 偏差表），
+ * F12 补注册 document.edit（写回链路，ARC-009 §5；判断全在 EditService 的决策阶梯里）。
  * 其余未交付类型继续由路由返回统一 unsupported，诚实声明能力边界。
  *
  * 依赖全部注入，本模块不 import vscode，可独立单测。
@@ -14,6 +16,8 @@ import {
   READORA_ERROR_CODES,
   type ConfigPatchKey,
   type ConfigPatchPayload,
+  type DocumentEditPayload,
+  type DocumentEditResult,
   type DocumentNavigatePayload,
   type DocumentOpenPayload,
   type ExportDataPayload,
@@ -66,6 +70,16 @@ export interface HandlerDependencies {
   requestExport(sessionId: string, format: ExportFormat): Promise<void>;
   /** export.data（M11 补设）：View 交回的那一帧，组装与写盘都在 ExportService。 */
   onExportData(payload: ExportDataPayload, sessionId: string): Promise<void>;
+  /**
+   * document.edit（F12 补设）：把一段源行范围替换回宿主文档模型。
+   *
+   * 本层不判范围合法性、不判版本、不碰 `WorkspaceEdit`：那些都在 EditService。
+   * 返回的新版本要让 View 拿去替换自己手里的 `baseVersion`，否则紧接的第二笔
+   * 编辑会被自己刚造成的版本变化判成陈旧 —— 于是它是继 resource.resolve 之后
+   * 第二个带结构化成功载荷的 view-to-host 通道（出口复判见契约的
+   * `RESPONSE_PAYLOAD_SCHEMAS`）。
+   */
+  editDocument(payload: DocumentEditPayload, sessionId: string): Promise<DocumentEditResult>;
 }
 
 export function registerMessageHandlers(
@@ -131,5 +145,12 @@ export function registerMessageHandlers(
   // 结果（写到哪、成不成）由 Host 的通知说出来，不让页面去解析响应。
   dispatcher.register("export.data", async (payload, context) => {
     await deps.onExportData(payload as ExportDataPayload, context.sessionId);
+  });
+
+  // document.edit：会话归属同样取自 dispatcher 的 context，payload.documentUri
+  // 只是「View 以为自己在改哪篇」，它参与陈旧判定而不参与授权（ARC-008 §16.1）。
+  dispatcher.register("document.edit", async (payload, context) => {
+    const parsed = payload as DocumentEditPayload;
+    return deps.editDocument(parsed, context.sessionId);
   });
 }

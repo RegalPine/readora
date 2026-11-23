@@ -256,9 +256,15 @@ function Fixture() {
               searchOpen={false}
               settingsOpen={false}
               exportOpen={false}
+              // 基线不得拍到编辑态（E2）：`editMode` 固定 false，
+              // 正文上不会出现任何 `[data-readora-editable]`，
+              // 于是阅读态的 rect 仍是「静态产物」那一件东西。
+              editMode={false}
+              editAvailable
               zoom={BASE_ZOOM}
               onToggleOutline={() => undefined}
               onToggleFocusMode={() => undefined}
+              onToggleEditMode={() => undefined}
               onToggleSearch={() => undefined}
               onToggleSettings={() => undefined}
               onToggleExport={() => undefined}

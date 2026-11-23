@@ -25,6 +25,8 @@ import {
 } from "./configuration/configuration-service";
 import { createDiagnostics } from "./diagnostics";
 import { DocumentService } from "./document/document-service";
+import { EditService } from "./edit/edit-service";
+import { createEditPorts } from "./edit/vscode-port";
 import { ReaderError, toErrorMessage } from "./errors";
 import { createExportPorts } from "./export/vscode-ports";
 import { ExportService, type ExportSessionInfo, type ExportStyleContext } from "./export/export-service";
@@ -138,6 +140,23 @@ export function createReaderApplication(
       postCapture: (payload, sessionId) => webviews.postExportCapture(sessionId, payload),
       styleContext: exportStyleContext,
       getChromePath: () => configuration.getExportChromePath(),
+      diagnostics
+    })
+  );
+
+  /**
+   * 编辑写回（F12 · ARC-009 §5.2）。
+   *
+   * 会话事实直接复用 `exportSessionOf` 那一条翻译（结构上兼容 `EditSessionInfo`）：
+   * 「这个会话还在吗、有没有面板、文档是哪一篇」对导出与写回是同一个问题。
+   *
+   * 这里**不新增任何监听器、也不碰 `pushDocumentUpdate`**：写回之后宿主模型自己
+   * 发变更事件，走的还是下面那条 `onDidChangeTextDocument` → 防抖 →
+   * `document.update` 链（ARC-009 §5.2 的关键点：编辑模式不自己发明刷新）。
+   */
+  const edits = new EditService(
+    createEditPorts({
+      sessionOf: exportSessionOf,
       diagnostics
     })
   );
@@ -277,7 +296,9 @@ export function createReaderApplication(
     // M11：顶栏菜单与三条命令在 ExportService 里汇成同一条链路，
     // 因此这里只转接，不再加一层判断（护栏全在那一边）。
     requestExport: (sessionId, format) => exportService.requestExport(sessionId, format),
-    onExportData: (payload, sessionId) => exportService.onExportData(payload, sessionId)
+    onExportData: (payload, sessionId) => exportService.onExportData(payload, sessionId),
+    // F12：同样只转接，护栏（版本、scheme、范围、宿主拒绝）全在 EditService 那边。
+    editDocument: (payload, sessionId) => edits.editDocument(payload, sessionId)
   });
 
   /**

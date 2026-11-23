@@ -1,5 +1,6 @@
 /**
- * 权威消息类型表（ARC-004 §8.3 的 11 条 + M4 补设 1 条 + M6 补设 2 条）。
+ * 权威消息类型表（ARC-004 §8.3 的 11 条 + M4 补设 1 条 + M6 补设 2 条 +
+ * M11 补设 3 条 + F12 补设 1 条）。
  *
  * 早期草案命名（document.request / navigation.change /
  * configuration.update / asset.resolve / host.error）已废弃，
@@ -24,6 +25,12 @@
  * 因此导出必然是一来一回：View 序列化、Host 写盘。三条都登记为规范缺口
  * （README「能力边界」M11 小节）。方向刻意为 request/data 进、capture 出：
  * 保存对话框是唯一授权边界，Host 只有在用户选定路径之后才向 View 取帧。
+ *
+ * `document.edit` 是第 18 条，性质与上面几段相反：**它不是规范缺口**。
+ * ARC-004 §8.3 在 1.3.0 就已经把这条写进消息表（IMP-002 F12 / ARC-009 §5），
+ * 本轮是把实现补齐到那张表上，而不是依推导新造一条通道。所以这里的偏差
+ * 是「表已有、码已有、实现未到」，与 reader.viewState / config.patch /
+ * export.* 那几条「表里没有、依上一级条款推导补设」不能混成同一种写法。
  */
 
 export const MESSAGE_TYPES = {
@@ -43,7 +50,8 @@ export const MESSAGE_TYPES = {
   READER_VIEW_STATE: "reader.viewState",
   EXPORT_REQUEST: "export.request",
   EXPORT_CAPTURE: "export.capture",
-  EXPORT_DATA: "export.data"
+  EXPORT_DATA: "export.data",
+  DOCUMENT_EDIT: "document.edit"
 } as const;
 
 export type MessageType = (typeof MESSAGE_TYPES)[keyof typeof MESSAGE_TYPES];
@@ -69,7 +77,9 @@ export const MESSAGE_DIRECTIONS: Record<MessageType, MessageDirection> = {
   // M11 导出：用户点菜单（进）→ Host 弹完对话框索取正文（出）→ View 交回正文（进）。
   "export.request": "view-to-host",
   "export.capture": "host-to-view",
-  "export.data": "view-to-host"
+  "export.data": "view-to-host",
+  // document.edit：ARC-004 §8.3 表内第 18 条，View 提交一段源行范围的替换。
+  "document.edit": "view-to-host"
 };
 
 export function isMessageType(value: string): value is MessageType {

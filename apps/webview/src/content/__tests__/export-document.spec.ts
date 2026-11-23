@@ -14,6 +14,14 @@ import {
   serializeExportDocument
 } from "../export-document";
 import { CODE_EDITOR_STATE_ATTRIBUTE } from "../code-editor/code-editor-layer";
+import {
+  EDIT_CONFLICT_CLASS,
+  EDIT_DOM_ATTRIBUTES,
+  EDIT_MODE_ATTRIBUTE,
+  EDIT_STATE_ATTRIBUTE,
+  EDITABLE_ATTRIBUTE
+} from "../edit/edit-unit";
+import { EDIT_TOOLBAR_CLASS } from "../edit/format-toolbar";
 import { DIAGRAM_ACTION_ATTRIBUTE, DIAGRAM_TOOLBAR_CLASS } from "../diagram-layer";
 import {
   REFERENCE_ATTRIBUTE as IMAGE_REFERENCE_ATTRIBUTE,
@@ -63,6 +71,20 @@ const RICH_HTML = `
   <table><caption>csv</caption><tbody><tr><td>1</td></tr></tbody></table>
 `;
 
+/** 编辑模式开着、并且有一张冲突卡片在正文里的屏（E2 的剥离名单）。 */
+const EDITED_HTML = `
+  <p class="readora-paragraph" data-readora-source-range="2:2" ${EDITABLE_ATTRIBUTE}="paragraph"
+     ${EDIT_STATE_ATTRIBUTE}="idle">第一段。</p>
+  <p class="readora-paragraph" data-readora-source-range="4:4" ${EDITABLE_ATTRIBUTE}="paragraph"
+     ${EDIT_STATE_ATTRIBUTE}="conflict" ${EDIT_MODE_ATTRIBUTE}="source">第二段。</p>
+  <div class="${EDIT_CONFLICT_CLASS}" role="status" data-readora-edit-reason="stale">
+    <p class="readora-edit-conflict-reason">文件已被外部改动。</p>
+    <pre class="readora-edit-conflict-text">还没提交的那一份</pre>
+    <button type="button">Replace anyway</button>
+  </div>
+  <hr class="readora-divider">
+`;
+
 function mount(html = RICH_HTML): HTMLElement {
   const host = document.createElement("div");
   host.className = "readora-document";
@@ -99,6 +121,48 @@ describe("交互专属节点剥除", () => {
     const block = parse(result.bodyHtml).querySelector(".readora-code-block");
     expect(block?.hasAttribute(CODE_EDITOR_STATE_ATTRIBUTE)).toBe(false);
     expect(block?.querySelector("pre.readora-code-pre code")?.textContent).toBe("const a = 1");
+  });
+
+  test("编辑态的三枚属性与冲突卡片都不进交付物（E2）", () => {
+    const host = mount(EDITED_HTML);
+    const result = serializeExportDocument(host);
+    const root = parse(result.bodyHtml);
+    for (const attribute of EDIT_DOM_ATTRIBUTES) {
+      expect(root.querySelectorAll(`[${attribute}]`)).toHaveLength(0);
+    }
+    expect(root.querySelector(`.${EDIT_CONFLICT_CLASS}`)).toBeNull();
+    // 卡片里那份未提交的草稿不得被“揉回”正文：整个节点抬走，底下那块保持静态产物
+    expect(root.textContent).not.toContain("还没提交的那一份");
+    expect(root.textContent).not.toContain("文件已被外部改动");
+    // 删的是编辑态，不是内容：区块、正文与源位置锚点一个不少
+    const paragraphs = root.querySelectorAll("p.readora-paragraph");
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0]?.getAttribute("data-readora-source-range")).toBe("2:2");
+    expect(paragraphs[1]?.textContent).toBe("第二段。");
+    // 屏上那一份不受扰动：用户还看着把手与卡片，导出不该替他退出编辑模式
+    expect(host.querySelectorAll(`.${EDIT_CONFLICT_CLASS}`)).toHaveLength(1);
+    expect(host.querySelector("p.readora-paragraph")?.getAttribute(EDITABLE_ATTRIBUTE)).toBe(
+      "paragraph"
+    );
+  });
+
+  test("挂 body 的工具条在导出序列化的视野之外（E3，结构性而非剥离）", () => {
+    const host = mount(EDITED_HTML);
+    // 造一个「工具条正浮着」的屏：它挂在 body 上，不在正文容器里。
+    const toolbar = document.createElement("div");
+    toolbar.className = EDIT_TOOLBAR_CLASS;
+    toolbar.setAttribute("role", "toolbar");
+    toolbar.innerHTML = '<button type="button" aria-label="Bold">B</button>';
+    document.body.append(toolbar);
+
+    const result = serializeExportDocument(host);
+    expect(result.bodyHtml).not.toContain(EDIT_TOOLBAR_CLASS);
+    expect(parse(result.bodyHtml).querySelector(`.${EDIT_TOOLBAR_CLASS}`)).toBeNull();
+    // 关键的一条：剥离名单里**没有**它 —— 进不去不是因为被删掉，而是因为不在克隆件里。
+    // 所以 E3 不往 INTERACTIVE_SELECTORS 里加一项，而 E2 的冲突卡片必须加（它挂在正文里）。
+    expect(INTERACTIVE_SELECTORS).not.toContain(EDIT_TOOLBAR_CLASS);
+    // 屏上那一份不受扰动：替用户收起工具条是接管层的生命周期，不是导出层的职责。
+    expect(document.body.querySelectorAll(`.${EDIT_TOOLBAR_CLASS}`)).toHaveLength(1);
   });
 
   test("图表工具栏与其中的每一枚按钮都不在交付物里", () => {

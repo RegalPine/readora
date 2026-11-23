@@ -90,6 +90,21 @@ export function OutlineToggleIcon({ visible, ...props }: IconProps & { visible: 
   );
 }
 
+/**
+ * 编辑模式：一支铅笔压在一条基线上。
+ *
+ * 描边风格与 `FocusIcon` 一致（PRD-003 §10.6：图标是装饰，可读名称靠 `aria-label`），
+ * 不引入第二套线条宽度。
+ */
+export function EditIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 19h14" />
+      <path d="M14.8 5.6l2.6 2.6L8.6 17H6v-2.6z" />
+    </Icon>
+  );
+}
+
 /** 专注模式：外框收拢、中心一块正文。 */
 export function FocusIcon(props: IconProps) {
   return (
@@ -100,6 +115,7 @@ export function FocusIcon(props: IconProps) {
   );
 }
 
+/** 搜索：放大镜。 */
 export function SearchIcon(props: IconProps) {
   return (
     <Icon {...props}>

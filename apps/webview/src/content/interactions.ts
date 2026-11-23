@@ -94,8 +94,14 @@ function scrollToAnchor(container: HTMLElement, anchor: string): void {
   target.focus({ preventScroll: true });
 }
 
-/** 行内降级提示：同一条提示重复点击时复位计时器，不叠加节点。 */
-function showInlineNote(anchor: Element, text: string): void {
+/**
+ * 行内降级提示：同一条提示重复点击时复位计时器，不叠加节点。
+ *
+ * 导出给编辑接管层复用（ARC-009 §9.5）：「这块太大不适合就地改」与
+ * 「这个链接指向不存在的文件」是同一种反馈 —— 说在原地、不打断阅读，
+ * 所以走同一个通道、同一个 class，不再造一套提示节点。
+ */
+export function showInlineNote(anchor: Element, text: string): void {
   const parent = anchor.parentElement;
   if (!parent) {
     return;

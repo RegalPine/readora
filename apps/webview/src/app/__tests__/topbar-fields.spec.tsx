@@ -3,6 +3,7 @@
  *
  * 顶栏只留动作控件，逐条都是「有真实数据源才渲染」：
  * - 缩放组：端点上禁用 − / +，点百分号复位（§10.5）。
+ * - Edit 开关（E2 / UX-008）：与 Focus 同排且在它之前；不可写文档上禁用而非隐藏。
  *
  * 面包屑不在顶栏：readora 是自定义编辑器，宿主在编辑器上方给原生面包屑，
  * 顶栏自绘第二条就是冗余导航（「用 VS Code 的，不用自己实现」）。
@@ -34,10 +35,13 @@ function zoomApi(overrides: Partial<ZoomApi> = {}): ZoomApi {
 function bar(overrides: {
   zoom?: ZoomApi;
   outlineVisible?: boolean;
+  editMode?: boolean;
+  editAvailable?: boolean;
 } = {}) {
   const handlers = {
     onToggleOutline: vi.fn(),
     onToggleFocusMode: vi.fn(),
+    onToggleEditMode: vi.fn(),
     onToggleSearch: vi.fn(),
     onToggleSettings: vi.fn(),
     onToggleExport: vi.fn(),
@@ -50,6 +54,8 @@ function bar(overrides: {
       searchOpen={false}
       settingsOpen={false}
       exportOpen={false}
+      editMode={overrides.editMode ?? false}
+      editAvailable={overrides.editAvailable ?? true}
       zoom={overrides.zoom ?? zoomApi()}
       {...handlers}
     />
@@ -166,5 +172,42 @@ describe("缩放组", () => {
     expect(zoom.zoomOut).toHaveBeenCalledTimes(1);
     expect(zoom.reset).toHaveBeenCalledTimes(1);
     expect(zoom.zoomIn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Edit 开关（ARC-009 §7.2 / PRD-002 UX-008，E2）", () => {
+  function editButton(container: HTMLElement): HTMLButtonElement | null {
+    return container.querySelector<HTMLButtonElement>('button[aria-label="Edit mode"]');
+  }
+
+  test("与 Focus 同排且排在它之前：两个互斥的模式开关相邻摆放", () => {
+    const { view } = bar();
+    const labels = [...view.container.querySelectorAll<HTMLButtonElement>(`.${TOOLBAR_CLASS}-actions button`)].map(
+      (button) => button.getAttribute("aria-label")
+    );
+    expect(labels.slice(0, 3)).toEqual(["Edit mode", "Enter focus mode", "Search in document"]);
+  });
+
+  test("aria-pressed 跟开关走", () => {
+    expect(editButton(bar().view.container)?.getAttribute("aria-pressed")).toBe("false");
+    expect(
+      editButton(bar({ editMode: true }).view.container)?.getAttribute("aria-pressed")
+    ).toBe("true");
+  });
+
+  test("不可写文档：禁用而不是隐藏，title 说清原因", () => {
+    const { view } = bar({ editAvailable: false });
+    const button = editButton(view.container);
+    expect(button).not.toBeNull();
+    expect(button?.disabled).toBe(true);
+    expect(button?.title).toBe("Editing is available only for local files");
+  });
+
+  test("可写文档上按钮可用，点击落到 onToggleEditMode", () => {
+    const { view, handlers } = bar();
+    const button = editButton(view.container);
+    expect(button?.disabled).toBe(false);
+    fireEvent.click(button as HTMLButtonElement);
+    expect(handlers.onToggleEditMode).toHaveBeenCalledTimes(1);
   });
 });

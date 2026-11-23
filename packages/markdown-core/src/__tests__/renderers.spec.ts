@@ -2,6 +2,10 @@
  * 基础语法渲染单测（ARC-002 §7，验收 RND-AC-001）。
  *
  * 断言针对 sanitize 后的最终 HTML：既验证结构，也验证白名单没有吃掉语义标记。
+ *
+ * 顶层区块的元素上会带 `data-readora-source-range`（E0 源位置锚定），所以钉顶层元素
+ * 「标签 + class」时一律不写收尾的 `>`（与本文件既有的 h1/h2 断言同口径）—— 属性集不是
+ * 这些用例要钉的东西，源位置本身由 source-range.spec.ts 负责；嵌套层不标范围，仍写全 `>`。
  */
 import { describe, expect, it } from "vitest";
 import { renderMarkdown } from "../index";
@@ -25,7 +29,7 @@ describe("标题与段落（§7.1 / §7.2）", () => {
 
   it("段落与行内语法（粗体/斜体/删除线/行内码/硬换行）", () => {
     const html = htmlOf("普通 **粗** *斜* ~~删~~ `码` 换行  \n第二行\n");
-    expect(html).toContain('<p class="readora-paragraph">');
+    expect(html).toContain('<p class="readora-paragraph"');
     expect(html).toContain('<strong class="readora-strong">粗</strong>');
     expect(html).toContain('<em class="readora-emphasis">斜</em>');
     expect(html).toContain('<del class="readora-delete">删</del>');
@@ -44,8 +48,8 @@ describe("标题与段落（§7.1 / §7.2）", () => {
 describe("列表（§7.3）", () => {
   it("无序 / 有序列表与嵌套层级", () => {
     const html = htmlOf("- 一\n  - 嵌套\n\n1. 甲\n2. 乙\n");
-    expect(html).toContain('<ul class="readora-list">');
-    expect(html).toContain('<ol class="readora-list">');
+    expect(html).toContain('<ul class="readora-list"');
+    expect(html).toContain('<ol class="readora-list"');
     expect(html).toContain('<li class="readora-list-item">');
     // 嵌套：ul 内部再出现 ul
     const first = html.indexOf("<ul");
@@ -81,7 +85,7 @@ describe("列表（§7.3）", () => {
 describe("引用块（§7.4）", () => {
   it("嵌套引用保留层级", () => {
     const html = htmlOf("> 外层\n>\n> > 内层\n");
-    expect(html).toContain('<blockquote class="readora-blockquote">');
+    expect(html).toContain('<blockquote class="readora-blockquote"');
     const first = html.indexOf("<blockquote");
     expect(html.indexOf("<blockquote", first + 1)).toBeGreaterThan(first);
   });
@@ -110,7 +114,9 @@ describe("表格（§7.5）", () => {
   });
 
   it("外层滚动容器存在（长内容横向滚动）", () => {
-    expect(html).toContain('<div class="readora-table-scroll"><table class="readora-table">');
+    // 滚动容器是顶层区块（带源位置属性），内层 table 不是，所以按各自的形状断言。
+    expect(html).toContain('<div class="readora-table-scroll"');
+    expect(html).toContain('<table class="readora-table">');
   });
 
   it("单元格内行内语法可渲染", () => {

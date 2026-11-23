@@ -152,6 +152,11 @@ class StubEmitter<Args extends unknown[]> {
     }
   }
 
+  /** 只清订阅者（事件本身还能继续用）：`resetVscodeStub` 需要这个语义。 */
+  clearListeners(): void {
+    this.listeners.clear();
+  }
+
   dispose(): void {
     this.listeners.clear();
   }
@@ -381,6 +386,25 @@ export const writtenFiles = new Map<string, Uint8Array>();
 export const deletedFiles: string[] = [];
 
 /**
+ * 文档正文的可注入来源（键为 fsPath）。
+ *
+ * `fileStates` 只带 size / mtime，`fs.readFile` 交回的是等长的零字节 ——
+ * 体积闸门与 stat 断言够用，但写回链路要的是**真文本**（按行替换、行数、
+ * 替换后的快照逐字节比对），所以模型另有一份可注入的源。
+ */
+export const documentTexts = new Map<string, string>();
+
+/**
+ * 「隐式写盘」的断言出口：把字节落回一篇**模型还活着的文档**上，在宿主意义
+ * 上等价于一次 save。E1 的写回链路一次都不该走到这里，所以它本应恒空。
+ *
+ * 配套的口径：`TextDocument.save()` **故意不建模**。生产代码哪天误调，
+ * 会在替身上当场 TypeError 而不是拿到一个假装成功的 Promise ——
+ * 「不隐式写盘」因此可证伪，不靠注释承诺。
+ */
+export const saveCalls: string[] = [];
+
+/**
  * 宿主的点号配置键 → 一棵树，本替身按同一规则建模。
  *
  * 取证于 workbench 产物里的配置装配逻辑：`a.b.c` 先按段下降，段上没有值就补一层
@@ -466,18 +490,132 @@ function notFound(path: string): Error {
   return Object.assign(new Error(`EntryNotFound: ${path}`), { code: "FileNotFound" });
 }
 
+/**
+ * 位置与范围（E1 写回链路补的建模）。
+ * 只存数值、不做归一化：`applyEdit` 那一段自己把越界夹到文档末尾，
+ * 与宿主「越界位置夹住、不报错」的行为对齐。
+ */
+export class Position {
+  constructor(
+    readonly line: number,
+    readonly character: number
+  ) {}
+}
+
+export class Range {
+  constructor(
+    readonly start: Position,
+    readonly end: Position
+  ) {}
+}
+
+/**
+ * 文本文档模型。
+ *
+ * `lineCount` / `lineAt` 是写回路径需要的行语义；`version` 与 `isDirty` 可变，
+ * 因为宿主就是这么记的（改一次 `version += 1`，未落盘就 `isDirty`）。
+ * 文本只能经 `openTextDocument`（初始）与 `applyEdit`（`replaceAll`）两条入口变化。
+ */
+export class StubTextDocument {
+  version: number;
+  isDirty: boolean;
+  private text: string;
+
+  constructor(
+    readonly uri: Uri,
+    readonly languageId: string,
+    text: string,
+    version: number,
+    isDirty: boolean
+  ) {
+    this.text = text;
+    this.version = version;
+    this.isDirty = isDirty;
+  }
+
+  get fileName(): string {
+    return this.uri.fsPath;
+  }
+
+  /** 与宿主同口径：按 `\n` 计行，尾随换行算出一个末尾空行。 */
+  get lineCount(): number {
+    return this.text.split("\n").length;
+  }
+
+  getText(): string {
+    return this.text;
+  }
+
+  lineAt(line: number): { text: string } {
+    return { text: this.text.split("\n")[line] ?? "" };
+  }
+
+  /** 只由 `workspace.applyEdit` 调用：外部拿不到写入入口。 */
+  replaceAll(text: string): void {
+    this.text = text;
+  }
+}
+
+/** 模型集：`workspace.textDocuments` 就是这份数组（同一引用，便于 reset 清空）。 */
+const liveTextDocuments: StubTextDocument[] = [];
+
+interface StubTextDocumentChangeEvent {
+  document: StubTextDocument;
+  contentChanges: { text: string }[];
+}
+
+/**
+ * `onDidChangeTextDocument` 的真订阅集合。
+ *
+ * 之前这是个把 listener 丢空的 no-op，于是「写回 → 模型变更 → `document.update`
+ * 回声」整条链在测试里无从断言（ARC-009 §12 的 E1 判据正好要它）。现在
+ * `applyEdit` 会真的 fire，接线与防抖那一段跑的是生产监听器。
+ */
+const textDocumentChanges = new StubEmitter<[StubTextDocumentChangeEvent]>();
+
+function languageIdFor(uri: Uri): string {
+  const lower = uri.path.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown") ? "markdown" : "plaintext";
+}
+
+/** 位置 → 字符偏移；越界位置夹到文档末尾（宿主同口径）。 */
+function offsetAt(text: string, position: Position): number {
+  const lines = text.split("\n");
+  if (position.line >= lines.length) {
+    return text.length;
+  }
+  let offset = 0;
+  for (let index = 0; index < position.line; index += 1) {
+    offset += (lines[index] as string).length + 1;
+  }
+  return Math.min(offset + position.character, text.length);
+}
+
+function applyRange(text: string, range: Range, newText: string): string {
+  const start = offsetAt(text, range.start);
+  const end = Math.max(start, offsetAt(text, range.end));
+  return text.slice(0, start) + newText + text.slice(end);
+}
+
+/**
+ * `WorkspaceEdit` 的替身：只记 `replace` 的条目（写回链路只用这一个方法）。
+ * 没有 `insert` / `delete` / `set` —— 误用即 TypeError，与本文件的总原则一致。
+ */
+export class WorkspaceEdit {
+  readonly entries: { uri: Uri; range: Range; newText: string }[] = [];
+
+  replace(uri: Uri, range: Range, newText: string): void {
+    this.entries.push({ uri, range, newText });
+  }
+}
+
 export const workspace = {
   workspaceFolders: undefined as
     | { uri: Uri; name: string; index: number }[]
     | undefined,
-  textDocuments: [] as {
-    uri: Uri;
-    fileName: string;
-    languageId: string;
-    version: number;
-    isDirty: boolean;
-    getText(): string;
-  }[],
+  get textDocuments(): StubTextDocument[] {
+    return liveTextDocuments;
+  },
   fs: {
     stat(uri: Uri): Promise<StubFileStat> {
       statCalls.push(uri.fsPath);
@@ -497,6 +635,12 @@ export const workspace = {
     },
     writeFile(uri: Uri, content: Uint8Array): Promise<void> {
       writtenFiles.set(uri.fsPath, content);
+      // 落回一篇模型还在的文档 = 一次隐式 save（写回链路必须一次不命中）。
+      if (
+        liveTextDocuments.some((document) => document.uri.fsPath === uri.fsPath)
+      ) {
+        saveCalls.push(uri.fsPath);
+      }
       // 写完就能 stat 到：体积与「产物是否存在」的断言共用同一份事实。
       fileStates.set(uri.fsPath, {
         type: FileType.File,
@@ -542,9 +686,58 @@ export const workspace = {
       }
     };
   },
-  onDidChangeTextDocument(listener: unknown): StubDisposable {
-    void listener;
-    return { dispose(): void {} };
+  onDidChangeTextDocument(
+    listener: (event: StubTextDocumentChangeEvent) => void
+  ): StubDisposable {
+    return textDocumentChanges.event(listener);
+  },
+  /**
+   * 打开文本模型：从 `documentTexts` 建模，**version = 1**。
+   *
+   * 这个 0→1 就是要显式建模的那件事：`snapshotVersionOf` 对「没在文本编辑器里
+   * 打开的文档」报 `0`，而一旦写回路径逼出一次 `openTextDocument`，宿主给的模型
+   * version 是 `1`。不建模这一段，「乐观锁到底比哪个空间的版本」这个分歧
+   * 在测试里永远看不见（E1 的首条 wiring 用例就是在钉它）。
+   */
+  openTextDocument(uri: Uri): Promise<StubTextDocument> {
+    const existing = liveTextDocuments.find(
+      (document) => document.uri.toString() === uri.toString()
+    );
+    // 宿主对同一 URI 交回同一个模型实例：复制一份会让两次 `version` 读数不一致。
+    if (existing) {
+      return Promise.resolve(existing);
+    }
+    const text = documentTexts.get(uri.fsPath);
+    if (text === undefined) {
+      return Promise.reject(notFound(uri.fsPath));
+    }
+    const document = new StubTextDocument(uri, languageIdFor(uri), text, 1, false);
+    liveTextDocuments.push(document);
+    return Promise.resolve(document);
+  },
+  /**
+   * 应用一次 `WorkspaceEdit`：只改**模型**，不碰 `fileStates` / `writtenFiles` ——
+   * 宿主侧未保存的修改就长这样（磁盘上的 size / mtime 必须零变化）。
+   */
+  applyEdit(edit: WorkspaceEdit): Promise<boolean> {
+    for (const entry of edit.entries) {
+      const document = liveTextDocuments.find(
+        (item) => item.uri.toString() === entry.uri.toString()
+      );
+      // 模型不在（已关 / 已释放）就是宿主拒绝这次修改：返回 false，
+      // 让写回侧拿到 EDIT_APPLY_FAILED 而不是假装成功。
+      if (!document) {
+        return Promise.resolve(false);
+      }
+      document.replaceAll(applyRange(document.getText(), entry.range, entry.newText));
+      document.version += 1;
+      document.isDirty = true;
+      textDocumentChanges.fire({
+        document,
+        contentChanges: [{ text: entry.newText }]
+      });
+    }
+    return Promise.resolve(true);
   },
   onDidSaveTextDocument(listener: unknown): StubDisposable {
     void listener;
@@ -638,6 +831,8 @@ export function resetVscodeStub(): void {
   writtenFiles.clear();
   deletedFiles.length = 0;
   fileStates.clear();
+  documentTexts.clear();
+  saveCalls.length = 0;
   configValues.clear();
   ignoredConfigKeys.length = 0;
   commandHandlers.clear();
@@ -645,6 +840,7 @@ export function resetVscodeStub(): void {
   configurationChangeListeners.clear();
   colorThemeChangeListeners.clear();
   workspace.textDocuments.length = 0;
+  textDocumentChanges.clearListeners();
   window.activeTextEditor = undefined;
   window.activeColorTheme = { kind: ColorThemeKind.Dark };
   workspace.workspaceFolders = undefined;

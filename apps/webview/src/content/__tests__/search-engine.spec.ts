@@ -7,6 +7,7 @@
  * 3. 结果带文档版本，供失效判定。
  */
 import { beforeEach, describe, expect, test } from "vitest";
+import { EDIT_CONFLICT_CLASS } from "../edit/edit-unit";
 import {
   DOCUMENT_VERSION_ATTRIBUTE,
   MAX_SEARCH_HITS,
@@ -188,6 +189,27 @@ describe("排除范围（§9.4 末段）", () => {
     const mark = root.querySelector(`.${SEARCH_HIT_CLASS}`);
     expect(mark?.closest(".readora-code-pre")).not.toBeNull();
     expect(mark?.closest(".readora-code-editor")).toBeNull();
+  });
+
+  test("编辑冲突卡片不进索引：卡片里是未提交的输入不是文档内容（E2）", () => {
+    // 卡片由接管层造，带一段草稿与几枚动作按钮。不排它则「命中计数」与文件里的
+    // 字对不上，而且按计数往下跳时落点根本不在正文里（与 code-editor 同一个坑）。
+    expect(excludedSelector()).toContain(`.${EDIT_CONFLICT_CLASS}`);
+    const root = mount(
+      `<p class="readora-paragraph" data-readora-source-range="2:2" data-readora-editable="paragraph">engine 在正文</p>
+       <div class="${EDIT_CONFLICT_CLASS}" role="status" data-readora-edit-reason="search">
+         <p class="readora-edit-conflict-reason">engine 还没提交</p>
+         <button type="button">Continue editing</button>
+       </div>`
+    );
+    const outcome = run(root, "engine");
+    expect(outcome.result.matches.length).toBe(1);
+    // 排的是卡片子树，不是被认领的区块：把手属性得照常可搜
+    expect(applyHighlights(root, outcome, 7)).toBe(1);
+    expect(root.querySelectorAll(`.${SEARCH_HIT_CLASS}`)).toHaveLength(1);
+    expect(root.querySelector(`.${EDIT_CONFLICT_CLASS}`)?.querySelector("mark")).toBeNull();
+    clearHighlights(root);
+    expect(root.querySelector("p.readora-paragraph")?.textContent).toBe("engine 在正文");
   });
 });
 

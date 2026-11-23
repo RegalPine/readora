@@ -17,6 +17,7 @@ import {
   createEnvelope,
   createErrorResponse,
   createSuccessResponse,
+  createValidatedSuccessResponse,
   isExportFormat,
   isMessageType,
   parsePayload,
@@ -44,9 +45,9 @@ const LOAD_PAYLOAD: DocumentLoadPayload = {
 };
 
 describe("权威消息表（ARC-004 §8.3）", () => {
-  it("注册表覆盖 11 条权威消息 + M4 补设 1 条 + M6 补设 2 条 + M11 补设 3 条", () => {
+  it("注册表覆盖 11 条权威消息 + M4 补设 1 条 + M6 补设 2 条 + M11 补设 3 条 + F12 补设 1 条", () => {
     const types = Object.values(MESSAGE_TYPES);
-    expect(types).toHaveLength(17);
+    expect(types).toHaveLength(18);
     expect(Object.keys(MESSAGE_REGISTRY).sort()).toEqual([...types].sort());
   });
 
@@ -72,6 +73,8 @@ describe("权威消息表（ARC-004 §8.3）", () => {
     expect(MESSAGE_DIRECTIONS["export.request"]).toBe("view-to-host");
     expect(MESSAGE_DIRECTIONS["export.capture"]).toBe("host-to-view");
     expect(MESSAGE_DIRECTIONS["export.data"]).toBe("view-to-host");
+    // F12 写回：方向反过来就是让页面能往磁盘上推东西而不经过任何请求。
+    expect(MESSAGE_DIRECTIONS["document.edit"]).toBe("view-to-host");
   });
 
   it("废弃草案命名不在注册表中", () => {
@@ -473,11 +476,85 @@ describe("export.*（M11 补设的导出通道）", () => {
     }
   });
 
-  it("三条导出错误码各自唯一且互不等于已有码", () => {
+  it("三条导出错误码与三枚编辑错误码各自唯一且互不等于已有码", () => {
     const codes = Object.values(READORA_ERROR_CODES);
     expect(new Set(codes).size).toBe(codes.length);
     expect(codes).toContain("readora.export.failed");
     expect(codes).toContain("readora.export.browserNotFound");
     expect(codes).toContain("readora.export.tooLarge");
+    expect(codes).toContain("readora.edit.stale");
+    expect(codes).toContain("readora.edit.rangeInvalid");
+    expect(codes).toContain("readora.edit.applyFailed");
+  });
+});
+
+describe("document.edit（F12 写回通道）", () => {
+  const EDIT = {
+    documentUri: "file:///workspace/doc.md",
+    range: { startLine: 3, endLine: 5 },
+    newText: "## Rewritten",
+    baseVersion: 3
+  };
+
+  it("四键齐备的合法载荷被接受", () => {
+    expect(parsePayload("document.edit", EDIT).ok).toBe(true);
+  });
+
+  it("未知键即拒：写回通道不接受 payload 以外的指令", () => {
+    expect(parsePayload("document.edit", { ...EDIT, save: true }).ok).toBe(false);
+    expect(
+      parsePayload("document.edit", { ...EDIT, range: { ...EDIT.range, uri: "file:///x" } }).ok
+    ).toBe(false);
+  });
+
+  it("形状：负数、小数、缺键、空 uri 一律拒", () => {
+    expect(parsePayload("document.edit", { ...EDIT, baseVersion: -1 }).ok).toBe(false);
+    expect(parsePayload("document.edit", { ...EDIT, baseVersion: 1.5 }).ok).toBe(false);
+    expect(
+      parsePayload("document.edit", { ...EDIT, range: { ...EDIT.range, startLine: -1 } }).ok
+    ).toBe(false);
+    expect(
+      parsePayload("document.edit", { ...EDIT, range: { ...EDIT.range, endLine: 2.5 } }).ok
+    ).toBe(false);
+    expect(parsePayload("document.edit", { ...EDIT, documentUri: "" }).ok).toBe(false);
+    const { baseVersion: _unused, ...rest } = EDIT;
+    expect(parsePayload("document.edit", rest).ok).toBe(false);
+  });
+
+  it("newText：空串合法（删空一个区块），超 DOCUMENT_TEXT_MAX_LENGTH 即拒", () => {
+    // 上限不开第二套：一段源文本与整篇源文本同一个量纲（ARC-008 §14.5 约束 4）。
+    expect(parsePayload("document.edit", { ...EDIT, newText: "" }).ok).toBe(true);
+    expect(
+      parsePayload("document.edit", {
+        ...EDIT,
+        newText: "x".repeat(DOCUMENT_TEXT_MAX_LENGTH + 1)
+      }).ok
+    ).toBe(false);
+  });
+
+  it("倒挂范围在 Schema 层放行：语义判断归 Host，错误码才能是 rangeInvalid", () => {
+    // 这里不是“忘了加 .refine”。parsePayload 失败只能回
+    // readora.payload.invalid，而 endLine < startLine 的用户语义是
+    // 「源结构已变、把手作废」—— E2 的 conflict 态要按那个码分支。
+    // 顺手补一条 .refine 会把一个业务终态降级成格式错误，不可逆。
+    expect(
+      parsePayload("document.edit", { ...EDIT, range: { startLine: 7, endLine: 2 } }).ok
+    ).toBe(true);
+    // 越界（endLine 大于任何文档行数）同理：只有 Host 知道行数。
+    expect(
+      parsePayload("document.edit", { ...EDIT, range: { startLine: 0, endLine: 10_000_000 } }).ok
+    ).toBe(true);
+  });
+
+  it("响应出口复判：version 为负不会以成功响应离开 Host", () => {
+    // 这是 RESPONSE_PAYLOAD_SCHEMAS 的第二个使用者：Host 自己发错也在出口挡住。
+    const ok = createValidatedSuccessResponse("document.edit", "msg-1", { version: 4 });
+    expect(ok.success).toBe(true);
+    expect(ok.payload).toEqual({ version: 4 });
+    const bad = createValidatedSuccessResponse("document.edit", "msg-2", {
+      version: -1
+    } as unknown as { version: number });
+    expect(bad.success).toBe(false);
+    expect(bad.error?.code).toBe(READORA_ERROR_CODES.INVALID_PAYLOAD);
   });
 });

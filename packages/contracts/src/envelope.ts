@@ -69,6 +69,14 @@ export const READORA_ERROR_CODES = {
   EXPORT_FAILED: "readora.export.failed",
   EXPORT_BROWSER_NOT_FOUND: "readora.export.browserNotFound",
   EXPORT_TOO_LARGE: "readora.export.tooLarge",
+  // 编辑写回（F12 / ARC-009 §5.3）：三码分工，因为用户的下一步动作各不相同 ——
+  // stale 是「源文件在我们不知道的时候变了，重新同步后再改」；rangeInvalid 是
+  // 「你手里那个编辑把手对应的源行范围已经不存在了，把手作废」；applyFailed 是
+  // 「宿主拒绝了这次修改（文件只读、被锁、模型已释放）」。合成一码会让用户
+  // 去重试一个重试不了的操作，或者以为改动没生效而白改一遍。
+  EDIT_STALE: "readora.edit.stale",
+  EDIT_RANGE_INVALID: "readora.edit.rangeInvalid",
+  EDIT_APPLY_FAILED: "readora.edit.applyFailed",
   INTERNAL: "readora.internal"
 } as const;
 

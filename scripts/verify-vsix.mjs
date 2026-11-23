@@ -3,7 +3,8 @@
  *
  * 检查：VSIX 存在、入口与 Webview 固定产物齐全、源码未混入包内、Webview 产物
  * 确实带上 M3 图文渲染、M4 导航/搜索、M6 公式、M8 代码编辑器、M10 脚注、M11 导出
- * 菜单的实现，Host 产物带上 Chrome CLI 的 argv，M5 的主题 Token 与字体真的进了包、
+ * 菜单的实现，Host 产物带上 Chrome CLI 的 argv，V1.4 编辑模式（E0–E3）在 View 与
+ * Host 两端产物里各留下标识，M5 的主题 Token 与字体真的进了包、
  * main.js 与 main.css 各自不超过预算。
  * 任一缺失即失败退出，不做"看起来没问题"的宽松判断。
  */
@@ -213,7 +214,33 @@ for (const marker of [
   // mangle，因此这两条是「菜单真的进了管线」的可判定证据：缺任一条，用户面对的
   // 就是一个不渲染的顶栏按钮，而导出命令仍然全绿。
   "data-readora-export-menu",
-  "readora-export-menu"
+  "readora-export-menu",
+  // V1.4 编辑模式（E0–E3）：0.13.0 首包补做包内对账后固化进来的五条。之前本清单
+  // 停在 M11，编辑模式一条都没有 —— 而头注要防的正是「能力只在源码里存在而用户
+  // 拿不到」，那一类缺失在旧清单下表现为全绿。五条一律取字符串字面量（class 名、
+  // 属性名、协议方法名）：函数名与变量名会被生产构建 mangle，实测拿 `nextFootnoteLabel`
+  // 当判据在产物里 0 命中，那类名字不能作为判定依据。
+  //
+  // 每条都过了反向对照：拿 0.12.1 / 0.12.2 两枚旧包跑同一份清单全 MISS，0.13.0 全 HIT。
+  // 同一轮筛掉了两个看上去合理但实际无鉴别力的串：`readora-inline-note`（旧包 x2，它是
+  // `interactions.ts` 的 NOTE_CLASS，M9 给 wiki link 未命中就在用，E3 只是复用这条通道）
+  // 与 `Formatting`（旧包 x7）。判据得能回答「缺了它会怎样」，否则只是装饰。
+  //
+  // E0：源行范围锚点。缺它则接管层答不出「改哪几行」，双击任何区块都没有反应。
+  "data-readora-source-range",
+  // E2：接管层状态属性（与 M8 那枚 code-editor-state 同族，取自 `EDIT_STATE_ATTRIBUTE`）。
+  // 缺它正文就只是静态渲染，而 webview 单测与 e2e 全都不会红 —— 它们跑的是 TS 源码。
+  "data-readora-edit-state",
+  // E2：冲突卡片容器 class。它是「陈旧写回被拒时不静默丢弃用户输入」那条硬约束在
+  // 产物里的唯一可见痕迹（ARC-009 §5.4），与下面 extension.js 的 `readora.edit.stale`
+  // 是同一件事的两端：Host 会拒、但 View 没地方放，用户得到的仍是一个报错弹框。
+  "readora-edit-conflict",
+  // E3：格式化工具条根节点 class（`EDIT_TOOLBAR_CLASS`）。工具条挂在 `body` 上而非正文里，
+  // 不进导出剥离集也不进搜索排除集，所以它在产物里缺席时没有任何一条既有用例会变红。
+  "readora-edit-toolbar",
+  // E1：写回消息的方法名在 View 侧的字面量。与下面 extension.js 那一条成对判定，
+  // 单侧存在不算通过（理由见那里）。
+  "document.edit"
 ]) {
   if (mainJs.includes(marker)) {
     console.log(`[verify] OK   main.js contains ${marker}`);
@@ -366,6 +393,28 @@ for (const flag of ["--print-to-pdf", "--headless=new", "--screenshot"]) {
     console.log(`[verify] OK   extension.js contains ${flag}`);
   } else {
     console.error(`[verify] MISS extension.js does not contain ${flag}`);
+    failed = true;
+  }
+}
+
+/**
+ * E1（V1.4 写回通道）：`document.edit` 与三枚错误码之一必须**两端都**进到产物里。
+ *
+ * 为什么两端各查一遍：这条通道是 View 发、Host 收，只在一侧出现恰好是本脚本头注
+ * 说的「看起来没问题」——只在 Webview 里，说明 Host 的 handler 没被装配进
+ * `activate()`，用户按下提交后什么都不会发生；只在 Host 里，说明 Webview 根本没发
+ * 这条消息。两侧的单测各自都还是全绿。
+ *
+ * 错误码取 `stale` 做代表：它是三码里唯一由版本号比对触发的一枚（`envelope.ts` 的
+ * `EDIT_STALE`），也是宿主模型被外部改动时唯一会走到的一条路径。三码实测都在产物里
+ * （各 x1），但只钉 `stale` 一条：另两码的文案后续很可能改，而这里要判的是「写回链路
+ * 装上了」不是「错误文本长什么样」。
+ */
+for (const marker of ["document.edit", "readora.edit.stale"]) {
+  if (extensionJs.includes(marker)) {
+    console.log(`[verify] OK   extension.js contains ${marker}`);
+  } else {
+    console.error(`[verify] MISS extension.js does not contain ${marker}`);
     failed = true;
   }
 }

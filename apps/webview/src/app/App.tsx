@@ -31,6 +31,8 @@ import type { HostBridge } from "../bridge/host-bridge";
 import { useSearchShortcuts } from "../content/interactions";
 import { documentRoot } from "../content/heading-query";
 import { exportDocumentRoot, serializeExportDocument } from "../content/export-document";
+import type { EditLayer } from "../content/edit/edit-layer";
+import { isFileSchemeUri } from "../content/edit/source-text";
 import { createHeadingLocator, type HeadingLocator } from "../content/heading-locator";
 import { ancestorKeysOf, buildOutlineTree } from "../content/outline-tree";
 import { OutlinePanel } from "../content/OutlinePanel";
@@ -144,6 +146,18 @@ export function App({ bridge }: AppProps) {
    */
   const [exportOpen, setExportOpen] = useState(false);
   /**
+   * 编辑模式（ARC-009 §7.2，E2）：与 `searchOpen` / `exportOpen` 同一族的**本地**
+   * React state，不走 `reader.viewState` 通道。
+   *
+   * 那条通道的方向是 host→view（ARC-004 §8.3 里没有 view→host 的视图状态位），
+   * 照字面挂上去要么新增第 19 条消息，要么给 `ViewStatePayload` 加一个**没有任何
+   * Host 写者**的死字段。两者都是拿协议为一个不需要它的开关付账。
+   * 默认 `false` 天然兑现「不持久化、每次开面板默认只读」。
+   */
+  const [editMode, setEditMode] = useState(false);
+  /** 接管层的向上出口：导出取帧前要先挂起编辑（ARC-008 §16.1）。 */
+  const editLayerRef = useRef<EditLayer | null>(null);
+  /**
    * 专注模式下的临时展开（PRD-003 §10.5「浮动快速条：专注模式下额外出现展开大纲」）。
    *
    * 它必须是独立的一份状态而不是直接翻 `outlineVisible`：§11.2 的口径是专注模式
@@ -252,6 +266,9 @@ export function App({ bridge }: AppProps) {
         if (exportRequestIdRef.current === next.requestId) {
           return;
         }
+        // 取帧前先挂起编辑（ARC-008 §16.1 / ARC-009 §8）：正在输入的那一块不是
+        // 文档内容，不能跟着克隆进交付物。未提交的输入走同一套保全机制进卡片。
+        editLayerRef.current?.suspend();
         const container = exportDocumentRoot();
         const documentUri = documentUriRef.current;
         if (container === null || documentUri === undefined) {
@@ -534,7 +551,28 @@ export function App({ bridge }: AppProps) {
   const toggleFocusMode = (): void => {
     // 进出专注都收回缺省：大纲在专注模式下默认收起（§11.2）。
     setFocusOutline(false);
+    if (!shell.focusMode) {
+      // 专注与编辑互斥（ARC-009 §7.3）：专注模式不渲染顶栏，进去以后
+      // 那个开关根本点不到，所以必须在入口上就把它关掉，不留「开着但看不见」。
+      setEditMode(false);
+    }
     setOverride({ focusMode: !shell.focusMode });
+  };
+
+  /**
+   * 编辑模式开关：只改本地 state，**不产生任何 view→host 消息**。
+   *
+   * 这条是 §7.2 原文「editMode 走 reader.viewState 通道」不可实现的直接后果，
+   * 并由 `app/__tests__/app-edit-mode.spec.tsx` 钉成契约：将来谁想从这里发一条
+   * 新消息，得先改掉那条断言与它的理由。
+   */
+  const toggleEditMode = (): void => {
+    const next = !editMode;
+    if (next && shell.focusMode) {
+      // 互斥的另一头：开编辑先退专注（与上面一条对称）。
+      setOverride({ focusMode: false });
+    }
+    setEditMode(next);
   };
 
   const themeContext: ThemeContextValue = {
@@ -555,9 +593,12 @@ export function App({ bridge }: AppProps) {
             searchOpen={searchOpen}
             settingsOpen={settingsOpen}
             exportOpen={exportOpen}
+            editMode={editMode}
+            editAvailable={isFileSchemeUri(payload.documentUri)}
             zoom={zoom}
             onToggleOutline={toggleOutline}
             onToggleFocusMode={toggleFocusMode}
+            onToggleEditMode={toggleEditMode}
             onToggleSearch={() => {
               setSearchOpen((open) => !open);
             }}
@@ -635,6 +676,10 @@ export function App({ bridge }: AppProps) {
           payload={payload}
           bridge={bridge}
           focusMode={shell.focusMode}
+          editMode={editMode}
+          editSuspended={searchOpen}
+          editResume={() => setSearchOpen(false)}
+          editLayerRef={editLayerRef}
           onOutline={setOutline}
           onRendered={handleRendered}
         />

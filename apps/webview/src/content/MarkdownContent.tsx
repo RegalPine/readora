@@ -3,7 +3,7 @@
  *
  * 渲染管线跑在 Webview 内（IMP-001 §4.2）：这里调 renderMarkdown，
  * 只把 Sanitizer 之后的 HTML 写入容器（IMP-001 §8.4 允许的唯一 innerHTML 形态），
- * 写入后一次性绑定事件委托（不生成内联脚本），并让图片层、图表层与代码编辑器层接管产物。
+ * 写入后一次性绑定事件委托（不生成内联脚本），并让图片层、图表层、编辑接管层与代码编辑器层接管产物。
  *
  * 五条不变量：
  * - 旧 version 的结果不覆盖新内容（ARC-005 §9.5）；
@@ -13,8 +13,14 @@
  * - 附加层与 DOM 同生命周期：正文重写即销毁旧实例，卸载即清理观察器与监听，
  *   不留悬挂的在途请求（ARC-003 §6.3）；
  * - 附加层只创建自己的节点，不重写正文（innerHTML 写入点仍只有这一处）。
+ *
+ * 编辑接管层（ARC-009 §8，E2）是上面最后两条的**登记例外**：它的实例跨正文重写
+ * 存活，只在卸载时 destroy。理由是无条件重写的 innerHTML 会端掉用户正在输入的
+ * 那个节点，而那份输入在源文件里还不存在。于是重写顺序固定成
+ * 「edit.detachForRewrite() → 写 innerHTML → edit.scan()」，由本层保证三步在同一次
+ * effect 里连着跑完，不给中间任何插队的机会。
  */
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import type { DiagramEngine } from "@readora/diagram-core";
 import {
   computeContentHash,
@@ -29,6 +35,8 @@ import {
   createCodeEditorLayer,
   type CodeEditorLayer
 } from "./code-editor/code-editor-layer";
+import { createEditLayer, type EditLayer, type EditPort } from "./edit/edit-layer";
+import { isFileSchemeUri } from "./edit/source-text";
 
 export interface MarkdownContentProps {
   documentId: string;
@@ -44,6 +52,24 @@ export interface MarkdownContentProps {
   diagramEngine?: DiagramEngine;
   /** 字号偏好：度量变化才需要引擎重算布局（主题变化不走这里）。 */
   fontSize?: number;
+  /**
+   * 编辑模式开关（ARC-009 §7.2）。
+   *
+   * 它走 prop 而不是 `reader.viewState` 通道：那条通道方向是 host→view，
+   * 且没有任何 Host 会写「编辑模式」这个字段（§8.3 里没有 view→view 的视图状态位）。
+   */
+  editMode?: boolean | undefined;
+  /** 搜索面板打开即挂起编辑（§7.3）。 */
+  editSuspended?: boolean | undefined;
+  /**
+   * 接管层请求「把搜索关掉以便继续编辑」（§7.3「继续编辑 = 关搜索并重挂」）。
+   * 挂起信号的所有权在上层，本层不代它改状态，只负责转达。
+   */
+  editResume?: (() => void) | undefined;
+  /** 写回端口：留空即本层完全不接管正文（单测与不可写文档同一形态）。 */
+  editPort?: EditPort | undefined;
+  /** 把接管层交回上层，供导出前显式挂起（ARC-008 §16.1）。 */
+  editLayerRef?: RefObject<EditLayer | null> | undefined;
   onRendered?: (result: MarkdownRenderResult) => void;
 }
 
@@ -65,6 +91,14 @@ interface ContentLayers {
   image: ImageLayer;
   diagram: DiagramLayer;
   code: CodeEditorLayer;
+  /**
+   * 跨正文重写存活的那一个（见文件头注的例外说明）。
+   *
+   * 写成 `| undefined` 而不是 `?:`：本项目开了 `exactOptionalPropertyTypes`，
+   * 「没有这个键」与「这个键是 undefined」（没给 editPort）不是一回事，
+   * 而重建时两种都要能写进同一个对象。
+   */
+  edit: EditLayer | undefined;
 }
 
 function sameSource(
@@ -86,6 +120,11 @@ export function MarkdownContent({
   handlers,
   diagramEngine,
   fontSize,
+  editMode = false,
+  editSuspended = false,
+  editResume,
+  editPort,
+  editLayerRef,
   onRendered
 }: MarkdownContentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -96,6 +135,16 @@ export function MarkdownContent({
   const engineRef = useRef(diagramEngine);
   const cacheRef = useRef<RenderCache | null>(null);
   const layersRef = useRef<ContentLayers | null>(null);
+  /**
+   * 写回端口与当前全文都走 ref：它们**不能**进 render effect 的依赖表，
+   * 否则上层的 `payload` 一变就把整层重建（ARC-009 §8）。
+   */
+  const editPortRef = useRef(editPort);
+  const editResumeRef = useRef(editResume);
+  const textRef = useRef(text);
+  editPortRef.current = editPort;
+  editResumeRef.current = editResume;
+  textRef.current = text;
   engineRef.current = diagramEngine;
 
   const contentHash = computeContentHash(text);
@@ -131,13 +180,21 @@ export function MarkdownContent({
       return;
     }
     writtenHtmlRef.current = result.html;
+    // 接管层先于重写摘走活动单元所在的那一个节点（ARC-009 §5.4 的保全仲裁）。
+    const edit = layersRef.current?.edit;
+    edit?.detachForRewrite();
     // 唯一允许的 innerHTML 写入点：值来自 renderMarkdown 的 DOMPurify 产物（IMP-001 §8.4），
     // 管线失败时也只输出转义纯文本，绝不写入未验证 HTML。
     container.innerHTML = result.html;
     // 旧产物已离开 DOM：其观察目标、在途请求与引擎实例全部作废。
+    // edit **不在**此列：它持有刚从上面捣下来的那个节点，插回去要在 scan 里做。
     layersRef.current?.image.destroy();
     layersRef.current?.diagram.destroy();
     layersRef.current?.code.destroy();
+    if (!sameDocument) {
+      // 换文档：上一次没提交出去的输入与新文档毫无关系，丢（§5.4）。
+      edit?.resetForDocument();
+    }
     const image = createImageLayer({
       // 解析一律交 Host：Webview 不拼路径、不猜本地位置（ARC-008 §8.1）。
       resolve: (reference, kind) => handlersRef.current.resolveResource(reference, kind)
@@ -146,9 +203,23 @@ export function MarkdownContent({
     // 代码编辑器层没有注入口：CodeMirror 是纯本地库，不像 mermaid 那样需要外部解析器，
     // 也没有「换引擎」的需求，所以单测靠 createEditor 参数注替身（见 code-editor-layer）。
     const code = createCodeEditorLayer();
-    layersRef.current = { image, diagram, code };
+    // 接管层只在有端口时存在，并且**只建一次**（ARC-009 §8：它在 code 层之前接管）。
+    const nextEdit =
+      edit ??
+      (editPortRef.current
+        ? createEditLayer({
+            port: editPortRef.current,
+            source: () => textRef.current,
+            onResume: () => editResumeRef.current?.()
+          })
+        : undefined);
+    layersRef.current = { image, diagram, code, edit: nextEdit };
+    if (nextEdit && editLayerRef) {
+      editLayerRef.current = nextEdit;
+    }
     image.scan(container);
     diagram.scan(container);
+    nextEdit?.scan(container);
     code.scan(container);
     onRendered?.(result);
   }, [documentId, result, version, onRendered]);
@@ -186,11 +257,37 @@ export function MarkdownContent({
     layersRef.current?.code.refreshAll();
   }, [fontSize]);
 
+  /**
+   * 编辑模式开关只转给接管层，不重建任何层（ARC-009 §7.2）。
+   *
+   * 它不能进 render effect 的依赖表：那会让「点一下开关」变成整篇重排 DOM，
+   * 阅读位置与已挂载的图表实例一起没了 —— 那不是开关，那是刷新。
+   */
+  useEffect(() => {
+    const edit = layersRef.current?.edit;
+    if (!edit) {
+      return;
+    }
+    // 只读判据：`file:` 之外的文档不给编辑入口（§7.2，UX 判据，权威在 Host）。
+    edit.setAvailable(isFileSchemeUri(documentUri));
+    edit.setEditMode(editMode);
+  }, [editMode, documentUri]);
+
+  // 搜索面板打开即挂起编辑（§7.3）：高亮插入会拆改文本节点，与在输入的元素重合。
+  useEffect(() => {
+    layersRef.current?.edit?.setSuspended(editSuspended);
+  }, [editSuspended]);
+
   useEffect(
     () => () => {
       layersRef.current?.image.destroy();
       layersRef.current?.diagram.destroy();
       layersRef.current?.code.destroy();
+      // 只有卸载才销毁接管层：DOM 已重建，持有节点与卡片跟着作废。
+      layersRef.current?.edit?.destroy();
+      if (editLayerRef) {
+        editLayerRef.current = null;
+      }
       layersRef.current = null;
       // 卸载后 DOM 已重建：允许下一次挂载重新写入并重新接管。
       writtenHtmlRef.current = null;

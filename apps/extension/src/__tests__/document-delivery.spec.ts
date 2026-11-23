@@ -13,6 +13,7 @@ import type * as vscode from "vscode";
 import {
   createEnvelope,
   READORA_ERROR_CODES,
+  type DocumentEditPayload,
   type DocumentSnapshot,
   type ExportDataPayload,
   type ExportFormat,
@@ -65,6 +66,7 @@ function createHarness() {
   const metrics: { payload: MetricsReportPayload; sessionId: string }[] = [];
   const exportRequests: { sessionId: string; format: ExportFormat }[] = [];
   const exportFrames: { payload: ExportDataPayload; sessionId: string }[] = [];
+  const edits: { payload: DocumentEditPayload; sessionId: string }[] = [];
   const webviews = new WebviewManager({
     extensionUri: Uri.file("/ext") as unknown as vscode.Uri,
     dispatcher,
@@ -118,6 +120,12 @@ function createHarness() {
     },
     onExportData: async (payload, sessionId) => {
       exportFrames.push({ payload, sessionId });
+    },
+    // F12 写回通道：与上面两条同口径，本夹具只验证投递门控与会话归属，
+    // 写回本身由 `edit-service.spec.ts`（阶梯）与 `document-edit-wiring.spec.ts`（接线）负责。
+    editDocument: async (payload, sessionId) => {
+      edits.push({ payload, sessionId });
+      return { version: payload.baseVersion + 1 };
     }
   });
   return {
@@ -130,7 +138,8 @@ function createHarness() {
     patched,
     metrics,
     exportRequests,
-    exportFrames
+    exportFrames,
+    edits
   };
 }
 

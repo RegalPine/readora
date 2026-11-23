@@ -1,6 +1,6 @@
 {
   "name": "@readora/diagram-core",
-  "version": "0.12.2",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "description": "图形渲染引擎（ARC-003；M3 落地：Pele/Mermaid 图表渲染 + SVG 安全处理）",

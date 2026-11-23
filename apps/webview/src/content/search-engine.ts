@@ -65,9 +65,11 @@ export const MATH_EXCLUDED_SELECTOR = "";
  * 的 `<pre>` 是同一份源码的完整副本，并且已经在可搜范围内。不排这个宿主会让每处
  * 命中数两遍（还数不准）；排了宿主不动 pre，则一行代码都不少。
  * 选择器对的是 code-editor-layer 写下的真实 class（同一个坑已在图表层踩过一次）。
+ * `.readora-edit-conflict`（E2）同一条理由：卡片里是**未提交的输入**与几个动作
+ * 按钮，它们不是文档内容，进索引就会让「命中计数」与文件里的字对不上。
  */
 export const ATTACHED_EXCLUDED_SELECTOR =
-  "button, .readora-diagram-toolbar, .readora-image-hint, .readora-inline-note, .readora-code-editor";
+  "button, .readora-diagram-toolbar, .readora-image-hint, .readora-inline-note, .readora-code-editor, .readora-edit-conflict";
 /** 上一轮高亮自身：重新搜索前必然先清，这里再兜一层防二次命中。 */
 export const SEARCH_HIT_SELECTOR = `mark[${SEARCH_HIT_ID_ATTRIBUTE}]`;
 

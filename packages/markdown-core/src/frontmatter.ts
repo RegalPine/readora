@@ -24,6 +24,15 @@ import type {
 
 export interface FrontmatterOutcome {
   body: string;
+  /**
+   * `body` 的第 0 行对应**原文件**的第几行（0 基）。
+   *
+   * 提取是整段切掉 frontmatter 的（`lines.slice(closing + 1)`），所以 body 里的行号
+   * 比文件行号少这一截。AST 的 `position` 是相对 body 算出来的，编辑锚点
+   * （ARC-002 §12.3）要的是文件绝对行号 —— 不交出这个偏移，带 frontmatter 的文档
+   * 每个区块的行范围都会整体前移，写回就改到隔壁那几行去了。
+   */
+  bodyLineOffset: number;
   metadata: DocumentMetadata;
   diagnostics: RenderDiagnostic[];
 }
@@ -112,13 +121,15 @@ export function extractFrontmatter(source: string): FrontmatterOutcome {
   const empty: DocumentMetadata = { tags: [], properties: [] };
   const lines = source.split("\n");
   if ((lines[0] ?? "").trim() !== "---") {
-    return { body: source, metadata: empty, diagnostics: [] };
+    return { body: source, bodyLineOffset: 0, metadata: empty, diagnostics: [] };
   }
 
   const closing = findClosingFence(lines);
   if (closing < 0) {
     return {
       body: source,
+      // 未闭合就整段当正文渲染，body 仍是原文，偏移照旧是 0。
+      bodyLineOffset: 0,
       metadata: empty,
       diagnostics: [
         {
@@ -229,6 +240,7 @@ export function extractFrontmatter(source: string): FrontmatterOutcome {
 
   return {
     body: lines.slice(closing + 1).join("\n"),
+    bodyLineOffset: closing + 1,
     metadata: { ...metadata, properties },
     diagnostics
   };

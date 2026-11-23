@@ -25,11 +25,13 @@ import { wikiLinkRenderer } from "./renderers/wiki-link";
 import { tableRenderers } from "./renderers/table";
 import { RendererRegistry } from "./registry";
 import { DEFAULT_SANITIZATION_POLICY, sanitizeHtml } from "./sanitizer";
+import { blankLineTester, decorateFragment, sourceRangeValue } from "./source-range";
 import {
   DEFAULT_PARSER_OPTIONS,
   type DocumentMetadata,
   type HtmlSanitizer,
   type MarkdownDocument,
+  type MarkdownNode,
   type MarkdownParserOptions,
   type MarkdownRenderResult,
   type RenderDiagnostic,
@@ -136,6 +138,16 @@ export {
 // CSV 门面导出：CSV_LANGUAGES 让 Webview / Host 与处理器共用同一张语言表；
 // isDelimitedSizeValue 从 attrs 导出（见上），尺寸正则不允许两边各写一份。
 export { CSV_LANGUAGES, delimiterFor } from "./csv";
+// 源位置锚点（ARC-002 §12.3）：属性名与值形状必须只有一份作者 —— Webview 侧的
+// 编辑接管层（ARC-009 E2）要按同一个常量读 DOM，正则写两份就会漂移。
+export {
+  SOURCE_RANGE_ATTRIBUTE,
+  SOURCE_RANGE_PATTERN,
+  blankLineTester,
+  decorateFragment,
+  sourceRangeValue,
+  trimToContentEnd
+} from "./source-range";
 
 /** 所有渲染器统一经 Registry 注册（IMP-001 §8.3）。 */
 export function createRendererRegistry(): RendererRegistry {
@@ -210,6 +222,37 @@ function attrsRejectionDiagnostics(env: Record<string, unknown>): RenderDiagnost
   }));
 }
 
+/**
+ * 顶层组装（P07）：逐块渲染 + 贴源行范围锚点。
+ *
+ * 只走 `registry.render`，因此节点级异常隔离与降级片段（§14.3 第 1、5 条）行为不变；
+ * 降级产物是裸文本或 `<span>` 时可能无处挂属性，`decorateFragment` 会原样返回，
+ * 结果只是该区块不可编辑，不影响整篇。
+ *
+ * `bodyLineOffset` / `isBlankLine` 都以 `frontmatter.body` 为准（同一个坐标空间），
+ * 行号先收缩尾随空行、再加偏移输出成文件绝对行号（ARC-002 §12.3）。
+ *
+ * `failureResult()` 的整篇兜底不走这里：管线都炸了就没有可靠范围，宁可不标。
+ */
+function assembleDocument(
+  document: MarkdownDocument,
+  renderNode: (node: MarkdownNode) => RenderFragment,
+  bodyLineOffset: number,
+  isBlankLine: (line: number) => boolean
+): RenderFragment {
+  const fragments = (document.children ?? []).map((child) => {
+    const rendered = renderNode(child);
+    const range = sourceRangeValue(child.position, bodyLineOffset, isBlankLine);
+    return range
+      ? { ...rendered, html: decorateFragment(rendered.html, range) }
+      : rendered;
+  });
+  return {
+    html: fragments.map((fragment) => fragment.html).join(""),
+    diagnostics: fragments.flatMap((fragment) => fragment.diagnostics)
+  };
+}
+
 /** 完整管线：normalize → frontmatter → parse → AST → processors → render → sanitize。 */
 export function renderMarkdown(
   request: RenderRequest,
@@ -241,7 +284,17 @@ export function renderMarkdown(
       renderChildren: (node): RenderFragment => registry.renderChildren(node, context)
     };
 
-    const assembled = registry.renderChildren(document, context);
+    // 顶层逐个渲染而不是一句 renderChildren(document)：源行范围只能在这一层拿到
+    // （ARC-002 §12.3「仅 document.children 一层」）。放到渲染器里写做不到这件事——
+    // paragraphRenderer 同时服务顶层段落与 blockquote / list 里的段落，要区分就得往
+    // RendererContext 里塞「我是不是顶层」，再把判断抄进每个块级渲染器。
+    // 拼接与诊断顺序与 registry.renderChildren 一致。
+    const assembled: RenderFragment = assembleDocument(
+      document,
+      (node) => registry.render(node, context),
+      frontmatter.bodyLineOffset,
+      blankLineTester(frontmatter.body)
+    );
     const policy = options.policy ?? DEFAULT_SANITIZATION_POLICY;
     const sanitized = options.sanitizer
       ? options.sanitizer.sanitize(assembled.html, policy)

@@ -438,6 +438,206 @@ EPIC 优先级以文档标注为准（EPIC-03/04/05/07/08/09/10/11/12 为 P0，E
 
 一条方法上的自我修正：本轮曾在 IMP-003 写明「IMP-001 §4.2 / §8.4 已同步修订」，实测推翻 —— §4.2 的 markdown-core 运行环境本就是 Webview（渲染管线不在 Host），§8.4 本就允许净化后的 `innerHTML`。两句都是错的印象，IMP-003 已更正。教训：列「受影响条款」必须逐条读原文，**未需要改动的项也要说清**。
 
+### 13.9 E0 源位置锚定交付（ARC-009 E0 / IMP-002 STORY-13-01）
+
+§13.8 那句「代码未动」自本节起不再成立，但只推进了一格：**E0 交付的是 DOM 上的一个属性，不是编辑能力**。
+
+| 项 | 处置 | 取证 |
+|---|---|---|
+| 新增锚定契约本体 | `packages/markdown-core/src/source-range.ts`：`SOURCE_RANGE_ATTRIBUTE` / `SOURCE_RANGE_PATTERN` / `sourceRangeValue` / `decorateFragment`（引号感知）/ `blankLineTester` + `trimToContentEnd`，经门面导出供 E2 的 `EditLayer` 按同一常量读 | 文件本体 + `pnpm typecheck` 全绿 |
+| 发射点 | `index.ts` 新增 `assembleDocument`，在管线顶层组装处逐子节点渲染 + 装饰（取代一句 `registry.renderChildren(document, …)`，拼接与诊断顺序等价） | 真机采集：`.readora-document` 的 16 个顶层子元素全部带锚点，无遗漏无多余 |
+| frontmatter 行偏移 | `FrontmatterOutcome.bodyLineOffset`（未识别 / 围栏未闭合两条早退路径给 0，正常提取给 `closing + 1`）；行号先收缩尾随空行再加偏移 | 真机：夹具文件有 8 行 YAML 头，首个标题得 `9:9`（文件绝对）而不是 `1:1`（body 相对） |
+| Sanitizer | `stripMalformedSourceRanges` 后置剥离（形状非法或区间倒挂）+ 新诊断码 `readora.render.source-range-stripped`（warning）；`ALLOWED_ATTR` / `ADD_URI_SAFE_ATTR` 一字未改，并在表上方注记理由 | 门禁 5：`a:b` 与 `15:12` 被剥且出诊断，`1:2` 保留且零诊断；正常渲染全夹具零命中 |
+| 六道门禁 + 两组支撑 | `source-range.spec.ts` 33 个用例：幂等逐字节回取 / 区间严格递增不相交且间隙只空行 / 文件绝对行号 / 只标顶层与合成节点缺位 / 后置剥离与诊断 / 只增属性，再加注入健壮性（降级公式带 `>` 与引号）与 `decorateFragment` 白盒 | `pnpm --filter @readora/markdown-core test`：20 文件 342 用例全绿 |
+| 全量回归 | `pnpm lint` / `pnpm typecheck` / `pnpm test` 全绿（contracts 41 + design-tokens 63 + diagram-core 119 + markdown-core 342 + extension 338 + webview 752 = 1655，含 1 条原有 skip） | 本轮未改任何测试预期除下一行 |
+| 视觉基线 | `pnpm build:webview` + `pnpm visual:check`：**10 档全等**（与基线一致）。该比对含 `tokens` / `styles`（`getComputedStyle` 采样）/ `rects` / `gridTemplateColumns` 与截图 sha256，所以样式零变化是被量出来的而不是断言出来的；真机另采到全页 0 条 CSS 规则引用该属性 | 未跑过 `visual:update`（跑了就说明越界改了样式） |
+| 真机 DOM 采集 | playwright-cli 开 `dev/visual.html`：锚点数 16 == 顶层子元素数 16、全部在 `.readora-document` 内、形状全部合法、`[data-readora-source-range] [data-readora-source-range]` 命中 0 | 截图 `.playwright-cli/e0-source-range-visual.png`（目录已 gitignore，不入库） |
+
+**四条与立项口径的偏差（均已回写权威文档，不是就地改测试换绿灯）**：
+
+1. ARC-002 §12.3 / ARC-009 §4.1 原定「0 基与 `positionOf` 一致」不够 —— `positionOf` 的行号相对 body，必须补 frontmatter 偏移（ARC-002 1.4.0 §17.5、ARC-009 1.1.0 §16.3）。
+2. ARC-002 / ARC-009 / IMP-002 三处均写「Sanitizer 白名单必须放行」，实测不成立：`ALLOW_DATA_ATTR` 对 `data-*` 名字早退且不校值，白名单无需改，值形状校验得自己写。
+3. ARC-002 §12.3 原写 `positionOf` 已排除尾随空行，实测列表块的 `map` 本身包含分隔空行（`- a` / `- b` 后接空行再接 `---` 得 `[0, 3]`），不收缩则写回吃分隔行。
+4. ARC-009 §12 E0 判据与 IMP-002 §22 验收均写「既有 HTML 结构断言无需改动」，**这句不成立**：产物只多一个属性（结构不变，视觉基线全等可证），但 `renderers.spec.ts` 有 4 处对全管线产物做精确串匹配、钉到了属性集末尾的 `>`。它们钉的意图是「标签 + class」，已去掉收尾 `>`（与该文件 `h1` / `h2` 用例既有写法一致）并在文件头注说明；实现侧未因此调整过任何输出结构，也未在这些用例里固化行号。
+
+**未闭合项不得因本节而显得已动**：F12 仍为未实现 —— E1（`document.edit` 与 Host 写回）、E2（`EditLayer` / 编辑开关 / 双击入口）、E3～E6 均零行代码，契约侧 `protocol.spec.ts` 仍是 17 条消息口径，编辑模式在装上本版本后仍然完全不可用。这是 ARC-009 §12「E0 与 E1 之间没有功能可见性」的预期结果，不是缺口。§4 需求完成度表不因本轮上调；ARC-009 维持 Draft（按 PRD-001 §10.4 注记，E0 **与** E1 都落地后才转 Final）；README 不写编辑能力（ARC-009 §12 归 E6，提前写会让用户以为装上就能编辑）；`package.json` 版本号未动。
+
+（上段两句已于 §13.10 失效：E1 已交付、`protocol.spec.ts` 计数已转 18。保留原文是为了不回溯抹掉 E0 当时的事实；ARC-009 仍为 Draft，理由见其 §16.2。）
+
+### 13.10 E1 写回链路交付（ARC-009 E1 / IMP-002 STORY-13-02）
+
+§13.9 预告的 E1 已落地。**它交付的是一条能被确定性拒收与确定性回声的链路，不是编辑能力**：本轮零 View 代码、零 UI，用户装上后依旧改不了任何一个字（入口在 E2）。
+
+| 项 | 处置 | 取证 |
+|---|---|---|
+| 契约（`packages/contracts`） | `envelope.ts` 三枚错误码（`readora.edit.stale` / `.rangeInvalid` / `.applyFailed`，注记三者对应的**用户动作不同**）；`message-types.ts` 收 `DOCUMENT_EDIT` 并标 `view-to-host`；`schemas.ts` 三张 strict Schema；`protocol.ts` 进 `MESSAGE_REGISTRY` 与 `RESPONSE_PAYLOAD_SCHEMAS`（后者第二个使用者）；`index.ts` 未动 | `pnpm --filter @readora/contracts test`：47 用例全绿（含 18 条计数、三码唯一性、`document.edit` payload 用例组、响应出口复判） |
+| 版本空间单一权威 | `document/document-service.ts` 导出 `snapshotVersionOf(open)`（`open?.version ?? 0`），`readSnapshot` 与写回侧同源 | 文件本体 + wiring 首条用例 |
+| Host 写回 | 新增 `edit/edit-service.ts`（**不 import vscode**，八步阶梯，任一步不过即抛 `ReaderError`）+ `edit/vscode-port.ts`（薄转译，不进覆盖率）；`messaging/handlers.ts` 注册；`application.ts` 装配复用 `exportSessionOf` | `edit-service.spec.ts` 20 用例逐码触发，每条拒收路径另断言 `applyLineReplacement` 零调用且模型零变化 |
+| 不新增刷新、不隐式写盘 | `application.ts` 未加任何监听器、未碰 `pushDocumentUpdate`；`EditServicePorts` 里没有 `postMessage` / `pushUpdate` / `save` | `document-edit-wiring.spec.ts`：写回后防抖窗口内只多一条响应、零 `document.update`；`FILE_EVENT_DEBOUNCE_MS` 后回声到来且 `text` / `version` 与模型一致 |
+| 测试替身（本轮最大一块非生产代码） | `__stubs__/vscode.ts` 补行语义（`lineCount` / `lineAt`）、可注入正文、`Position` / `Range` / `WorkspaceEdit` / `applyEdit`（改模型 + `version += 1` + `isDirty` + fire 事件）、`openTextDocument`（新模型 **version = 1**）、`onDidChangeTextDocument` 从丢 listener 的 no-op 改为真 emitter、`saveCalls` 出口；**故意不建模 `TextDocument.save()`** | 上面两份 spec 能跑即替身生效；误调 `save()` 会在替身里当场 TypeError 而不是假装成功 |
+| 全量回归 | `pnpm lint` / `pnpm typecheck` / `pnpm test` 全绿（contracts 47 + design-tokens 63 + diagram-core 119 + markdown-core 342 + extension 367 + webview 752 = 1690，含 1 条原有 skip） | 本轮未改任何已有断言口径，除 `document-delivery.spec.ts` 夹具需多一个 `editDocument` 依赖 |
+| 真实浏览器侧 | `pnpm build:webview` + `pnpm test:e2e`：**128 通过**（夹具不发 `document.edit`，本轮故意不加应答器）。这组证明的是 17→18 没把入站方向检查测歪 | e2e 输出 |
+| 视觉基线 | `pnpm visual:check`：**10 档全等**。E1 一行 View 代码都不该动，任何一档要 `visual:update` 都是越界信号 | 未跑过 `visual:update` |
+| 产物加载 | `pnpm build:host` + `pnpm smoke:host`：`dist/extension.js` 加载、`activate()` 注册 9/9 命令、命令体全部调起 | 新注册在激活路径上；单测跑 TS 源码，抓不到 CJS 打包问题，所以这步不可省 |
+
+**四条与立项口径的偏差（均已回写权威文档，不是就地改测试换绿灯）**：
+
+1. **版本空间**：ARC-009 §5.2 第 3 步原文「`model.version ≠ baseVersion` → `EDIT_STALE`」会误杀首次编辑（快照侧 `0` vs `openTextDocument` 后模型 `1`）。改比快照空间的版本，并把 `?? 0` 抽成单一权威；取证是 wiring 首条「无 TextDocument 时首次写回必须成功」（先跑红再实现）→ ARC-009 1.2.0 §5.2 / §16.4、ARC-004 1.3.1 §9.4、ARC-008 1.4.2 §14.5。
+2. **形状 vs 语义**：ARC-009 §5.1 原表把 `endLine >= startLine` 列入 Schema。倒挂的用户语义是「把手作废」（E2 的 `conflict` 态要按它分支），而 Schema 失败只能回 `payload.invalid` —— 改为形状在 Schema、语义在 Host，并用一条契约用例钉住「Schema 必须放行倒挂范围」。
+3. **替换终点**（本轮实测新发现，计划里也没有）：ARC-009 §5.2 写 `range(model.line(s), model.line(e+1))`，并隐含「`e+1` 行行首等于闭区间 `e` 行行尾换行之前」—— 这是错的，`Position(e+1, 0)` 在该行换行符**之后**。配合「`newText` 不含尾随换行」，每改一个区块就吃一个分隔空行，下一个区块直接贴上来、连解析都会变。改为 `(endLine, lineAt(endLine).text.length)` → ARC-009 §16.4 第 3 条。
+4. **测试基建测不到回声**：旧替身没有 `WorkspaceEdit` / `applyEdit` / `openTextDocument`，`onDidChangeTextDocument` 把 listener 丢空，所以 ARC-009 §12 的 E1 判据在现有基建里根本无法断言 → IMP-002 1.1.2 新增 TASK-13-02-06。
+
+**未闭合项不得因本节而显得已动**：F12 仍记为**未实现**，§4 需求完成度表不上调（E1 只是写回通道，不可被用户使用也不产生任何行为变化）。E2 起零代码：`EditLayer` / `EditUnit` / `contenteditable` / 顶栏开关 / 双击入口 / `conflict` 态 UI 全未动；选区→源偏移映射属 E3；`data-readora-edit-state` 与导出侧剥离属 E2/E6；e2e 夹具的 `document.edit` 应答器等 E2 有真实发送者再加；CSP 与 `localResourceRoots` 未变（ARC-008 §14.5 约束 6）。契约侧 `protocol.spec.ts` 计数**已转 18**；ARC-009 仍为 **Draft**（转 Final 的两个前置里「§6.2 最终开放类型集合」要等 E2 才有事实，理由见其 §16.2）；README 不写编辑能力（归 E6）；`package.json` 版本号未动。
+
+### 13.11 E2 段落级就地编辑交付（ARC-009 E2 / IMP-002 STORY-13-03 前半）
+
+§13.10 预告的 E2 已落地，并**推翻了该节那句「装上后依旧改不了任何一个字」**：本轮起用户可以在阅读视图里
+双击段落改字、提交后进宿主模型（仍不等于落盘）。本节只登记门禁与取证；口径变更入 ARC-009 1.3.0 §16.5、
+IMP-002 1.2.0 §19.7、ARC-008 1.4.3 §20.8。零协议变更成立：`packages/contracts` 与 `apps/extension` **一个字节未改**，
+消息仍 18 条，`ViewStatePayload` 未加字段，无新依赖。
+
+**六道门禁结果（均为本轮实跑，不是引用上一轮）**
+
+| # | 门禁 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | `pnpm --filter @readora/webview test` | **40 文件 / 865 全绿** | 较 E1 的 752 增 113，全部落在本轮新增/扩展的 8 份 spec 里；`resource-cache.spec.ts` 既有断言一字未改即绿，即 `parseResourceFailure` 提取为 `bridge-error.ts` 后行为全等 |
+| 2 | `pnpm lint` ; `pnpm typecheck` ; `pnpm test` | 全清 | 本轮**不得变化**的三条零变化：contracts **47** / markdown-core **342** / extension **367 + 1 skip**；另 design-tokens 63、diagram-core 119。typecheck 当场逼出两处 `exactOptionalPropertyTypes`（`onResume` / `draft` 需显式 `\| undefined`），lint 当场逼出一个写了没读的字段（改成两挂起信号取或） |
+| 3 | `pnpm build:webview` + `pnpm test:e2e`（三 project） | **137 通过**（4.1m） | 含安全 project 全绿——这是「CSP 一行未放」的反向取证。一条提醒：默认 6 worker 下跑出过 4 条 `newPage` / `boundingBox` 30s 超时，降并发即全绿且失败面不固定 → 判为并发争抢而非回归（本轮新增 e2e 文件使页面数量上升），不得据此改断言 |
+| 4 | `pnpm visual:check` → `visual:update` → `visual:check` | 十档全等 | 与计划预测相反：差异**只有** `screenshot/sha256` 十档，25 个选择器 × 10 档 `rects` 零差异 → 无越界污染，`visual:update` 合法且必要（详见 ARC-009 §8 末行） |
+| 5 | `pnpm build:host` + `pnpm smoke:host` | `registered 9/9 commands` | Host 零改动仍要跑：webview bundle 变了，产物加载不能出错 |
+| 6 | `pnpm coverage` | 无阈值错误 | diagram-core 88.23% / extension 95.62%（本轮阈值与它无关，跑一次证明没被牵连） |
+
+**本轮交付面**
+
+| 项 | 处置 | 取证 |
+|---|---|---|
+| 接管层（新增 `apps/webview/src/content/edit/`） | `source-text.ts`（无 DOM 纯函数：判据 / 剥补前缀 / marker 复用 / `isFileSchemeUri`）+ `limits.ts`（`EDIT_BLOCK_MAX_SOURCE_LENGTH = 8_000`、三枚冲突文案、`EDIT_UNAVAILABLE_TITLE`）+ `edit-unit.ts`（`contenteditable` 挂载与退出、`readEditableText`、提交/取消/粘贴/IME）+ `edit-layer.ts`（scan / 认领表 / 把手 / `parked` / 冲突卡片 / 挂起） | `source-text.spec.ts`、`edit-layer.spec.ts`（40 条，正文产物来自真跑 `renderMarkdown`） |
+| 接线 | `MarkdownContent.tsx`（`edit` 层入 `ContentLayers`，位置在 code 之前；`editPort` 经 ref、`editMode` 走独立 effect 不重建）、`ReadingCanvas.tsx`（装配 `editPort`，取值时机为提交那一刻现读）、`App.tsx`（`editMode` 本地 state + 与 `focusMode` 双向互斥 + `suspend={searchOpen}` + `export.capture` 前先 `suspend()`）、`TopBar.tsx` + `Icon.tsx`（Edit 排在 Focus 之前，`aria-pressed`，不可写时 `disabled` + `title`） | `markdown-content-edit.spec.tsx`（接管顺序 / 不重建 / `resetForDocument` 只在换文档）、`app-edit-mode.spec.tsx`、`topbar-fields.spec.tsx` |
+| 错误码解析 | 新增 `bridge/bridge-error.ts` 导出 `bridgeErrorCode(error, fallback)`，把 `resource-cache.ts` 已有的 `Readora: <code>: <message>` 前缀解析**提出来共用**；**不改** `HostBridge` 的 reject 消息格式（改格式是跨层破坏） | `resource-cache.spec.ts` 既有断言不动即行为全等 |
+| 副作用 | 导出剔三枚编辑属性 + 冲突卡片（ARC-008 §14.4 / §16.1 第 24 条）；`.readora-edit-conflict` 进搜索排除集；编辑态样式只用存量令牌 | `export-document.spec.ts`、`search-engine.spec.ts`；`visual:check` 的 `rects` 零差异 |
+| e2e 夹具 | `dev/e2e.tsx` 补宿主模型（`model.text/version`）+ `document.edit` 应答器（页内复算可 View 侧观测的阶梯：`stale` / `rangeInvalid` / `applyFailed` / `silent`，成功时**先 respond 再 deliver**）+ `E2EHost.model()`；`visual.tsx` 固定 `editMode={false}`（基线不得拍到编辑态） | `tests/e2e/edit.spec.ts` 九条 |
+| e2e 九条 | ① 逐字节写回且未编辑行逐条 `toEqual` ② heading 保 `##` 与锚点 ③ 引用/列表形态 A + 含 `**` 回落 B ④ 8 枚把手而 `table`/`hr` 为 0 ⑤ `stale` 卡片两动作且强制替换落进文件 ⑥ 外部 `update` 输入不丢 ⑦ Escape 放弃后零消息 ⑧ 清空只留空行 ⑨ `untitled:` 开关禁用 | 137 通过里含这九条 |
+
+**五处与立项口径的分歧（按计划「先写测试证伪、再按实测实现」逐条兑现）**
+
+1. **`editMode` 不能走 `reader.viewState`**：该通道方向是 host→view（`MESSAGE_DIRECTIONS` + `host-bridge.ts` 入站方向检查），照 §7.2 字面实现要么新增第 19 条消息、要么造一个没有任何 Host 写者的死字段。改为 `App` 本地 state，并把「不新增通道」钉成契约：`app-edit-mode.spec.tsx`「点一下只改界面，**不产生任何 view→host 消息**」+ e2e「编辑中途下发 `reader.viewState` 不清本地开关」。
+2. **§6.2 的「所见即所得 = 是」必须加条件**：无条件承诺等价于 DOM→源反解析，与 §9.4 互斥。改为单条判据下的形态 A / B 二分（ARC-009 §6.2.1），不写任何类型特判。
+3. **§5.4 的冲突保全需要一个仲裁规则**：活动单元有未提交输入时，重写前摘节点、重写后插回同 `rangeKey`（不存在则接正文末尾），**不做**「抑制重写」。取证是节点身份 `toBe` 而不是文本相似。
+4. **§9.5 的阈值没有可复用常量**：`DOCUMENT_TEXT_MAX_LENGTH` 是整篇护栏、两个 `50_000` 是「送进解析引擎」的闸门，只有 `MATH_SOURCE_MAX_LENGTH = 8_000` 同问题域 → 取同一量并明记它**不是**协议约束（Host 侧仍按 §5.1 整篇上限复判）。
+5. **§15-4「撤销/脏态归宿主」本轮无宿主可测**：e2e 夹具的模型在页内、没有撤销栈。该条取证仍在 E1 的 `document-edit-wiring.spec.ts`，按 §13.10 的写法显式交代而**不当成已验证**（IMP-002 STORY-13-03 验收标准里该条已划除）。
+
+**三处实测与预测相反 / 计划外发现**
+
+1. **`visual:check` 的差异不在 `rects`**（预测「顶栏多一枚按钮必然变宽」）：`.readora-topbar` 是整宽条带、`.readora-toolbar-button` 量首枚按钮，加一枚不改这两者。提醒后续轮次：`rects` 盖不到顶栏按钮数量变化，不能当「样式污染」的唯一护栏。
+2. **`>无空格` 的引用落形态 A**（预测回落 B）：`blockquote` 那条路径只读直接子 `p` 的文本不读前缀，前缀原串留在 `markers` 里，无信息丢失 → 没理由让用户去改源。
+3. **一条计划里没有的真缺陷（本轮唯一产品级修复）**：把手的键盘激活监听在容器上，而提交由区块自己的监听发起 —— Chromium 在同一个 `keydown` 的两个监听之间让出一个**微任务检查点**，被拒的 `park`（置 `active = null`）正好落在那个空档，于是同一个 `Ctrl+Enter` 会在 `park` 之后继续冒泡触发重激活；重挂按判据重算形态，而那一刻块里是未提交输入 → 落形态 B 把源文本盖回去，**草稿被抹掉**（e2e ⑤ 就是这条红）。护栏：修饰键让路 + 激活**只从 `idle` 态发生**；jsdom 结构上复现不了这个时序，但补了两条能真实证伪的回归（修前的实现过不了它们）。详情入 ARC-009 §5.4。
+
+**未闭合项（不得因本节而显得已动）**
+
+- **F12 的完成度**：F12-001（开关）/ F12-002（区块就地编辑）/ F12-004（源保真写回）/ F12-008（冲突保护）/ F12-009（安全边界）本轮有实现与取证；**F12-003（行内格式化）/ F12-006（图表公式源码）/ F12-007（frontmatter 属性）未做**。§4 需求完成度表是基线当日快照，不因本轮上调，以上述逐项拆解为准。
+- **E3**：浮动工具条与选区→源偏移映射、H1–H6 级别选择器、`E` 键入口与 ARC-004 §4 键位登记。
+- **E4 / E5**：`codeBlock` 翻 `editable`、diagram / math / htmlBlock 源码输入、表格单元格、frontmatter 卡片。
+- **冲突合并**：只做到「同 `rangeKey` 跨重写保住节点」；多区块同时 `parked` 各自一张卡片，**无**合并动作与多路 diff 合并（协作冲突合并本身在 ARC-009 §22.1 排除）。
+- **不隐式写盘**：提交只改宿主 `TextDocument` 模型，**用户仍需宿主 `Ctrl+S`** 才落盘（ARC-008 §14.4 / §14.5 约束 5）；README 与冲突卡片文案均不得许诺「已保存」。
+- **ARC-008 §16.1 第 20–21 条**（管线不放过 `contenteditable` / 写回含 `<script>` 字面量后重渲染仍净化）本轮未新增断言，逐条交代见其尾注。
+- **按编辑区块自身的阅读位置锚定**未实现（本轮只依赖既有的标题锚点 + 比例恢复），登记于 ARC-009 §8。
+
+**对外口径**：ARC-009 升到 **1.3.0** 但仍为 **Draft**（§6.2 其余行未经执行）；README 本轮**写**编辑能力（新增 M14）—— §13.10 那句「README 不写编辑能力（归 E6）」的前提是「无可写内容」，而 E2 已产生用户可见变化，继续不写会让 README 落后于事实；E6 只补快捷键与 PRD-003 编辑态视觉章（IMP-002 TASK-13-04-06 已加注）。`package.json` 版本号未动。
+
+### 13.12 E3 行内格式化交付（ARC-009 E3 / IMP-002 TASK-13-03-05 / 09 / 10）
+
+§13.11「未闭合项」里预告的那一句 —— 「E3：浮动工具条与选区→源偏移映射、H1–H6 级别选择器、`E` 键入口与
+ARC-004 §4 键位登记」—— **本轮四条全部落地**：活动单元上方浮出格式化工具条，六个行内动作
+（加粗 / 斜体 / 删除线 / 行内代码 / 链接 / 脚注引用）+ 标题的 H1–H6 级别选择器 + `E` 键激活入口。
+本节只登记门禁与取证；口径变更入 ARC-009 1.4.0 §6.3.1–§6.3.7 与 §16.6、IMP-002 1.3.0 §19.8、
+ARC-008 1.4.4 §14.5 与 §16.1 第 25 条、ARC-004 1.4.0 §4.5、PRD-002 1.1.0 §4.3（UX-009）。
+
+**零协议变更成立**：`packages/contracts` 与 `apps/extension` **一个字节未改**，消息仍 18 条，无新依赖，
+CSP 与 `localResourceRoots` 一行未放 —— 格式化只是让 `newText` 里多出几个字面标记，写回契约的字段形状不变。
+
+**六道门禁结果（均为本轮实跑，不是引用上一轮）**
+
+| # | 门禁 | 结果 | 说明 |
+|---|---|---|---|
+| 1 | `pnpm --filter @readora/webview test` | **43 文件 / 987 全绿** | 较 E2 的 40 / 865 增 3 份 spec（`selection-map` / `inline-format` / `format-toolbar`）与 122 条。其中 1 条是**文档回写阶段补的**导出侧结构性断言（首跑 986，补后复跑 987，见「本轮交付面」末行）。`source-text.spec.ts` 既有条目一字未改即绿 —— 那是决策 1 那条地基未被破坏的证（本轮在其后追加九例纯字符串等价证明） |
+| 2 | `pnpm lint` ; `pnpm typecheck` ; `pnpm test` | 全清（三个 exit=0） | 本轮**不得变化**的五条计数零变化：contracts **47** / design-tokens **63** / diagram-core **119** / markdown-core **342** / extension **367 + 1 skip**；webview 由 865 → 987。改 markdown-core 即为越界，没有改。补了那条导出断言之后全量重跑一遍，六条计数逐个对上 |
+| 3 | `pnpm build:webview` + `npx playwright test --workers=3` | **146 通过** | 137 + 新文件九条；三 project 全绿，安全 project 顺带证明 CSP 一行未放。**`tests/e2e/edit.spec.ts` 九条一字未改**（决策 7 立的越界检测器，它真的没红）。文档回写时为一条 e2e **用例标题**的措辞改动单文件复跑：**9 通过**（1.6m）；收尾阶段在测试补条与七篇文档全部落地后再全量复跑一次：**146 通过**（4.7m）。沿用 E2 的并发教训：按 3 worker 跑，未据任何超时改断言 |
+| 4 | `pnpm visual:check` | **十档全等**，`rects` / `tokens` 零差异（每档 211 tokens），**未跑 `visual:update`** | 判据与 E2 **相反**：本轮没有任何阅读态元素变化（`dev/visual.tsx` 固定 `editMode={false}`，且工具条挂 `body` 不进正文容器的克隆件）。一旦这一轮出现要刷基线的情形就是越界信号，先修再谈刷新。收尾复跑仍为十档全等 |
+| 5 | `pnpm build:host` + `pnpm smoke:host` | `registered 9/9 commands`（两个 exit=0） | Host 零改动仍要跑：webview bundle 变了，产物加载不能出错。收尾复跑同样通过 |
+| 6 | `pnpm coverage` | 无阈值错误（exit=0） | diagram-core **88.23%** / extension **95.62%**，与 E2 同值（本轮不碰那两个包）。收尾复跑同值 |
+
+**浏览器取证（playwright-cli，全局规则「功能验证使用 playwright-cli 技能」）**
+
+`pnpm --filter @readora/webview dev --port 5288` 起页，走「开编辑模式 → 双击段落 → 放真选区到 `paragraph`
+那个词 → 工具条出现 → 点 Bold → `Ctrl+Enter` → 再双击同一块 → `Escape`」。采到的、jsdom 结构与断言都
+给不出的事实：`parentElement === document.body`、`role="toolbar"`、`aria-label="Formatting"`；选区框 top
+291.64 / left 431.98，工具框 top 249.64 / left 431.98 / **height 37** → **左端全等、垂直间距 5px**（CSS 意图 8px，
+定位用估算高 34px）；roving tabindex 只让首枚按钮 `tabIndex=0`；六枚动作按钮 `aria-pressed` 为 `null`、
+`H1`…`H6` 六枚带 `aria-pressed="false"` 且整组 `hidden`（当前块不是 heading）；提交后模型 `version=2`、
+`document.edit` 消息 1 条、其余 24 行逐字节不变；**再双击同一块落 `data-readora-edit="source"`**（形态 A→B
+回落，这条单测答不了）；`Escape` 后 body 上工具条计数 `0`、`contenteditable` 残留 `0`。
+截图 `.playwright-cli/e3-toolbar-visible.png` 与 `.playwright-cli/e3-form-b-source.png`，取证脚本
+`.playwright-cli/e3-evidence.mjs`（可重跑，直接返回上面这串 JSON；**不放 `test-results/`** —— 那是 playwright
+的 `outputDir`，跑一次 e2e 就清空整目录，本轮已因此失去一份脚本后重建）。
+
+**本轮交付面**
+
+| 项 | 处置 | 取证 |
+|---|---|---|
+| 三层新文件（`apps/webview/src/content/edit/`） | `selection-map.ts`（DOM 点 ↔ 文本下标，与 `readEditableText` **同一条遍历**，不新增行内源锚点）+ `inline-format.ts`（纯字符串动作层，无 DOM：`applied` / `degraded` / `blocked` 三态、逐行包裹、解包、`nextFootnoteLabel`、`withHeadingLevel`）+ `format-toolbar.ts`（只管节点与定位，挂 `ownerDocument.body`，`placeToolbar` 为纯函数） | `selection-map.spec.ts` 18 条（含一条「每个文本节点每个偏移」的交叉断言）、`inline-format.spec.ts` 35 条、`format-toolbar.spec.ts` 24 条 |
+| 改现有 | `edit-unit.ts`（`KEEP_EDITING_SELECTOR` 增工具条 + `applyTextSplice`（`Range` + `createTextNode`，不用 `execCommand`）+ `markerOverride` / `dirty()` 计入 marker 签名 / `setLevel`）；`edit-layer.ts`（工具条生命周期五种收起场合 + `runAction` + `E` 键容器委托 + `EditLayerOptions.selection` 注入口）；`source-text.ts`（导出 `markerLengthOf`）；`limits.ts`（**五条**新文案：逐行包裹 / 代码段内屏蔽 / 脚注定义另起一行 / 降级只插字面标记 / 级别不可改。立项口径列了四条，第五条 `EDIT_SELECTION_UNMAPPED_NOTE` 是决策 3「降级那一端也要给一行 `.readora-inline-note`」的落点，立项时只描述了行为未命名常量）；`markdown.css`（`.readora-edit-toolbar` 一族，**只用存量令牌**） | `edit-layer.spec.ts` 61 条（较 E2 的 40 增 21），`markdown-content-edit.spec.tsx` 重建路径不残留；`no-hardcoded-color.spec.ts` 是门禁 |
+| e2e | `tests/e2e/edit-inline.spec.ts` 九条：①真像素落点 + 只改一个词 ②端到端幂等 ③跨列表项逐行包裹 ④引用空行不包 ⑤URL 行展开时单元不销毁 ⑥改级别只动 `##` 三字节 ⑦`E` 键 + idle 护栏浏览器版 ⑧脚注只插引用不多一行 ⑨code span 内置灰 | 146 通过里含这九条；单文件复跑 9 通过 |
+| 结构性取证补一条 | 文档回写时发现「工具条进不了导出件」这件事只有推理没有断言，遂在 `export-document.spec.ts` 补一条：造一个浮着的工具条 → `bodyHtml` 里没有它 → **同时钉住 `INTERACTIVE_SELECTORS` 未新增该项**（E2 的冲突卡片挂在正文里必须显式剔，两个形态的差别就在这两条名单要不要动） | 该 spec 23 → 24 条；webview 986 → 987 |
+| 文档 | ARC-009 1.4.0、ARC-004 1.4.0（编辑模式第一次动它）、IMP-002 1.3.0、ARC-008 1.4.4、PRD-002 1.1.0、README M15、本报告 §13.12 | 措辞与代码同轮，且以实测为准（见下七条） |
+
+**七条被推翻或收窄的口径**（详情登记于 ARC-009 §16.6，这里只列结论）
+
+1. **焦点会抢走文档选区**：Chromium 里 `urlInput.focus()` 之后正文选区即消失（`selection.toString()` 实测空串）。
+   计划与 E2 那句「单元不销毁、**选区不丢**」按实测改为「单元不销毁、**包裹对象**不丢 —— 丢的正是选区本身，
+   靠 `onUrlOpen` 在失焦前抄下的下标快照补回」。这是本轮**唯一的产品级修复**。
+2. **工具条与选区的实测间距 5px 而非 8px**（估算高 34 vs 真渲染 37）→ e2e 的真像素判据写成「横向相交 +
+   在其上方 + 垂直 < 24px」，视觉校准留给 PRD-003 编辑态章。
+3. **`dirty()` 原「只比文本」会漏判级别改动**（形态 A 改级别 DOM 一个字符都不动）→ 扩成「文本变了 **或**
+   marker 签名变了」。这是本轮最容易漏的缺陷，靠一条「只改级别不改文本仍发出提交且 `newText` 首行是 `###`」钉住。
+4. **链接解包的 UI 可达性比纯函数面窄一格**：空 URL 先被判 `blocked`，于是要拆掉一个已有链接必须先输入
+   任意非空地址。登记为已知限制而不是特判改行为。
+5. **`aria-pressed` 只落在六枚级别按钮上**：六枚动作按钮用 `disabled` 表达可用性 ——「这段是否已加粗」在
+   文本空间里不是单点可判定的，用一个 toggle 态撒谎比不说更坏。
+6. **工具条的出现条件不是「有选区」**：`syncToolbar()` 只要有活动单元就浮出（无选区时四枚包裹按钮置灰、
+   脚注仍可点）。E3 拟稿那句「只在活动单元有选区时出现」未采，理由与 PRD-002 §4.3 UX-009 的口径一并登记。
+7. **形态 A 提交加粗后同一区块回落形态 B**（渲染抹掉 `**` → 判据不等 → 改源，标记现形）。这是「绝不做
+   DOM→源反解析」的直接后果而不是缺陷，但先真采一次再写文档（见上面取证段）。
+
+**顺带补正一处 E2 遗留**：ARC-009 §11 的 ADR-009-07 仍写「开关状态归属 = 会话视图状态（`reader.viewState`）」，
+与该篇 §7.2 / §16.5 第 1 条（已改 `App` 本地 state、零协议变更）直接矛盾 —— 1.3.0 回写时漏了这一格，本轮按实测
+补齐并在 §16.6 记「E2 漏改」。
+
+**未闭合项（不得因本节而显得已动）**
+
+- **F12 的完成度**：F12-003（行内格式化）本轮有实现与取证，但**只到「插引用」为止** —— 脚注**定义行**不自动写
+  （一次 `document.edit` 只带一个行范围，补定义要发两条写回并改协议侧的回声判据）。F12-006（图表 / 公式源码输入）
+  / F12-007（frontmatter 属性卡片）未做。§4 需求完成度表是基线当日快照，不因本轮上调。
+- **ARC-008 §16.1 第 20 / 21 条**本轮仍未新增断言：第 20 条的依据是结构性的（净化器白名单不含 `contenteditable`，
+  且 E3 没碰那个包），第 21 条要在全链路上投一个 `<script>` 字面量再看重渲染净化 —— 未做就是未做。
+- **E4 / E5**：`codeBlock` 翻 `editable`、diagram / math / htmlBlock 源码输入、表格单元格与增删行列、frontmatter 卡片。
+- **E6**：除 `E` 以外的键位、编辑期性能报告、PRD-003 编辑态视觉章（本轮工具条是**过渡形态**：字面字形 +
+  `aria-label`，无图标、无新令牌）。
+- 区块**删除**把手、按编辑区块自身的阅读位置锚定（ARC-009 §8）、多区块 `parked` 的合并动作。
+- **不隐式写盘**：格式化提交只改宿主 `TextDocument` 模型，**用户仍需宿主 `Ctrl+S`** 才落盘；README 与文档
+  均不得许诺「已保存」。
+
+**对外口径**：ARC-009 升到 **1.4.0** 但仍为 **Draft**（§6.2 只剩 E4 / E5 两行未经执行，理由见其 §16.2）；
+ARC-004 因键位登记升到 1.4.0（编辑模式第一次动那篇，理由写在 ARC-004 §18.6 与 ARC-009 §16.6：§7.1 自己把
+「键位登记」设成了 `E` 键的前置条件，不登记就不能做这个键）；`E` 键**不进** `contributes.keybindings`；
+README 新增 M15。本报告**不动文档版本号**（沿用 §13.9–§13.11 的处理：交付事实按节追加，报告本身仍是
+1.0.0 / Final）。`package.json` 版本号未动，VSIX 未打包（发布归 IMP-003 阶段 4）。
+
+（末句两句**已于 v0.13.0 出包时失效**：那一次把 8 处 `package.json` 0.12.2 → 0.13.0 同步，
+`readora-0.13.0.vsix` 已打出并通过 `pnpm verify`（门禁链与产物数字见 README「发布 · v0.13.0」一节）。
+保留原文是为了不回溯抹掉 E3 交付当时的事实——那一节写完时确实不存在任何含编辑模式的包。
+本轮不因出包而上调 §4 的 F12 完成度，也不改本报告文档版本号：ARC-009 仍为 **Draft**
+（§6.2 只剩 E4 / E5 行未经执行，见其 §16.2），E4–E6 零代码。）
+
 ---
 
 **文档结束**

@@ -24,8 +24,10 @@ import {
   createErrorResponse,
   createSuccessResponse,
   DEFAULT_READER_PREFERENCES,
+  READORA_ERROR_CODES,
   ReaderPreferencesSchema,
   type ConfigPatchKey,
+  type DocumentEditPayload,
   type DocumentLoadPayload,
   type ExportCapturePayload,
   type ExportFormat,
@@ -80,6 +82,20 @@ export type NavigateScript =
   | { mode: "error"; code: string; message: string };
 
 /**
+ * `document.edit` 的五种剧本（ARC-009 §5.1 / §5.3，E2）。
+ *
+ * `ok` 不是「直接成功」而是「不强制分支」：走完整的阶梯，版本对不上仍然会回
+ * stale —— 用例于是能造出「真的陈旧」与「假装陈旧」两种冲突而不必跳页。
+ * `silent` 不回复：验的是 View 在响应丢失时不能把输入扫掉。
+ */
+export type EditScript =
+  | { mode: "ok" }
+  | { mode: "stale" }
+  | { mode: "rangeInvalid" }
+  | { mode: "applyFailed" }
+  | { mode: "silent" };
+
+/**
  * 排队中的 host→view 快照。
  *
  * `capture` 与 `load` / `update` 走同一道门控：真 Host 在 ready 之前不会 post
@@ -119,6 +135,15 @@ export interface E2EHost {
   setPreferences(patch: Partial<ReaderPreferences>): void;
   setResourceScript(script: ResourceScript): void;
   setNavigateScript(script: NavigateScript): void;
+  /** 换一条 `document.edit` 的剧本（默认 `ok`）。 */
+  setEditScript(script: EditScript): void;
+  /**
+   * 宿主模型：当前文本与快照版本。
+   *
+   * E2 的「逐字节不变」类断言只能读这里 —— 屏上的 DOM 是渲染产物，拿它当文件内容
+   * 等于用结论证明前提（ARC-009 §15-3）。
+   */
+  model(): { documentUri: string; text: string; version: number };
   /** 切门控：`hold` 期间所有快照只排队不投递，`open` 时一次性放行。 */
   setGate(gate: HostGate): void;
   /** 直接投一条信封（可故意投非法 payload / 未知类型 / 方向不符）。 */
@@ -188,6 +213,18 @@ class ScriptedHost {
     code: "readora.wikilink.missing",
     message: "e2e: no navigate script set"
   };
+  private editScript: EditScript = { mode: "ok" };
+  /**
+   * 宿主手里的文本模型（E1 把应答器推给本轮，本轮补上）。
+   *
+   * `load` 记为初值、`update` 覆盖、`document.edit` 改它并递增版本。
+   * 它是逐字节断言的唯一权威，与屏上渲染产物无关。
+   */
+  private model: { documentUri: string; text: string; version: number } = {
+    documentUri: "file:///vault/e2e/reader.md",
+    text: "",
+    version: 0
+  };
   private readonly api: VsCodeApi;
   /** 交给 App 的那个 bridge 与控制器是同一个实例：夹具不造第二个通道。 */
   readonly bridge: HostBridge;
@@ -229,6 +266,11 @@ class ScriptedHost {
             }),
       load: (input) => {
         const payload = toPayload(input, this.preferences);
+        this.model = {
+          documentUri: payload.documentUri,
+          text: payload.text,
+          version: payload.version
+        };
         if (!this.deliverable) {
           this.queued.push({ kind: "load", payload });
           return;
@@ -237,6 +279,11 @@ class ScriptedHost {
       },
       update: (input) => {
         const payload = toPayload(input, this.preferences);
+        this.model = {
+          documentUri: payload.documentUri,
+          text: payload.text,
+          version: payload.version
+        };
         if (!this.deliverable) {
           this.queued.push({ kind: "update", payload });
           return;
@@ -288,6 +335,10 @@ class ScriptedHost {
       setNavigateScript: (script) => {
         this.navigateScript = script;
       },
+      setEditScript: (script) => {
+        this.editScript = script;
+      },
+      model: () => ({ ...this.model }),
       setGate: (gate) => {
         this.gate = gate;
         if (gate === "open") {
@@ -382,6 +433,68 @@ class ScriptedHost {
     this.deliver("reader.viewState", this.viewState);
   }
 
+  /**
+   * `document.edit` 应答器：在页内复算 Host 阶梯里**可由 View 侧观测到的那部分**
+   * （ARC-009 §5.1）。
+   *
+   * 不复算的那部分（`WorkspaceEdit` 真落盘、文件只读、模型已释放）在本夹具里
+   * 根本没有对应对象，只能由 `setEditScript` 强制。
+   *
+   * 两条时序口径：
+   * - **先 respond 再 deliver `document.update`**：与真 Host 的「applyEdit →
+   *   文档变更事件 → 防抖推送」同形（那个防抖是 300ms，这里不等时长，
+   *   因果顺序由本函数与用例控制）；
+   * - 行替换只动 `[startLine, endLine]`，其余行逐字符不变 —— §15-3 要证的
+   *   就是这一条，所这里不能用整篇拼接。
+   */
+  private handleEdit(id: string, request: DocumentEditPayload): void {
+    const script = this.editScript;
+    if (script.mode === "silent") {
+      return;
+    }
+    const lines = this.model.text.split("\n");
+    if (script.mode === "stale" || request.baseVersion !== this.model.version) {
+      this.respond(id, false, {
+        code: READORA_ERROR_CODES.EDIT_STALE,
+        message: "e2e: baseVersion is behind the snapshot version"
+      });
+      return;
+    }
+    if (
+      script.mode === "rangeInvalid" ||
+      request.range.endLine < request.range.startLine ||
+      request.range.endLine >= lines.length
+    ) {
+      this.respond(id, false, {
+        code: READORA_ERROR_CODES.EDIT_RANGE_INVALID,
+        message: "e2e: the recorded source range no longer exists"
+      });
+      return;
+    }
+    if (script.mode === "applyFailed") {
+      this.respond(id, false, {
+        code: READORA_ERROR_CODES.EDIT_APPLY_FAILED,
+        message: "e2e: the host refused the change"
+      });
+      return;
+    }
+    const next = [
+      ...lines.slice(0, request.range.startLine),
+      ...request.newText.split("\n"),
+      ...lines.slice(request.range.endLine + 1)
+    ];
+    this.model = {
+      documentUri: this.model.documentUri,
+      text: next.join("\n"),
+      version: this.model.version + 1
+    };
+    this.respond(id, true, { version: this.model.version });
+    this.deliver("document.update", toPayload(
+      { text: this.model.text, documentUri: this.model.documentUri, version: this.model.version },
+      this.preferences
+    ));
+  }
+
   private onViewMessage(message: ViewMessage): void {
     this.posted.push(message);
     switch (message.type) {
@@ -416,6 +529,10 @@ class ScriptedHost {
           version: "e2e-1",
           ...script.result
         } satisfies ResourceResolveResult);
+        return;
+      }
+      case "document.edit": {
+        this.handleEdit(message.id, message.payload as DocumentEditPayload);
         return;
       }
       case "document.navigate": {
