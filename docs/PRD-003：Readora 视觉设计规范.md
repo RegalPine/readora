@@ -4,7 +4,7 @@
 |---|---|
 | 文档编号 | PRD-003 |
 | 文档名称 | 视觉设计规范 |
-| 文档版本 | 1.5.0 |
+| 文档版本 | 1.8.1 |
 | 文档状态 | Draft |
 | 所属产品 | Readora |
 | 关联文档 | PRD-001、PRD-002 |
@@ -718,6 +718,14 @@ Outline 图形在 1.7.2 由「三个项目点 + 三条右对齐横线」（与�
 
 分节字数按 outline 顺序取相邻标题之间的源行区间计数，`useMemo` 依赖 `[text, outline]`——每次渲染一次，不是每次滚动一次。行号不上 UI，但 `OutlineItem.position.startLine` 仍是切区间的边界，继续在数据结构里。区间按 **0 基**行号算（与 `docs/ARC-002` §4.3 的 `SourcePosition` 同基），左闭右开：第 i 节是 `[startLine_i, startLine_{i+1})`，最后一节到文件末尾——把行号当 1 基算会把首行的 H1 整条判成没有区间而丢标签。
 
+**行尾章节结构菜单（1.8.0，E7）**：只在编辑模式下的本地文件上存在，形态三句话：
+
+- `⋯` 按钮用 **`opacity: 0` + transition** 而非 `visibility` / `display`：它一直**占宽**，行不会在悬停时抖一下，鼠标从标题滑到按钮也不会因为布局位移而丢命中；显现的三个触发条件是行悬停 / 行内任一元素聚焦（`:focus-within`）/ 菜单已开（`[aria-expanded="true"]`）。
+- 菜单**行内展开**而不是浮层：它是大纲那一行的延伸（`margin-left: 18px` 与标题文本左对齐 —— 折叠按钮 16px + 行 gap 2px），不需要定位计算也不需要额外的层叠语境，代价是展开时侧栏里多占一段高度 —— 这是接受的（一次只做一件结构动作）。
+- **零新增颜色 Token**：三枚动作按钮复用面板文本色族，唯「删除本节」一枚换前景 `var(--readora-danger-color)`（不换底色，避免在侧栏里出现第二块重色）；确认态只加一句说明 + 两枚按钮，不加描边。失败提示 `.readora-outline-note` 用 `text-muted`，`role="status"` 不带图标。
+
+> 取证口径（给后续写 e2e 的人）：`opacity: 0` 的元素对 Playwright 的 **role 引擎不可见**（`getByRole` 拿到 0 个，jsdom 单测则全绿），e2e 必须走 CSS 属性选择器 + 先 `hover()` 再断言可见；不要为了选择器把一个悬停才出现的按钮改成常驻（ARC-009 §16.7 第 7 条）。
+
 ---
 
 ## 11. Light / Dark 主题规范
@@ -964,9 +972,12 @@ KaTeX 样式必须在最前、阅读器覆盖在后，这是既有不变量（IM
 
 ### 16.5 格式化工具条
 
-- 绝对定位于当前选区上方，仅形态 A 且选区非空时显示。
+- 绝对定位于当前选区上方（上方放不下则翻到下方），**只要有一个活动单元就出现，不以「已选中一段」为前提**；源码型区块（codeBlock / diagramBlock / table / mathBlock）不出现工具条。
 - 按钮内容用**字面字形**（`B` / `I` / `` ` ``…）配合 `aria-label`，不使用 SVG 图标（过渡形态）。
 - 键盘 Tab 序列中占一格，可纯键盘操作。
+- **取消出口（1.8.1 / ARC-009 E8）**：末尾一枚 `Cancel`，与最后一枚格式化动作之间划一条 hairline 分隔线（`border-left: var(--readora-hairline) solid var(--readora-panel-border)` + `margin-left: var(--readora-space-1)` + `padding-left: var(--readora-space-2)`，与级别组 `__levels` 前那道同一手法）。它**不参与可点性三档**（永远可点 —— 灰掉的取消等于没有取消，因此 CSS 不多写一档状态），也**不进 tab 序列**（`tabIndex` 恒 `-1`，键盘退路是 `Escape`）。零新增颜色 Token。
+
+> 1.8.1 顺手纠正：本节首条原写「仅形态 A 且**选区非空**时显示」，与实现不符（ARC-009 §6.3.4 早已按实测定为「有活动单元就显示」，1.4.0 那轮甚至专门写过「为什么不给「有选区才弹」」）。选区只决定按钮**可不可点**，不决定工具条**在不在这**。
 
 ### 16.6 源码型区块 cursor
 
@@ -1043,3 +1054,6 @@ Markdown、代码块、Mermaid 图表和辅助面板必须使用统一的设计�
 | 1.7.1 | §10.5 外壳由「纵向四段」改为**大纲通顶的侧栏布局**（1.7.0 删面包屑后顶栏左侧空出，顺势定型）：主体段 `.readora-body` 仍是「大纲列 \| 内容列」两列 grid（保留 grid 以守住基线的 `gridTemplateColumns` 收单列护栏），但顶栏 `.readora-topbar` 与搜索行 `.readora-searchbar` **移进右列 `.readora-shell-main`**，横向不再压过左列；大纲列 `.readora-shell-nav` 从 `sticky top: var(--readora-topbar-height)` 改 `sticky top: 0`、高度去掉 topbar 项（`calc(100vh − statusbar − hairline)`），一路贯到状态条上沿。`TopBar` 的 Outline 按钮从靠右的 `.readora-toolbar-actions` 移到工具栏**首节点（左侧）**，与它控制的大纲列同侧；动作组仍 `margin-left: auto` 靠右。状态条仍横贯整窗（Q：只有顶栏让位）。滚动模型不变（window + sticky），专注 / 窄窗 / 目录收起的单列形态下顶栏随内容列铺满整窗、回到旧观。`ReaderShell` DOM 层级重排但 props 与 band 名不变；`reader-shell.spec` band 顺序改 `["body","topbar",…,"statusbar"]`，e2e 新增「大纲通顶 + 顶栏让位」几何断言。视觉基线因 topbar 变窄、nav 变高、body/main 变高需 `visual:update` 重采 |
 | 1.7.2 | 外壳细节四处按产品反馈收敛（均不改 Token 取值，10 档视觉基线只改像素需 `visual:update` 重采）：① §10.5 / §10.6 **三枚控件改为纯图标** —— 顶栏 Outline 开合与大纲面板头部的「展开全部 / 过滤」去掉文字，`aria-label` + `title` 保留可读名称与悬停解释，内边距由 `.readora-toolbar-button--icon` / `.readora-outline-action--icon` 收成与图标等宽的定量（点击区实测 34×24 与 22×18，随文字一同收窄）；② §10.6 `OutlineIcon` 图形由项目点列表改为**层级树**（旧图形与正文 `ul` 同形）；③ §10.7 **活动条目高亮改背景** —— `.readora-outline-link[aria-current="location"]` 去掉 `inset 2px` 左侧指示条（它随条目缩进停在空档里），改用 `--readora-outline-active-bg` 淡底，accent 文字色与加粗保留；④ §4.6 **状态条删掉 `N sections` 字段**（节数目录那一栏直接数得出来，五降到四），`StatusBar` 去 `sectionCount` prop 与 `sections` 字段名，`App.tsx`/`dev/visual.tsx` 不再透传 |
 | 1.7.3 | §8.6.1 **新增行内代码小节，色块改三重线索**（用户反馈「` 包裹内容` 在亮色模式下对比度不够」）：`--readora-inline-code-background` 由 `var(--readora-color-surface-subtle)` 改为 `color-mix(in srgb, var(--readora-color-text-primary) 12%, transparent)`，`.readora-inline-code` 补 `border: var(--readora-hairline) solid var(--readora-color-border-strong)` 与 `color: var(--readora-syntax-attr)`。诊断口径：旧写法的文字对比度 14.59:1 本来就合格，缺陷在色块与容器——对画布 1.11:1、落进引用块（同取 `surface-subtle`）1.00:1 逐字节撞色。未新增 Token 名（描边复用 `border-strong`、前景复用 `syntax-attr`），亮／暗两套 palette 同步；§14.1 补一条色块类元素的验收要求；`contrast.spec.ts` 新增「行内代码色块与它的落点」21 条门禁；10 档视觉基线取值只改 `--readora-inline-code-background` 与 `.readora-inline-code` 的 computed 三项，需 `visual:update` 重采 |
+| 1.7.4 | **新增 §16 编辑态视觉规范**（随 ARC-009 E4–E6 收尾补章）：16.1 把手角标（8px 圆点、`:after` 绝对定位）、16.2 活动单元、16.3 形态 A/B 字体区分、16.4 冲突态（warning 描边 + 冲突卡片）、16.5 格式化工具条、16.6 源码型区块 `cursor: pointer`。未新增颜色 Token（描边/背景/前景均取已有的 `border-strong` / `accent-soft` / `warning` / `danger`）；编辑态元素只在 `editMode` 为真时存在，而 `dev/visual.tsx` 固定 `editMode={false}`，故 10 档基线不受影响。**补记说明**：本行是 1.8.0 编辑时补登的 —— §16 落地当时只改了正文没写修订行，附录 B 停在 1.7.3 而元数据表已写 1.5.0，两处都已脱节 |
+| 1.8.0 | §10.7 新增**行尾章节结构菜单**三句口径（随 ARC-009 1.5.0 / E7）：`⋯` 用 `opacity: 0` + transition 而非 `visibility`（一直占宽，行不抖、鼠标不丢命中）；菜单**行内展开**而不是浮层（`margin-left: 18px` 与标题文本左对齐，不做定位计算）；零新增颜色 Token（删除那枚只换前景 `danger`，失败提示用 `text-muted`）。另补一段 e2e 取证口径：`opacity: 0` 对 Playwright role 引擎不可见。元数据表 1.5.0→1.8.0 是**追平**（见 1.7.4 行的脱节说明）。本轮面板 DOM 有新增元素，10 档基线需 `visual:update` 重采（已核：差异只落在大纲行右侧新增的隐形按钮占位） |
+| 1.8.1 | §16.5 格式化工具条补**取消出口**一句（随 ARC-009 1.6.0 / E8）：末尾一枚 `Cancel`，与动作组之间一条 hairline 分隔线（复用级别组 `__levels` 前那道的手法），不参与可点性三档（永远可点，故 CSS 不多写一档状态）、不进 tab 序列（`tabIndex` 恒 -1）。零新增颜色 Token。同时**纠正 1.7.4 遗留的一处与实现不符的口径**：原首条写「仅形态 A 且选区非空时显示」，实测为「有活动单元就显示，选区只决定按钮可不可点」（ARC-009 §6.3.4）。编辑态元素仍只在 `editMode` 为真时存在而 `dev/visual.tsx` 固定 `editMode={false}`，10 档基线预期不受影响（已跑 `visual:check` 证实未刷） |

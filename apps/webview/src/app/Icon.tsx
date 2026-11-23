@@ -115,6 +115,18 @@ export function FocusIcon(props: IconProps) {
   );
 }
 
+/**
+ * 更多动作（⋯）：三枚圆点用零长度描边 + 圆头线帽画出，线条宽度不另开一套
+ *（与 §10.6 的描边口径一致），缩到 12px 仍是三个点而不是三个方块。
+ */
+export function MoreIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 12h.01M12 12h.01M18 12h.01" />
+    </Icon>
+  );
+}
+
 /** 搜索：放大镜。 */
 export function SearchIcon(props: IconProps) {
   return (

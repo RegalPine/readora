@@ -944,6 +944,14 @@
   border-left: var(--readora-hairline) solid var(--readora-panel-border);
 }
 
+/* 取消出口（E8）：与格式化动作之间划一条分隔线，用的是上面 `__levels` 同一手法。
+   它不参与可点性三档（永远可点），所以只借 `__button` 的形态，不多写一档状态。 */
+.readora-edit-toolbar__button--cancel {
+  margin-left: var(--readora-space-1);
+  padding-left: var(--readora-space-2);
+  border-left: var(--readora-hairline) solid var(--readora-panel-border);
+}
+
 .readora-edit-toolbar__url {
   display: flex;
   flex-basis: 100%;

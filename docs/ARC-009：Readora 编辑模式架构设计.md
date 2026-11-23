@@ -4,7 +4,7 @@
 |---|---|
 | 文档编号 | ARC-009 |
 | 文档名称 | 编辑模式架构设计 |
-| 文档版本 | 1.4.0 |
+| 文档版本 | 1.5.0 |
 | 文档状态 | Draft |
 | 所属产品 | Readora |
 | 关联文档 | PRD-001（F12）、ARC-002（§4 / §11 / §13）、ARC-004（§4.4 / §8 / §9）、ARC-005（§9）、ARC-008（§9 / §11） |
@@ -429,7 +429,23 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 
 §7.1 的第三入口在键位登记进 ARC-004 §4.5 之后交付：容器 `onKeyDown` 里与 `Enter` / `Space` **同一条路径**加一个分支 —— `event.key.toLowerCase() === "e"`、无 ctrl/meta/alt、`event.target.closest("[data-readora-editable]")` 命中且 `data-readora-edit-state === "idle"`。**idle-only 那道护栏是 E2 踩过 Chromium 微任务坑留下的，新键复用而不是另写判据**；它同时保证活动单元里敲字母 `e` 只是打进去一个字（e2e ⑦ 的浏览器版取证：`innerHTML` 只多一个 `E` 且只发一条消息）。`editMode` / `available` / `suspended` 三个前置一起把关（`activateByRangeKey` 内已含）。键位**不进 `contributes.keybindings`**，理由见 ARC-004 §4.5。
 
-`Escape` 语义**不变**：仍是一次就取消编辑，工具条随单元一起收起，**不做**「第一次 Escape 只收工具条」；工具条按钮获焦时按 Escape 由工具条自己的 `keydown` 转交同一条取消路径。这条是硬约束 —— Chromium 双击会选中一个词，一旦「有选区就弹工具条」改动了失焦/取消时序，E2 的 `tests/e2e/edit.spec.ts` ⑦（Escape 后正文回到静态产物且零消息）就会红。**E2 九条用例一字不改是本阶段的越界检测器**，实测零改动通过。
+`Escape` 语义**不变**：仍是一次就取消编辑，工具条随单元一起收起，**不做**「第一次 Escape 只收工具条」。这条是硬约束 —— Chromium 双击会选中一个词，一旦「有选区就弹工具条」改动了失焦/取消时序，E2 的 `tests/e2e/edit.spec.ts` ⑦（Escape 后正文回到静态产物且零消息）就会红。**E2 九条用例一字不改是本阶段的越界检测器**，实测零改动通过。
+
+> 1.4.0 本节末原写「工具条按钮获焦时按 Escape 由工具条自己的 `keydown` 转交同一条取消路径」，那句在当时的代码里**没有对应实现**（焦点走进工具条后 Escape 无人接），1.6.0 / E8 补齐并改写为下面 §6.3.8。
+
+#### 6.3.8 取消出口（E8）
+
+用户诉求是一句话：「文本编辑样式后没法取消」。实测拆开是**四条互不相同的机制**，前两条本轮修，后两条登记为边界（§16.8）。
+
+**① Escape 死区**（本轮修）。Escape 的耳朵挂在**区块元素**上（`edit-unit` 的 `onKeyDown` → `options.onEscape` → `cancelActive` → `unit.deactivate({ restore: true })`），而工具条按 §6.3.4 决策 4 挂在 `ownerDocument.body` —— 冒泡路径根本不经过区块。焦点一旦走进工具条（Tab 进入，或点开 URL 输入框之后），按键就落空。修法是在工具条根节点的 `keydown` 里前置一个 `Escape` 分支（`preventDefault` + `stopPropagation` + `handlers.onCancel()`），`ToolbarHandlers` 新增 `onCancel`，接管层的实现**复用区块 Escape 那同一对句子**（`cancelActive(unit)` + `refreshAffordances()`）而不是新写一份回滚 —— 于是 `deactivate({restore:true})` 的两套恢复语义自动继承：形态 A 还 `innerHTML` 快照，形态 B 按**节点身份** `replaceChildren(...detachedChildren)` 接回摘走的原始子节点（保住接管层的活引擎引用，§5.4）。选这条出口的理由是「不存在第二条取消路径」：另写一份回滚迟早会出现「Escape 撤得掉、按钮撤不掉」这类第二套事实。
+
+**② 鼠标路径没有取消出口**（本轮修）。§7.4 的 `focusout` = **提交**而不是取消，这是 E2 定下的语义（切走即存，不静默丢输入），本轮不动 —— 动它等于改「用户改了字又点了别处」的结果。问题是提交之外只剩 Escape，而鼠标用户不会去按键盘。补法是把取消做成看得见的一等公民：工具条末尾一枚 `Cancel`（`data-readora-cancel="true"`），代价写在原生 `title` 里（`Undo the markers and leave this block unchanged`），不新增第二套提示层。三条刻意的**不参与**：不进 `ACTIONS`、不带 `data-readora-action`（可点性三档的取证 `disabledMap` 与 roving 用例都按那个属性筛，混进来就是改契约）、不进 `focusables()`（`tabIndex` 恒 `-1`，roving 那一格只属于格式化动作，键盘用户的退路是 Escape 而不是多 Tab 一次）。它**永远可点** —— 灰掉的取消等于没有取消，单测在无选区 / 代码段内 / 有选区三档下各断言一次 `disabled === false` 且 `hasAttribute("data-readora-action") === false`。
+
+**③ `Ctrl+Z` 撤不动格式化**（边界，不修）。标记是 `Range#deleteContents()` + `insertNode()` 写进文本节点的，不进 Chromium 的原生 undo 栈（浏览器实测按 `Ctrl+Z` 正文不变）。§15-4 那句「撤销归宿主」讲的是**文件级** undo，与就地编辑期间的 View 侧撤销栈不是一回事；View 侧撤销栈属独立机制，本轮取向明确不含它。
+
+**④ 含行内标记的段落回落形态 B**（既有预期行为，不动）。加粗提交后判据不再相等（渲染抹掉 `**`），下次激活必然落 `data-readora-edit="source"`，屏幕上看得见标记 —— 这是「绝不做 DOM→源反解析」（§9.4）的直接后果，`tests/e2e/edit-inline.spec.ts` 早已把它写成预期断言。它读起来像「文本变成源码了撤不回去」，但那一形态下再点一次 `B` 就是解包出口（标记现形，点的正是标记本身），不是坏了。
+
+**URL 输入行那支 Escape 的优先级重新分工**：输入框展开着的那一次仍然只**收输入框**（还原选区、交回焦点），因此它新增一句 `stopPropagation()` —— 根节点现在也听 Escape，不收这一层就会把「收输入框」顺带升级成「退整次编辑」。这是 E8 唯一一处**改到既有行为**的地方，取证是 `format-toolbar.spec.ts` 那条 URL Escape 用例新增的 `expect(scope.cancels).toEqual([])`（`awaitingUrl` 转假而不退编辑）。
 
 ---
 
@@ -468,7 +484,11 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 
 ### 7.4 提交时机
 
-`focusout`（点击单元外或切面板）与 `Ctrl+Enter` 提交；`Escape` 取消。四条必须存在的护栏（E2 已全部实现并有单测）：
+`focusout`（点击单元外或切面板）与 `Ctrl+Enter` 提交；`Escape` 取消。
+
+> **`focusout` 是提交不是取消**（E8 重申，因为它被当成缺陷报过一次）：用户加粗后点正文之外，期望的是「放弃」，实际发生的是一次 `document.edit`。本轮**不改**这条语义（切走即存、不静默丢输入是 E2 的定意），但它的直接推论是：取消必须是一个**显式**出口，而不能只是「点别处」。于是有区块上的 `Escape` 与 §6.3.8 那枚工具条 `Cancel`；而 `KEEP_EDITING_SELECTOR` 里包含 `.readora-edit-toolbar`（焦点走进工具条不算离开）正是这条推论的另一面。
+
+四条必须存在的护栏（E2 已全部实现并有单测）：
 
 - **IME**（§13 R4）：`compositionstart` / `compositionend` 期间屏蔽 `blur` 提交与 `Ctrl+Enter`。
 - **`blur` 不等于离开**：`focusout` 只在 `relatedTarget` 落在单元之外**且**不在 Lightbox / 全屏图表 / `role="dialog"` 内时才算提交；`relatedTarget === null`（切面板）算提交。这条同时兜住 §7.3 的「Lightbox 打开时暂时失焦不销毁」。
@@ -559,10 +579,12 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 | **E4 源码型区块** | codeBlock 翻 `editable:true`；diagram / math / htmlBlock 展源码输入 | ✅ 已交付（IMP-002 STORY-13-04）：codeBlock / diagramBlock / table 三类走 contenteditable 源码模式（形态 B），与计划偏差：未翻 CodeMirror `editable:true`，而是复用编辑接管层的源码形态。“math / htmlBlock 随 E6 一并交付”。`source-text.spec.ts` + `edit-layer.spec.ts` 取证认领表与 editModeFor 短路 |
 | **E5 结构化区块** | 表格单元格与增删行列；frontmatter 属性卡片逐键编辑 | ✅ 部分交付：表格走源码模式（与 E4 同机制）；单元格 WYSIWYG、增删行列与 frontmatter 卡片属后续版本 |
 | **E6 收尾** | 编辑期性能报告、快捷键登记进 manifest、PRD-003 视觉规范补章、README 能力边界 | ✅ 已交付：mathBlock 纳入源码编辑认领（htmlBlock 不可认领，生产 DOM 中 `div.readora-html-block` 不存在，因 parser `html:false` 冻结）；PRD-003 新增 §16 编辑态视觉规范；README 能力边界更新；全量 1006 测试零失败。快捷键登记与编辑期性能报告属后续版本 |
+| **E7 大纲章节结构** | 大纲行尾 `⋯` 菜单三动作：在其后新增章节（平级）/ 新增子节 / 删除本节（两步确认，报行数与子节数） | ✅ 已交付（用户诉求「如何增删平级/下级章节」）：**编辑模式的第二个写入口**，三动作全部折算成一次 `document.edit` 按行区间替换，**零协议变更**（contracts 与 extension 一个字节未改，消息仍 18 条）。取证五层：`outline-section-ops.spec.ts`（纯函数 19 条）+ `outline-panel.spec.tsx` E7 两段（13 条）+ `app-edit-mode.spec.tsx` 接线（5 条）+ `tests/e2e/outline-sections.spec.ts`（6 条**逐字节**断言宿主模型）+ 视觉基线 10 档。门槛 = 编辑模式 × `file:` 文档 × 该条目带 `position`；删除后旧位置残留一个空行是契约固有行为（§16.7 第 3 条），不是缺陷 |
+| **E8 取消出口** | 工具条末尾一枚常驻 `Cancel` + 工具条内 `Escape`（补上 §6.3.7 从 E3 起就没落地的那句承诺） | ✅ 已交付（用户诉求「文本编辑样式后没法取消」）：**零协议变更**（contracts 与 extension 一个字节未改，消息仍 18 条），取消复用区块 `Escape` 的同一条 `cancelActive`，不发 `document.edit`。取证三层：`format-toolbar.spec.ts`（4 条：点 Cancel 只回一次 `onCancel`、三档下永远可点且不带 `data-readora-action`、获焦时 Escape 转交且**不冒到 document**、不进 roving）+ `edit-layer.spec.ts`（2 条：取消后 `innerHTML` 逐字节还原、属性回 `idle` 而非摘净、`activeRangeKey` 为空、零请求、工具条从 body 摘掉）+ `tests/e2e/edit-inline.spec.ts`（新增 2 条，其中「焦点真走进工具条后按 Escape」是 jsdom 焦点模型给不出的那一条）。形态取证脚本存档 `.playwright-cli/e8-cancel-probe.mjs`（截图 `e8-toolbar.png`，与 §16.6 第 7 条同一条理由不放 `test-results/`）：真 Chromium 里读 Cancel 的 computed style（`borderLeft` / `tabIndex -1` / `disabled false` / 与前一枚间距 8px）与点击后的归位（文本、`state="idle"`、body 上工具条数、`version`）。四条机制拆开登记于 §6.3.8，未被本轮修的三条边界登记于 §16.8 |
 
 E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人读的属性。这是刻意切的 —— 锚定契约的正确性必须能在与编辑无关的前提下独立证明。
 
-阶段→任务→版本的映射：E0–E6 拆为 **IMP-002 §22 的 EPIC-13**（STORY-13-01 = E0，13-02 = E1，13-03 = E2+E3，13-04 = E4～E6），交付位置挂在 **IMP-003 §8 的 V1.4.x**。三处阶段名称一致，不得一处改一半。
+阶段→任务→版本的映射：E0–E6 拆为 **IMP-002 §22 的 EPIC-13**（STORY-13-01 = E0，13-02 = E1，13-03 = E2+E3，13-04 = E4～E6），交付位置挂在 **IMP-003 §8 的 V1.4.x**。三处阶段名称一致，不得一处改一半。**E7 不在这份映射里** —— 它是 E6 收尾之后按用户诉求追加的新阶段，IMP-002 / IMP-003 尚未登记对应条目（本轮只改 ARC-009 / PRD-002 / PRD-003 三篇，理由同 §16.5 末段 (b)：那两篇描述的机制没变）。
 
 ---
 
@@ -599,6 +621,7 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
    **E3 后实测**：webview **986**（+121，其中 3 份新 spec）/ extension 367+1skip / markdown-core 342 / contracts 47 / design-tokens 63 / diagram-core 119 **六条计数里除 webview 外零变化**（本轮不碰那五个包，改 markdown-core 即为越界）；`test:e2e` **146 passed**（三 project，137 → +9 全部是本轮新文件）；`visual:check` **十档全等且未跑 `visual:update`** —— 与 E2 相反，本轮没有任何阅读态元素变化（`dev/visual.tsx` 固定 `editMode={false}`，工具条只在编辑态存在），要刷基线就是越界信号。
 7. 全阶段：`contenteditable` 不引入任何 CSP 放宽；粘贴富文本被拒。✅ 前者见上一行与 §8 CSP 行（零例外）；后者见 §9.3 的取证（整条粘贴路径不读 `text/html`）。
 8. E3：行内格式化只作用在文本空间，**偏移不足时降级插入字面标记而不损坏源**。✅ 取证三层：纯函数层 `inline-format.spec.ts`（四类区块 × 包裹/解包幂等、跳空行段、形态 B 插 marker 之后、code span 内 `blocked`、链接与脚注取号、`withHeadingLevel` 保留原空白组）；等价前提层 `source-text.spec.ts` 九例（§6.3.1 那条纯字符串证明）；浏览器层 `tests/e2e/edit-inline.spec.ts` 九条（真选区 + 真像素 + 真 contenteditable + 真键盘）。**未编辑行逐字节不变**依旧是逐行 `toEqual` 而不是「大致相同」（`expectSource` 夹具），本轮九条全走这个夹具。
+9. E8：样式加上去之后，**鼠标路径上必须有一个「什么都不写就退回原样」的出口**。✅ 判据三件事同时成立：正文逐字节等于进入编辑时那一版、`document.edit` 消息为空、模型 `version` 不变 —— 这三条合起来才是「取消」而不是「往后退一步」（后者是撤销，本轮未做，见 §6.3.8 ③）。取证见 §12 的 E8 行；工具条获焦那一条只能真浏览器测（jsdom 的焦点模型不认 `tabIndex = -1`）。
 
 ---
 
@@ -613,6 +636,8 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
 | 1.2.0 | 2026-11-20 | E1 落地后按实测回写 §5.1 / §5.2 / §12 / §15-2，并新增 §16.4 登记被推翻的四条口径。三处纠正全部发生在**实现侧语义**而不是能力边界：乐观锁改比快照空间的版本（否则首次写回必被误杀）、`endLine >= startLine` 从 Schema 移到 Host（否则错误码从 `rangeInvalid` 退化）、替换终点取行末而不是下一行行首（否则每改一个区块吃一个分隔空行）。**状态仍为 Draft**，理由见 §16.2 |
 | 1.3.0 | 2026-11-20 | E2 落地后按实测回写 §5.4 / §6.1 / §6.2（新增 §6.2.1）/ §7.1 / §7.2 / §7.3 / §7.4 / §8 / §9.3 / §9.5 / §12 / §15，并新增 §16.5 登记本轮推翻与收窄的七条口径。最重要的一条是 §7.2：原计划的「`editMode` 走 `reader.viewState` 通道」不可实现（那条通道方向是 host→view），改为 `App` 本地 state 并零协议变更；其次 §6.2 的四个「是」改成条件式判据，因为无条件写「是」就是 §9.4 禁的 DOM→源反解析。**状态仍为 Draft**，理由收窄到「§6.2 其余行未经执行」 |
 | 1.4.0 | 2026-11-23 | E3 行内格式化落地：§6.3 整节按七条决策改写（新增 §6.3.1–§6.3.7），§6.2 heading 行与 §7.1 的 `E` 键行改为已交付，§8 加两行（工具条的**结构性**隔离、滚动重定位），§9 加第 7 条（只写文本节点 ≠ 第二条 HTML 路径），§11 新增 ADR-009-11 并**补正 ADR-009-07**（1.3.0 漏改的一格，与 §7.2 直接矛盾），§13 加 R7（映射不足），§14 改「`E` 已在 E3 登记」，§15 加第 8 条，并新增 §16.6 登记本轮推翻与收窄的七条口径。两处推翻都是 e2e 实测逼出来的：焦点进 `<input>` 会清掉文档选区（§6.3.4），以及只改级别不改文本时 `dirty()` 会漏判（§6.3.5）。**状态仍为 Draft**，理由再收窄到「§6.2 只剩 E4/E5 行未经执行」 |
+| 1.5.0 | 2026-11-23 | E7 大纲章节结构菜单落地：§12 加 E7 行并声明它不在 EPIC-13 映射内，新增 §16.7 登记七条口径。最重要的一条是**推翻 §6 / `edit-layer.ts` 头注的「只有 edit-layer 会发 `document.edit`」不变量** —— 第二个发送方（大纲菜单经 `App.runSectionOp`）是用户诉求直接带来的，不是实现走样；其余六条是坐标补偿复用、删除残留空行、版本记账、菜单行为契约、hook 声明位置、e2e 定位口径。**状态仍为 Draft**，转 Final 条件不变（§16.2） |
+| 1.6.0 | 2026-11-23 | E8 取消出口落地（用户诉求「文本编辑样式后没法取消」）：§6.3.7 那句从 1.4.0 起就没有对应实现的「工具条按钮获焦时按 Escape 由工具条自己的 `keydown` 转交取消」按实测改写，新开 §6.3.8 拆开四条机制（Escape 死区、鼠标路径无出口、`Ctrl+Z` 撤不动标记、含标记段落回落形态 B），§7.4 补一段「`focusout` 是提交不是取消」的推论，§12 加 E8 行，§15 加第 9 条，新增 §16.8。**零协议变更**：§5 写回契约与 §6.2 语义矩阵一字未动，新增的全在 View 侧工具条与接管层各一个回调。**状态仍为 Draft**，转 Final 条件不变（§16.2） |
 
 ### 16.2 状态说明
 
@@ -678,3 +703,33 @@ E3 是编辑模式第一次把判据交到**真浏览器**手上（之前四轮�
 5. **`aria-pressed` 只落在六枚级别按钮上**（§6.3.4）。初稿说工具条样式要覆盖「`aria-pressed` 态」，读起来像六枚动作按钮也有压态；实测 DOM 里只有 `H1`…`H6` 带这个属性（当前级别 `true` 且同时 `disabled`，其余 `false`），六枚动作按钮用 `disabled` 表达可用性。理由不是漏实现：「这段文字是否已经加粗」在文本空间里**不是单点可判定的**（选区可能只覆盖标记的一部分、可能跨行而只几行有标记），用一个 toggle 态撒谎比不说更坏。当前级别则是一个确定的事实，可以也应该说。
 6. **双击之后的默认态是「无选区」而不是「选中整块」**（§6.3.7）。`activate()` 把选区收到块末尾并把 `data-readora-edit-state` 置为 `active`（不是 `idle`），所以双击后工具条出现但四枚包裹按钮置灰、**只有脚注仍可点**（它是纯插入，不受 `canWrap` 约束）。这是设计自洽的结果，但它是本轮实测而不是计划里写明的预期，补在这里以免下一个人当缺陷修。同时 idle-only 护栏的浏览器版取证：活动单元里按 `E` 只是打进去一个字母且只发一条消息。
 7. **形态 A 提交加粗后，同一区块下一次激活必然落形态 B**（§6.2.1，浏览器实测确认）。渲染抹掉了 `**` → 判据不等 → 回落改源，用户会看到标记**现形**。这是「不做 DOM→源反解析」这条决意的直接后果而不是缺陷，但在写进文档之前必须真采一次：取证为 `data-readora-edit="source"` + DOM 文本 `Alpha **paragraph** one.`（截图 `.playwright-cli/e3-form-b-source.png`）。取证脚本也存档在 `.playwright-cli/e3-evidence.mjs`：`playwright-cli run-code --filename=.playwright-cli/e3-evidence.mjs` 可重跑，它把下面这一串数字与事实作为 JSON 直接返回。**它不能放 `test-results/`** —— 那是 playwright 的 `outputDir`，跑一次 e2e 就把整个目录清空（本轮已经以失去一份取证脚本为代价实测到这一条）。同时采到的一串工具条事实：`parentElement === document.body`、`role="toolbar"`、`aria-label="Formatting"`、roving tabindex 只让首枚可点按钮占 `tabIndex=0`、`Escape` 后 body 上工具条残留在数为 `0`、模型 `version` 2 且 `document.edit` 消息 1 条、未编辑行逐字节不变。
+
+### 16.7 1.5.0 修订内容（E7 推翻与新增的七条口径）
+
+E7 是编辑模式第一次把写入口开在**正文之外**（大纲面板），所以它推翻的第一条就是本文与代码里都写得最硬的那条不变量。其余六条里三条是实现约束、一条是取证口径、两条是被实测逼出来的行为形态。都不改能力边界（新增 / 删除章节本身就是 E7 的能力边界）。
+
+1. **「只有 edit-layer 会发 `document.edit`」不再成立**（§6 / `edit-layer.ts` 头注第 2 条）。不变量的本意是「View 侧写回单一入口、拒收不自作主张重试」，而 E7 的三动作天然不属于任何已认领区块（它们改的是**区块之间的结构**），塞进 edit-layer 反而要让接管层去理解大纲树。定为：**两个发送方，共用同一条出站形态** —— `document.edit` + `{documentUri, range:{startLine,endLine}, newText, baseVersion}`，一次动作一笔替换；版本复判 / 行范围复判 / 落盘仍在 Host（§5.1 一字未改），拒收后也不重试（只把错误翻成面板内提示）。头注已改写为两个入口并指向本节。护栏：`sectionOpsEnabled={editMode && isFileSchemeUri(...)}` 与把手同生同灭，非 `file:` 文档下大纲行上零 affordance（与 §7.2 那条禁用口径同形）。
+2. **大纲入口自带一次坐标补偿**（§4.1 的复用）。`extractOutline` 透传的 `OutlineItem.position.startLine/endLine` 是 **body 相对**行（parser 吃的是剥掉 frontmatter 的正文），而 `document.edit` 吃**文件绝对行**。edit-layer 那边不碰这个（E0 锚点已是补偿后的绝对行），大纲入口必须自己加 `bodyLineOffset`。取证形状：e2e 夹具故意带 3 行 frontmatter，四个标题的文件行是 4/8/12/16 而 position 是 1/5/9/13 —— 不补偿就整组错位，这条用例当场红。
+3. **删除一个章节会在旧位置留一个空行**，且这是契约固有行为。`newText: ""` 的按行替换仍占一行空位（§16.4 第 3 条定的替换终点语义），所以删 `Alpha` 整节得到的是一个空行而不是零行。不把它当缺陷修的理由：要消掉那个空行就得把相邻区间一起吃掉，那是 §16.4 第 3 条刚纠正过的错误（每改一个区块吃一个分隔空行）的变体。e2e 与单测都按「残留一个空行」逐字节断言，而不是断言「看起来干净」。
+4. **版本记账需要一个独立于 `payload.version` 的游标**（§5.2）。一次动作成功后、`document.update` 回声到达之前，`payloadRef.current.version` 还是旧值；此时紧接第二笔就会拿旧 `baseVersion` 去写，被宿主乐观锁误判 `EDIT_STALE`。定为：`baseVersion = Math.max(payloadRef.current.version, sectionBumpRef.current)`，成功回执里把 `result.version` 写进 `sectionBumpRef`，**换文档分支重置 `-1`**（新文档是另一条版本计数线，上一版的写回执不能拿来当它的基线）。取证：`app-edit-mode.spec.tsx` 连续两笔第二笔 `baseVersion=6`，以及换文档后回到 `1`。
+5. **菜单的行为契约五条，都是「不把用户推到重来」的具体化**。（a）**失败不收菜单** —— 错误就发生在用户刚点的那一行上，收了它就要从开菜单重做；提示落在面板内 `role="status"`，**不弹窗**。（b）成功才 `closeMenu()` + 清提示。（c）`items` 换实例只作废菜单，**不清提示**（提示的寿命归用户，菜单的寿命归数据）。（d）点外收用 `document` 上的 `pointerdown` capture + `closest` 判 `.readora-outline-menu` / `.readora-outline-more`，`Escape` `stopPropagation` 只关菜单。（e）透传给面板的 `onSectionOp` prop 声明要显式写 `| undefined` —— `exactOptionalPropertyTypes: true` 下可空选项不能直接赋给 `T?`，这是调用方透传的前提而不是风格选择。
+6. **`App` 里新增的 hook 必须声明在 `if (!payload) return` 早退之前**。初版把 `runSectionOp` 的 `useCallback` 插在 `toggleEditMode` 后面（那个早退之下），payload null ↔ 非 null 两条渲染路径的 hook 数从 49 变 50，同一实例跨路径重渲染时 React 直接报「change in the order of Hooks」，**当场带崩 72 条既有测试**。教训不是「小心放位置」而是：那个早退之上的区域是 `App` 唯一的 hook 安全区，以后加 hook 只能往上面加（源码里已把这个理由写进注释）。`sectionBumpRef` 这类 `useRef` 不受影响（无条件执行）。
+7. **`opacity: 0` 的 `⋯` 按钮对 Playwright role 引擎不可见**（e2e 定位口径）。hover 才显现的行尾按钮用 `opacity: 0` 保留占宽和可命中区，而 role 引擎会把它从可访问性树里过滤掉 —— `getByRole("button", { name: "Section actions for Alpha" })` 拿到 0 个，6 条 e2e 首跑全挂，而 jsdom 单测全绿（那里没有这层过滤）。先写探针证伪「页面没渲染」（DOM 里 `moreButtons: 4`）再改定位：e2e 一律用 CSS 属性选择器 `button[aria-label="Section actions for X"]`，且按用户动作同形三步 `hover()` → `expect(more).toBeVisible()` → `click()`。**不改产品 CSS 迁就选择器**（为了测试把一个悬停才出现的按钮改成常驻，是拿交互形态换一个选择器引擎的便利）。单测仍可用 `getByRole`。
+
+### 16.8 1.6.0 修订内容（E8 推翻的一条与新增的六条口径）
+
+本轮的起点是一句不含技术名词的用户报告。与 E3 / E7 那两节不同，**本轮推翻的是本文自己**：1.4.0 起 §6.3.7 就写着「工具条按钮获焦时按 Escape 由工具条自己的 `keydown` 转交同一条取消路径」，而代码里没有那支监听。其余六条都是「原口径没错，但缺一个出口 / 缺一次分工 / 缺一次取证」。都不改能力边界。
+
+1. **文档写得比代码多，而且错得很自洽**（§6.3.7 → §6.3.8 ①）。那句承诺不是凭空写的，它是 §6.3.4 决策 4 的自然推论 —— 而同一个决策的第 4 条理由当时是把「冒泡不到容器」当**优点**写的（「容器上那套 `Enter` / `Space` / `E` 委托天然不会被输入框误触发」）。同一枚硬币的另一面就是 Escape 也进不来。**可复用的教训**：一个架构决策的理由里出现「天然不会收到 X」时，X 里每一条都要问一次「那用户需要 X 的时候怎么办」；需要的那条（Escape）当时没人问。探针实测补上：焦点在工具条按钮上时 dispatch Escape，`defaultPrevented` 为 `false`、单元仍 `active`、工具条仍在。
+
+2. **取消不是一个新动作，是同一条出口的第二个入口**（§6.3.8 ①）。`ToolbarHandlers.onCancel` 在接管层里就两句：`cancelActive(unit)` + `refreshAffordances()`，与区块 `onEscape` 完全同一对。这不是偷工：`deactivate({restore:true})` 的两套恢复语义（形态 A 还 `innerHTML` 快照 / 形态 B 按**节点身份** `replaceChildren`）是 E2–E4 三轮分别踩坑长出来的，另写一份回滚就会多出一个「只修了一套形态」的隐患，而且迟早出现「Escape 撤得掉、按钮撤不掉」这种第二套事实。单测钉的也是这个：`edit-layer.spec.ts` 那两条断的是「取消后 `innerHTML` 与进入时全等、属性回 `idle` 而不是摘净、零 `document.edit`」，不是断按钮长什么样。
+
+3. **一枚永远可点、但故意不可 Tab 到的按钮**（§6.3.8 ②）。两个反直觉的形状选择各自都有硬理由：（a）**不带** `data-readora-action`、不进 `ACTIONS` —— 可点性三档的取证（`disabledMap` 的 `toEqual`）与 roving 用例都按那个属性筛，混进来就是改契约；代价是它得用单独的挂点 `data-readora-cancel="true"`。（b）**不进** `focusables()`，`tabIndex` 恒 `-1` —— roving 那一格只属于格式化动作，把取消插进循环会把 `Home` / `End` 的落点改掉。键盘用户的退路是 Escape（本轮刚修好的那条），不是多 Tab 一次；鼠标用户直接看得见它。这一条在 e2e 里留了反向证据：jsdom 的焦点模型不认 `tabIndex = -1`，所以「焦点真走进工具条后按 Escape」只能真浏览器测。
+
+4. **`focusout` 的语义不动，改的是它旁边缺的东西**（§7.4）。「加粗后点正文之外」在用户眼里是取消，在代码里是提交。最省事的改法是把 `focusout` 翻成放弃，但那会静默丢输入（E2 定下这条就是为了这个），而且会当场弄红 `edit.spec.ts` 那九条。**取向已登记**：加一个看得见的出口，而不是改一个已经交付的语义。
+
+5. **Escape 的优先级从两层变三层**（§6.3.8 末段）。URL 输入行 / 工具条 / 区块。前两层现在都听 Escape，所以输入框那一支必须新增 `stopPropagation()`，否则「收输入框」会顺带升级成「退整次编辑」。这是 E8 唯一一处**改到既有行为**的地方，取证是那条 URL Escape 用例里新增的 `expect(scope.cancels).toEqual([])` —— 旧断言（`awaitingUrl` 转假、`defaultPrevented` 为真）在那之后仍全部成立，所以这一条同时拿到了「新旧行为都在」的证据。
+
+6. **本轮未修的三条边界**（与用户当面确认过取向，不是遗漏）。（a）**View 侧无撤销栈**：`Ctrl+Z` 撤不动格式化（标记是 `Range#deleteContents()` + `insertNode()` 写进文本节点的，不进 Chromium 原生 undo 栈，实测正文不变），而 §15-4 那句「撤销归宿主」说的是**文件级** undo，两者不是一回事。（b）**含行内标记的段落永久回落形态 B**：提交加粗后判据不再相等，下次激活必然在 `data-readora-edit="source"` 上，屏上看得见 `**` —— 这是 §9.4「绝不做 DOM→源反解析」的直接后果，e2e 已把它写成预期断言，改它等于改 markdown-core 的判据（未获批）。（c）**冲突卡片的 Escape 要焦点先进卡片才生效**：`showCard` 给卡片挂了 `keydown`→Escape→`abandon`，但卡片不主动 `focus()`、自身不带 `tabindex`，所以刚弹出时按 Escape 无人接。它不是本轮那条路径（卡片里的 `Discard` 鼠标可达，出口存在，只是键盘捷径要 Tab 两步才到），改它要动焦点归属，不夹带。
+
+7. **诊断阶段的方法论：`page.evaluate` 造出来的选区不是用户操作**。首个探针用脚本造 Range + 鼠标点按钮，Escape 与再点 Bold **全部正常**，差点得出「无法复现」而收工。真把焦点走一遍（Tab 进入、URL 输入框、提交后再激活、`Ctrl+Z`）才露出那四条互不相同的机制。本轮还留下两个探针自身的坑（都是同一类：把 DOM 结构写死）：按文本节点序号取内容 —— 夹具落形态 B 后只有一个文本节点，`walk[1]` 直接 `undefined`；游标 `let cursor` 放在函数外 —— 第二次调用从上轮末尾继续累加，下标全错。探针要按「空间下标 + 每次重置游标」写。

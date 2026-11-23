@@ -22,6 +22,16 @@
  * 「自动展开命中」的实现口径：过滤时命中项一律可见，即折叠状态不参与过滤视图，
  * 这一行的折叠按钮也一并收掉（改了状态却看不出变化的开关就是 §4.6 要剔除的假
  * affordance），头部「展开全部」同步禁用并说明原因。清空过滤即回到原样。
+ *
+ * E7 新增：行尾的「⋯」章节结构菜单（在其后新增 / 新增子节 / 删除本节）。
+ * 三条形态规矩：
+ * - **入口门槛在 App**（编辑模式开 + `file:` 文档），面板只看 `sectionOpsEnabled`；
+ *   未启用时零 affordance，与把手侧 §15-5 同一条门禁口径；
+ * - 菜单**开在行内**而不是浮层：左栏是 `position: sticky` 窄列，绝对定位的
+ *   popover 要么被列表的 overflow 裁掉要么跨栏悬浮，行内展开没有这两层问题；
+ * - 删除是破坏性写回，两步确认：第一步把菜单换成「删 N 行（含 M 个子节）？」
+ *   的报数（数字来自纯函数预览，不是估的），确认才发写回；写错了可回宿主撤销
+ * （模型归宿主 `TextDocument`，Ctrl+Z 就能拉回），所以不再叠第三层确认。
  */
 import {
   useEffect,
@@ -33,8 +43,19 @@ import {
 } from "react";
 import type { OutlineItem } from "@readora/markdown-core";
 import { formatSectionUnits } from "../app/text-metrics";
-import { ChevronDownIcon, ChevronRightIcon, ExpandIcon, FilterIcon } from "../app/Icon";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  ExpandIcon,
+  FilterIcon,
+  MoreIcon
+} from "../app/Icon";
 import { useSectionMetrics, type SectionMetricsMap } from "./section-metrics";
+import {
+  sectionOpPreview,
+  type SectionOpAction,
+  type SectionOpPlan
+} from "./outline-section-ops";
 import {
   activeKeyOf,
   buildOutlineTree,
@@ -53,6 +74,9 @@ export const OUTLINE_FILTER_INPUT_ID = "readora-outline-filter-input";
 /** 活动条目标记的属性与值：焦点跟随靠它找到要滚到哪个条目，不靠高亮样式反推。*/
 export const OUTLINE_ACTIVE_ATTRIBUTE = "data-readora-outline";
 export const OUTLINE_ACTIVE_VALUE = "active";
+/** 行尾「⋯」与行内菜单的类名：导出给单测与样式，不两处各写字面量。 */
+export const OUTLINE_MORE_CLASS = "readora-outline-more";
+export const OUTLINE_MENU_CLASS = "readora-outline-menu";
 
 export interface OutlinePanelProps {
   items: readonly OutlineItem[];
@@ -64,6 +88,16 @@ export interface OutlinePanelProps {
   /** 展开全部 / 折叠全部：整串 key 交回上层，折叠态仍由上层持有（§6.2）。 */
   onCollapsedChange(keys: readonly string[]): void;
   onSelect(anchor: string): void;
+  /** 章节结构菜单的总开关（E7）：App 按「编辑模式 × `file:` 文档」门控。 */
+  sectionOpsEnabled?: boolean;
+  /**
+   * 执行一次结构写回：成功返回 `null`，失败回一句可读文案（面板显示为提示）。
+   * 乐观锁、版本记账与错误码到文案的映射都在 App，面板不持 bridge。
+   * 显式 `| undefined`：`exactOptionalPropertyTypes` 下调用方要能透传可空的选项。
+   */
+  onSectionOp?:
+    | ((action: SectionOpAction, plan: SectionOpPlan) => Promise<string | null>)
+    | undefined;
 }
 
 /** 缩进按层级递增，超过 4 层不再加深（视觉上够用了，也避免窄栏里没地方放文字）。 */
@@ -94,7 +128,9 @@ export function OutlinePanel({
   text,
   onToggleCollapse,
   onCollapsedChange,
-  onSelect
+  onSelect,
+  sectionOpsEnabled = false,
+  onSectionOp
 }: OutlinePanelProps) {
   const tree = useMemo(() => buildOutlineTree(items), [items]);
   const foldable = useMemo(() => collapsibleKeys(tree), [tree]);
@@ -107,6 +143,70 @@ export function OutlinePanel({
   const [filterOpen, setFilterOpen] = useState(false);
   const needle = query.trim();
   const filtering = filterOpen && needle.length > 0;
+
+  // 章节结构菜单的一次性状态（E7）：全栏同时只开一个菜单。
+  const [menuKey, setMenuKey] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [opBusy, setOpBusy] = useState(false);
+  const [opNote, setOpNote] = useState<string | null>(null);
+
+  const closeMenu = (): void => {
+    setMenuKey(null);
+    setConfirmingDelete(false);
+  };
+
+  // 快照回声到达（items 换实例）：菜单里的写回计划按旧行号算好了，必须作废；
+  // 提示不清 —— 用户可能正盯着那句失败原因。
+  useEffect(() => {
+    setMenuKey(null);
+    setConfirmingDelete(false);
+  }, [items]);
+
+  // 点菜单外任意处即收：与过滤 disclosure 的「不收就一直是打开态」同理，
+  // 留一个看不见归属的行内菜单在列表里比收掉更误导。
+  useEffect(() => {
+    if (menuKey === null) {
+      return;
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target;
+      if (target instanceof Element && target.closest(`.${OUTLINE_MENU_CLASS}, .${OUTLINE_MORE_CLASS}`)) {
+        return;
+      }
+      closeMenu();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+  }, [menuKey]);
+
+  /**
+   * 算预览、发写回、收尾。失败文案进 `opNote`；成功只收菜单 ——
+   * 新大纲由 `document.update` 回声重建，面板不自己摸本地副本（§6.2）。
+   */
+  const runSectionOp = async (item: OutlineItem, action: SectionOpAction): Promise<void> => {
+    if (!onSectionOp) {
+      return;
+    }
+    const preview = sectionOpPreview({ text, items, index: items.indexOf(item), action });
+    if (preview === null) {
+      // 预览算不出（越界 / 丢 position）：等回声重建大纲，不在这里猜区间。
+      setOpNote("Section position is stale, the outline is refreshing.");
+      closeMenu();
+      return;
+    }
+    setOpBusy(true);
+    try {
+      const failure = await onSectionOp(action, preview.plan);
+      if (failure === null) {
+        closeMenu();
+        setOpNote(null);
+      } else {
+        setOpNote(failure);
+      }
+    } finally {
+      setOpBusy(false);
+    }
+  };
 
   // 折叠隐藏与过滤命中是两条互斥的可见性规则：过滤时命中项一律可见（见头注）。
   const visible = useMemo(
@@ -177,6 +277,15 @@ export function OutlinePanel({
   const allCollapsed =
     foldable.size > 0 && [...foldable].every((key) => collapsedIds.has(key));
   const expandLabel = allCollapsed ? "Expand all" : "Collapse all";
+
+  /** 菜单内的 Escape 只关菜单：不顺手把搜索浮层/过滤 disclosure 一起关掉。 */
+  const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== "Escape") {
+      return;
+    }
+    event.stopPropagation();
+    closeMenu();
+  };
 
   if (items.length === 0) {
     return (
@@ -250,6 +359,15 @@ export function OutlinePanel({
         </p>
       ) : null}
 
+      {opNote !== null ? (
+        // 写回失败的唯一可见出口（乐观锁拒收 / 区间过期 / 宿主写不进）：
+        // role=status 让读屏器播报，不弹对话框 —— 一次结构操作的失败
+        // 不该把用户从阅读流里踢出来，面板内一行字就够。
+        <p className="readora-outline-note" data-readora-outline="section-note" role="status">
+          {opNote}
+        </p>
+      ) : null}
+
       <ul className="readora-outline-list" ref={listRef}>
         {visible.map((node) => {
           // 过滤视图不执行折叠：命中项必须看得见（§10.7「自动展开命中」）。
@@ -259,6 +377,14 @@ export function OutlinePanel({
           const collapsed = collapsedIds.has(node.key);
           const label = outlineLabelOf(node.item);
           const inline = inlineLabelOf(node, metrics);
+          // 没有 `position` 的行不给菜单：与内联标签「拿不到源行就不编」同一条诚实性。
+          const actionable = sectionOpsEnabled && node.item.position !== undefined;
+          const menuOpen = actionable && menuKey === node.key;
+          // 确认文案里的行数与子节数现场从纯函数预览拿：菜单开着的那几帧里
+          // 源文若被回声换了，预览会一起重算，报出来的永远是「点确认会发生的数」。
+          const deletePreview = menuOpen
+            ? sectionOpPreview({ text, items, index: items.indexOf(node.item), action: "delete-section" })
+            : null;
           return (
             <li
               key={node.key}
@@ -306,7 +432,95 @@ export function OutlinePanel({
                     {inline}
                   </span>
                 ) : null}
+                {actionable ? (
+                  <button
+                    type="button"
+                    className={OUTLINE_MORE_CLASS}
+                    aria-label={`Section actions for ${label}`}
+                    aria-expanded={menuOpen}
+                    title="Section actions"
+                    onClick={() => {
+                      if (menuOpen) {
+                        closeMenu();
+                      } else {
+                        setMenuKey(node.key);
+                        setConfirmingDelete(false);
+                        setOpNote(null);
+                      }
+                    }}
+                  >
+                    <MoreIcon size={12} />
+                  </button>
+                ) : null}
               </div>
+              {menuOpen ? (
+                <div className={OUTLINE_MENU_CLASS} onKeyDown={onMenuKeyDown}>
+                  {confirmingDelete ? (
+                    <>
+                      <p className="readora-outline-menu-confirm">
+                        {deletePreview === null
+                          ? "Delete this section?"
+                          : `Delete ${deletePreview.affectedLines} line${deletePreview.affectedLines === 1 ? "" : "s"}${deletePreview.childCount > 0 ? ` including ${deletePreview.childCount} sub-section${deletePreview.childCount === 1 ? "" : "s"}` : ""}?`}
+                      </p>
+                      <div className="readora-outline-menu-actions">
+                        <button
+                          type="button"
+                          className="readora-outline-menu-item readora-outline-menu-item--danger"
+                          disabled={opBusy || deletePreview === null}
+                          onClick={() => {
+                            void runSectionOp(node.item, "delete-section");
+                          }}
+                        >
+                          Confirm delete
+                        </button>
+                        <button
+                          type="button"
+                          className="readora-outline-menu-item"
+                          disabled={opBusy}
+                          onClick={() => {
+                            setConfirmingDelete(false);
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="readora-outline-menu-item"
+                        disabled={opBusy}
+                        onClick={() => {
+                          void runSectionOp(node.item, "add-sibling-after");
+                        }}
+                      >
+                        Add section after
+                      </button>
+                      <button
+                        type="button"
+                        className="readora-outline-menu-item"
+                        disabled={opBusy}
+                        onClick={() => {
+                          void runSectionOp(node.item, "add-child");
+                        }}
+                      >
+                        Add sub-section
+                      </button>
+                      <button
+                        type="button"
+                        className="readora-outline-menu-item readora-outline-menu-item--danger"
+                        disabled={opBusy}
+                        onClick={() => {
+                          setConfirmingDelete(true);
+                        }}
+                      >
+                        Delete section
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : null}
             </li>
           );
         })}

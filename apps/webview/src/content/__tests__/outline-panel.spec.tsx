@@ -12,7 +12,7 @@
  * 没有 `position` 就没有行内标签，折叠态不参与过滤视图就不摆折叠按钮。
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
 import type { OutlineItem } from "@readora/markdown-core";
 import {
   OutlinePanel,
@@ -22,6 +22,7 @@ import {
   OUTLINE_FILTER_INPUT_ID,
   OUTLINE_PANEL_CLASS
 } from "../OutlinePanel";
+import type { SectionOpAction, SectionOpPlan } from "../outline-section-ops";
 
 /** jsdom 的默认 rect（恒为全 0）：用例收尾时要把它装回去。 */
 const REAL_RECT = Element.prototype.getBoundingClientRect;
@@ -42,6 +43,8 @@ interface Props {
   activeHeadingId?: string | null;
   collapsedIds?: ReadonlySet<string>;
   text?: string;
+  sectionOpsEnabled?: boolean | undefined;
+  onSectionOp?: SectionOpHandler | undefined;
 }
 
 function panel(options: Props = {}) {
@@ -57,6 +60,8 @@ function panel(options: Props = {}) {
       onToggleCollapse={onToggleCollapse}
       onCollapsedChange={onCollapsedChange}
       onSelect={onSelect}
+      sectionOpsEnabled={next.sectionOpsEnabled ?? false}
+      onSectionOp={next.onSectionOp}
     />
   );
   const view = render(elementOf(options));
@@ -561,5 +566,251 @@ describe("焦点跟随：活动项落在可见区外时列表自己滚", () => {
     h.setActive("six");
     expect(scroll.writes).toEqual([]);
     expect(scroll.value()).toBe(0);
+  });
+});
+
+// ---------- 章节结构菜单（E7）----------
+// 夹具与 outline-section-ops.spec.ts 同一份（frontmatter 3 行 + 正文 19 行，
+// 文件绝对行 0 基）：4 `# Guide`、8 `## Alpha`、12 `### Alpha child`、16 `## Beta`。
+// 这里断言的是面板行为（门槛 / 开合 / 回传 / 确认 / 提示）；区间数值的权威
+// 判据在纯函数测试里钉，这里只引用其期望值。
+const SECTION_DOC_LINES = [
+  "---",
+  "title: Sections",
+  "---",
+  "",
+  "# Guide",
+  "",
+  "Intro paragraph.",
+  "",
+  "## Alpha",
+  "",
+  "Alpha body.",
+  "",
+  "### Alpha child",
+  "",
+  "Child body.",
+  "",
+  "## Beta",
+  "",
+  "Beta body."
+];
+const SECTION_DOC = SECTION_DOC_LINES.join("\n");
+
+function sectionHeading(title: string, level: number, bodyLine: number): OutlineItem {
+  return {
+    id: `n-${title}`,
+    title,
+    level,
+    anchor: title.toLowerCase().replace(/\s+/g, "-"),
+    position: { startLine: bodyLine, endLine: bodyLine }
+  };
+}
+
+const SECTION_ITEMS: OutlineItem[] = [
+  sectionHeading("Guide", 1, 1),
+  sectionHeading("Alpha", 2, 5),
+  sectionHeading("Alpha child", 3, 9),
+  sectionHeading("Beta", 2, 13)
+];
+
+type SectionOpHandler = (action: SectionOpAction, plan: SectionOpPlan) => Promise<string | null>;
+
+function sectionPanel(options: { onSectionOp?: SectionOpHandler; enabled?: boolean } = {}) {
+  return panel({
+    items: SECTION_ITEMS,
+    text: SECTION_DOC,
+    sectionOpsEnabled: options.enabled ?? true,
+    onSectionOp: options.onSectionOp ?? (async () => null)
+  });
+}
+
+function moreButton(container: HTMLElement, label: string): HTMLButtonElement {
+  return within(container).getByRole("button", { name: `Section actions for ${label}` });
+}
+
+describe("章节结构菜单：门槛与形态", () => {
+  test("未启用时零 affordance：有 position 的行也不摆 ⋯", () => {
+    const { view } = sectionPanel({ enabled: false });
+    expect(view.queryAllByRole("button", { name: /Section actions for/ })).toEqual([]);
+  });
+
+  test("启用但条目没有 position（旧快照的大纲）：同样不摆 ⋯", () => {
+    const { view } = panel({ text: SECTION_DOC, sectionOpsEnabled: true });
+    expect(view.queryAllByRole("button", { name: /Section actions for/ })).toEqual([]);
+  });
+
+  test("启用后每个有 position 的行各有一枚 ⋯", () => {
+    const { view } = sectionPanel();
+    expect(view.queryAllByRole("button", { name: /Section actions for/ })).toHaveLength(4);
+  });
+
+  test("点 ⋯ 展开三动作，aria-expanded 跟随；全栏同时只开一个", () => {
+    const { view } = sectionPanel();
+    const more = moreButton(view.container, "Alpha");
+    fireEvent.click(more);
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    expect(within(view.container).getByRole("button", { name: "Add section after" })).toBeTruthy();
+    expect(within(view.container).getByRole("button", { name: "Add sub-section" })).toBeTruthy();
+    expect(within(view.container).getByRole("button", { name: "Delete section" })).toBeTruthy();
+    fireEvent.click(moreButton(view.container, "Beta"));
+    expect(more.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  test("Escape 只收菜单，不收面板本身", () => {
+    const { view } = sectionPanel();
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    const menu = view.container.querySelector<HTMLElement>(".readora-outline-menu");
+    if (!menu) {
+      throw new Error("menu missing");
+    }
+    fireEvent.keyDown(menu, { key: "Escape" });
+    expect(view.container.querySelector(".readora-outline-menu")).toBeNull();
+    expect(view.container.querySelector(".readora-outline-link")).toBeTruthy();
+  });
+
+  test("点菜单外任意处即收", () => {
+    const { view } = sectionPanel();
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    expect(view.container.querySelector(".readora-outline-menu")).toBeTruthy();
+    fireEvent.pointerDown(document.body);
+    expect(view.container.querySelector(".readora-outline-menu")).toBeNull();
+  });
+
+  test("回声到达（items 换实例）作废菜单：不拿着旧行号的计划待续", () => {
+    const element = (items: readonly OutlineItem[]) => (
+      <OutlinePanel
+        items={items}
+        activeHeadingId={null}
+        collapsedIds={new Set<string>()}
+        text={SECTION_DOC}
+        onToggleCollapse={() => undefined}
+        onCollapsedChange={() => undefined}
+        onSelect={() => undefined}
+        sectionOpsEnabled
+        onSectionOp={async () => null}
+      />
+    );
+    const view = render(element(SECTION_ITEMS));
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    expect(view.container.querySelector(".readora-outline-menu")).toBeTruthy();
+    view.rerender(element([...SECTION_ITEMS]));
+    expect(view.container.querySelector(".readora-outline-menu")).toBeNull();
+    // 面板本身照常：作废的只是菜单，不是整栏。
+    expect(view.container.querySelector(".readora-outline-link")).toBeTruthy();
+  });
+});
+
+describe("章节结构菜单：动作与提示", () => {
+  test("Add section after 回传文件绝对行的精确计划，成功后收菜单", async () => {
+    const onSectionOp = vi.fn(async () => null as string | null);
+    const { view } = sectionPanel({ onSectionOp });
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Add section after" }));
+    await waitFor(() => {
+      expect(view.container.querySelector(".readora-outline-menu")).toBeNull();
+    });
+    expect(onSectionOp).toHaveBeenCalledWith("add-sibling-after", {
+      range: { startLine: 15, endLine: 15 },
+      newText: "\n## 新章节"
+    });
+  });
+
+  test("Add sub-section 级别钳到下一档，落点在子树末行", async () => {
+    const ok: SectionOpHandler = async () => null;
+    const onSectionOp = vi.fn(ok);
+    const { view } = sectionPanel({ onSectionOp });
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Add sub-section" }));
+    await waitFor(() => {
+      expect(onSectionOp).toHaveBeenCalledTimes(1);
+    });
+    expect(onSectionOp.mock.calls[0]?.[1]).toEqual({
+      range: { startLine: 15, endLine: 15 },
+      newText: "\n### 新章节"
+    });
+  });
+
+  test("删除两步确认：第一步报数不发写回，第二步确认才发", async () => {
+    const ok: SectionOpHandler = async () => null;
+    const onSectionOp = vi.fn(ok);
+    const { view } = sectionPanel({ onSectionOp });
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Delete section" }));
+    expect(
+      within(view.container).getByText("Delete 8 lines including 1 sub-section?")
+    ).toBeTruthy();
+    expect(onSectionOp).not.toHaveBeenCalled();
+    fireEvent.click(within(view.container).getByRole("button", { name: "Confirm delete" }));
+    await waitFor(() => {
+      expect(onSectionOp).toHaveBeenCalledTimes(1);
+    });
+    expect(onSectionOp.mock.calls[0]?.[0]).toBe("delete-section");
+    expect(onSectionOp.mock.calls[0]?.[1]).toEqual({
+      range: { startLine: 8, endLine: 15 },
+      newText: ""
+    });
+  });
+
+  test("确认可退：Cancel 回到三动作，不发生写回", () => {
+    const onSectionOp = vi.fn(async () => null as string | null);
+    const { view } = sectionPanel({ onSectionOp });
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Delete section" }));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Cancel" }));
+    expect(within(view.container).getByRole("button", { name: "Add section after" })).toBeTruthy();
+    expect(onSectionOp).not.toHaveBeenCalled();
+  });
+
+  test("末节的删除报数到文档末行（Beta：3 行、无子节）", () => {
+    const { view } = sectionPanel();
+    fireEvent.click(moreButton(view.container, "Beta"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Delete section" }));
+    expect(within(view.container).getByText("Delete 3 lines?")).toBeTruthy();
+  });
+
+  test("写回失败只留一行 role=status 提示，菜单保留可重试", async () => {
+    const onSectionOp = vi.fn(
+      async () => "The document changed outside the outline; open the menu again to retry."
+    );
+    const { view } = sectionPanel({ onSectionOp });
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Add section after" }));
+    const note = await waitFor(() => {
+      const node = view.container.querySelector<HTMLElement>(
+        '[data-readora-outline="section-note"]'
+      );
+      if (!node) {
+        throw new Error("note missing");
+      }
+      return node;
+    });
+    expect(note.getAttribute("role")).toBe("status");
+    expect(note.textContent).toContain("The document changed outside the outline");
+    // 菜单不收：用户可以直接换动作重试，不必再点一次 ⋯。
+    expect(view.container.querySelector(".readora-outline-menu")).toBeTruthy();
+  });
+
+  test("下一次成功把提示清掉", async () => {
+    let fail = true;
+    const onSectionOp = vi.fn(async () => {
+      if (fail) {
+        fail = false;
+        return "boom";
+      }
+      return null;
+    });
+    const { view } = sectionPanel({ onSectionOp });
+    fireEvent.click(moreButton(view.container, "Alpha"));
+    fireEvent.click(within(view.container).getByRole("button", { name: "Add section after" }));
+    await waitFor(() => {
+      expect(
+        view.container.querySelector('[data-readora-outline="section-note"]')
+      ).toBeTruthy();
+    });
+    fireEvent.click(within(view.container).getByRole("button", { name: "Add section after" }));
+    await waitFor(() => {
+      expect(view.container.querySelector('[data-readora-outline="section-note"]')).toBeNull();
+    });
   });
 });

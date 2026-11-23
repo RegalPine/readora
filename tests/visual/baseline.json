@@ -636,7 +636,7 @@
       },
       "screenshot": {
         "path": "artifacts/light.png",
-        "sha256": "b086e8058e3f627487c9cb5ccd3f2642de5d35182f747207c13430c51b86631d"
+        "sha256": "2f070e0fe2d46d8e9db157cb91eb45b6633c299dcdb8b1aa83f0c1359eb2c384"
       }
     },
     "dark": {
@@ -1263,7 +1263,7 @@
       },
       "screenshot": {
         "path": "artifacts/dark.png",
-        "sha256": "e1fb1f32c1930ef2aafa59e089e308e70aa91f35ce7b223097a9a03b971c8cf0"
+        "sha256": "3201db5611c7a96d362500688934adcbb0db4b800c5b00ff10923a165f07e205"
       }
     },
     "vscode-light": {
@@ -1890,7 +1890,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-light.png",
-        "sha256": "c3b5adb9bcf3e79282ebaa9df1b9d0d75f29bb14e0c6b6a9e07e6f433ae26f96"
+        "sha256": "f4938d776cd3e6d87088e0827d5e21b70750a2db7bac8e3daeaefdd953fd0596"
       }
     },
     "vscode-dark": {
@@ -2517,7 +2517,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-dark.png",
-        "sha256": "592099b2a0b9ed94ecb4f8cbdecd420d2dd37c79e06e4966a030cf1c999f92d4"
+        "sha256": "456c2d396f9ca41d0d26f9b62148c7db2d5001f1ebdba4cd92c01c362b8f53ae"
       }
     },
     "light--high-contrast": {
@@ -3144,7 +3144,7 @@
       },
       "screenshot": {
         "path": "artifacts/light--high-contrast.png",
-        "sha256": "9f3243204ffc4c22506e516ab0f28165cb138934ce173522eb2ee12ca049630d"
+        "sha256": "d0ccc2a22ad1aabeb22f79dd37b0c8d5c130a587b130c2287d857d33e46920ab"
       }
     },
     "dark--high-contrast": {
@@ -3771,7 +3771,7 @@
       },
       "screenshot": {
         "path": "artifacts/dark--high-contrast.png",
-        "sha256": "328abbc768efd35b049905d05e7404a274bb19056dc8ba301620074408f84805"
+        "sha256": "8289d0733a6eb082662819ba501cd41aa2a73500923127b9a703244b8aa86ee2"
       }
     },
     "vscode-light--high-contrast": {
@@ -4398,7 +4398,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-light--high-contrast.png",
-        "sha256": "7e0ac99241b44f43046757fea3ad58e4615607659733dba8219312af83e20eab"
+        "sha256": "1d52143e22aa3761a7277876049111adf65cc16bdc5776769a4b074866d0b611"
       }
     },
     "vscode-dark--high-contrast": {
@@ -5025,7 +5025,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-dark--high-contrast.png",
-        "sha256": "93dc82c7d4052adde0c3b0f0dbe034d665565d2570c4fb5c1083ec0b55a3b100"
+        "sha256": "4473f88257310df9d6345711dc06e174da0329d571cb59143b4fd8fdff29b8a0"
       }
     },
     "light--geist": {
@@ -5652,7 +5652,7 @@
       },
       "screenshot": {
         "path": "artifacts/light--geist.png",
-        "sha256": "cf3fd90413c57a0ad82f91ab00aee0c1839221938b2fbb6c7b0af77596e33c20"
+        "sha256": "5f4d252ddf02f7edcb9eead514938527a622dcb7eb94229889143406c85217b8"
       }
     },
     "dark--geist": {
@@ -6279,7 +6279,7 @@
       },
       "screenshot": {
         "path": "artifacts/dark--geist.png",
-        "sha256": "2e849f93f10b1aabd667c5489f0bc9dce4f4ab461f63da57f9cc4307ab7f69b8"
+        "sha256": "a51d5fbb8485e208bf3d50fef2decb365a63996d1608e3d03a97f475d884aedf"
       }
     }
   }

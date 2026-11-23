@@ -7,8 +7,11 @@
  *    paragraph / heading / blockquote / list / codeBlock / diagramBlock / table
  *    七类认领，其余（公式、`hr`、没有 range 的合成节点）一律不认领 —— 没有
  *    可靠范围就没有「改哪几行」的答案，宁可不给入口。
- * 2. **只有这一层会发 `document.edit`**。写回的权威（版本复判、行范围复判、
- *    真的落盘）全在 Host（§5.1），本层拿到拒绝就保全输入，绝不自作主张重试。
+ * 2. **本层与大纲章节菜单是 View 侧仅有的两个 `document.edit` 发送方**（E7 修订，
+ *    ARC-009 §16.7 第 1 条）。不变量守住的是「两处都用同一条出站形态、拿到拒绝都绝
+ *    不自作主张重试」：另一处是 `App.runSectionOp`（它改的是区块之间的结构，不属于任何
+ *    已认领区块，塞进本层反而要让接管层去理解大纲树）。写回的权威（版本复判、
+ *    行范围复判、真的落盘）全在 Host（§5.1），本层拿到拒绝就保全输入。
  * 3. **本层不写正文**。除了 `edit-unit.ts` 里登记过的那两处例外（取消时恢复快照、
  *    E3 的 `applyTextSplice` 只写文本节点），正文 DOM 的
  *    作者永远是 `MarkdownContent` 里那一次 innerHTML。
@@ -642,6 +645,18 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
             offsets && offsets.from !== null && offsets.to !== null
               ? { from: offsets.from, to: offsets.to }
               : null;
+        },
+        onCancel: () => {
+          // 与区块上那枚 `Escape` 同一条出口（`activateBlock` 里 `onEscape` 那两句）：
+          // DOM 还原成进入编辑时那份快照，一个 `document.edit` 都不发。工具条自己在
+          // `cancelActive` 里被摘掉 —— 在它的子节点上摘它是安全的，而 `deactivate`
+          // 先退监听再摘属性，不会顺手把那一次焦点转移变成提交。
+          const unit = active;
+          if (!unit) {
+            return;
+          }
+          cancelActive(unit);
+          refreshAffordances();
         }
       });
     }

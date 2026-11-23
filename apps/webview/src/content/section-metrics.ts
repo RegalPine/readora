@@ -24,9 +24,10 @@
 import { useMemo } from "react";
 import type { OutlineItem } from "@readora/markdown-core";
 import { countTextUnits } from "../app/text-metrics";
+import { bodyLineOffsetOf } from "./outline-section-ops";
 
 export interface SectionMetrics {
-  /** 该节起始源行（0 基，与 `SourcePosition.startLine` 同基）。 */
+  /** 该节起始源行（0 基、**文件绝对行**，已补偿 frontmatter）。 */
   readonly startLine: number;
   /** 该节到下一个标题为止的单元数（含子节，见文件头）。 */
   readonly units: number;
@@ -55,11 +56,15 @@ export function sectionMetricsOf(
   outline: readonly OutlineItem[]
 ): SectionMetricsMap {
   const lines = text.split("\n");
+  // `OutlineItem.position` 相对**剥掉 frontmatter 的 body**（markdown-core 透传
+  // AST 原始行号），而 `lines` 是整篇文件 —— 不补偿则带 frontmatter 的文档每节
+  // 整体前移，字数读到隔壁几行（与大纲章节操作共用同一个补偿函数，口径只有一处）。
+  const offset = bodyLineOffsetOf(text);
   const starts: Array<{ item: OutlineItem; startLine: number }> = [];
   for (const item of outline) {
     const startLine = item.position?.startLine;
     if (usableLine(startLine)) {
-      starts.push({ item, startLine });
+      starts.push({ item, startLine: startLine + offset });
     }
   }
 

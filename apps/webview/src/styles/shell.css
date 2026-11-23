@@ -288,6 +288,95 @@
   padding-right: var(--readora-space-1);
 }
 
+/* ---------- 章节结构菜单（E7，ARC-009 §12 / PRD-002 UX-010） ----------
+ * 行尾 ⋯ 用 opacity 隐藏而不是 display:none —— 后者会让标题每悬停一行就
+ * 左移一个按钮宽，整列跟着抖；代价是省略号永远少挤一个按钮的宽度。
+ * 菜单开在行内（`.readora-outline-menu` 是 `li` 的普通子节点，不是浮层）：
+ * 左栏是 sticky 窄列，popover 会被列表 overflow 裁掉，形态理由见 OutlinePanel 头注。 */
+
+.readora-outline-more {
+  flex: 0 0 auto;
+  align-self: center;
+  border: 0;
+  border-radius: var(--readora-radius-sm);
+  background: transparent;
+  color: var(--readora-color-text-muted);
+  padding: 2px var(--readora-space-1);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--readora-motion-fast) ease;
+}
+
+/* 菜单展开时即便指针已离开也要可见：否则键盘打开后只剩一个隐形的锚点。 */
+.readora-outline-row:hover .readora-outline-more,
+.readora-outline-item:focus-within .readora-outline-more,
+.readora-outline-more[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.readora-outline-more:hover:not(:disabled) {
+  background: var(--readora-color-surface-raised);
+  color: var(--readora-color-text-primary);
+}
+
+.readora-outline-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* 左缩进对齐标题文本（折叠按钮 16px + 行 gap 2px），菜单是那一行的延伸。 */
+  margin: 2px var(--readora-space-1) var(--readora-space-1) 18px;
+  border: 1px solid var(--readora-color-border);
+  border-radius: var(--readora-radius-md);
+  background: var(--readora-color-surface-raised);
+  padding: var(--readora-space-1);
+}
+
+.readora-outline-menu-item {
+  border: 0;
+  border-radius: var(--readora-radius-sm);
+  background: transparent;
+  color: var(--readora-color-text-primary);
+  font: inherit;
+  font-size: var(--readora-font-xs);
+  text-align: left;
+  padding: 2px var(--readora-space-2);
+  cursor: pointer;
+}
+
+.readora-outline-menu-item:hover:not(:disabled) {
+  background: var(--readora-color-surface);
+}
+
+/* 破坏性动作只换前景色，底色留给 hover —— 菜单里常驻一块红底会盖过标题本身。 */
+.readora-outline-menu-item--danger {
+  color: var(--readora-danger-color);
+}
+
+.readora-outline-menu-item:disabled {
+  color: var(--readora-color-text-muted);
+  cursor: default;
+}
+
+.readora-outline-menu-confirm {
+  margin: 0;
+  padding: 2px var(--readora-space-2);
+  color: var(--readora-color-text-secondary);
+  font-size: var(--readora-font-xs);
+}
+
+.readora-outline-menu-actions {
+  display: flex;
+  gap: var(--readora-space-1);
+}
+
+/* 写回失败的面板内提示（role=status）：一行字留在列表上方，不弹对话框。 */
+.readora-outline-note {
+  flex: 0 0 auto;
+  margin: 0 var(--readora-space-1) var(--readora-space-2);
+  color: var(--readora-danger-color);
+  font-size: var(--readora-font-xs);
+}
+
 /* 焦点跟随：活动项落在可见区外时由 `OutlinePanel` 把列表滚到它身上，
  * 只动 `.readora-outline-list` 自己的 scrollTop，不碰 window 也不碰条目样式。*/
 

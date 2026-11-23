@@ -680,6 +680,11 @@ interface ReaderMessage<T = unknown> {
 
 1. 消息协议的权威定义见 ARC-004 §8.3，本表与其保持一致。
 2. 大纲数据随渲染结果投递（见 ARC-002 §12），不设独立的 `outline.update` 消息。
+[^1]
+
+
+
+
 
 ### 9.3 消息约束
 
@@ -799,11 +804,12 @@ readora/
 
 说明：
 
-1. Extension Host 与 Webview 必须拥有独立入口和独立构建产物（esbuild / Vite）。
+1. **Extension Host 与 Webview 必须拥有独立入口和独立构建产物（esbuild / Vite）。**
 2. 共享包（contracts、design-tokens）只存放跨运行环境共享的数据契约和纯函数，不依赖 React、VS Code 或 Node.js。
 3. 不允许 Webview 直接导入 VS Code API 或 Node.js 内置模块。
 4. 不允许 Rendering Engine 依赖 UI 组件。
 5. 不允许 Infrastructure 反向依赖 Application。
+
 
 模块依赖方向与禁止项以 IMP-001 §4.3 为准。
 
@@ -831,6 +837,15 @@ readora/
 | Playwright | UI E2E 测试 | 采用 |
 
 技术选型由 IMP-001 §3 冻结（早期计划的 TSD-001 / TSD-002 编号从未独立成文，其内容已并入 IMP-001）。版本基线与锁定规则见 IMP-001 §3.2～§3.4。
+
+
+
+
+
+
+****
+
+
 
 ---
 

@@ -23,6 +23,11 @@
  * 不用 `Icon` 组件（本轮不动 `Icon.tsx`）：按钮可见内容是字面字形
  * `B` / `I` / `S` / `<>` / `[]` / `[^n]` / `H1`…`H6`，可访问名走 `aria-label`，
  * 与 `editToggle` 的 "Edit mode"、冲突卡片的 "Replace anyway" 同一套英文口径。
+ *
+ * **E8 多了一枚 `Cancel`**（用户诉求「文本加样式后没法取消」）：格式化把字面标记
+ * 写进正文，而鼠标路径上原本没有一个「作废这次编辑」的出口。它不是第七枚格式化
+ * 动作，不进 `ACTIONS`、不参与可点性三档、也不进 roving tabindex —— 细节写在
+ * 创建它的那一段注释里。
  */
 import type { InlineAction } from "./inline-format";
 
@@ -47,6 +52,12 @@ const ACTIONS: ReadonlyArray<{ action: InlineAction; glyph: string; label: strin
 ];
 
 const LEVELS = [1, 2, 3, 4, 5, 6] as const;
+
+/** 取消出口（E8）的三个字面量：与六枚动作同一套「可见字形 + `aria-label`」口径。 */
+const CANCEL_GLYPH = "Cancel";
+const CANCEL_ARIA_LABEL = "Cancel editing";
+/** 原生 tooltip：把「点下去会发生什么」写在鼠标停下的那一帧，不新增第二套提示层。 */
+const CANCEL_TITLE = "Undo the markers and leave this block unchanged";
 
 export type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 
@@ -83,6 +94,11 @@ export interface ToolbarHandlers {
   onUrlOpen(): void;
   /** URL 输入框的提交（回车或 Apply）；空白串交回接管层按 `blocked` 处理。 */
   onLink(url: string): void;
+  /**
+   * 作废整次编辑（E8）：接管层走与区块上那枚 `Escape` 完全同一条路径
+   * （`cancelActive` → DOM 还原成进入编辑时那份快照，一个 `document.edit` 都不发）。
+   */
+  onCancel(): void;
 }
 
 export interface FormatToolbar {
@@ -185,6 +201,30 @@ export function createFormatToolbar(
   }
   root.appendChild(levelGroup);
 
+  /**
+   * 取消出口（E8）。
+   *
+   * 为什么非要有这一枚：格式化把**字面标记**写进正文（形态 A 下屏幕显示的就是
+   * `**词**`），用户第一反应是「撤回这一步」，而鼠标路径上原本没有出口 ——
+   * 点正文之外任何一处走的是 `focusout` = **提交**，`Ctrl+Z` 又撤不动（标记由
+   * `Range` API 写入，不进浏览器原生 undo 栈），于是只剩一枚没人会想到的 `Escape`。
+   *
+   * 它**不进** `focusables()`：roving 那一格只属于格式化动作，键盘用户退编辑的路
+   * 是 `Escape`（见 `onRootKeyDown`），而不是让焦点在七枚按钮之间多绕一下。
+   * `mousedown` 那条全件 `preventDefault` 覆盖得到它（它也是 `button`），所以点了
+   * 它不会先把选区弄丢。
+   */
+  const cancelButton = makeButton(CANCEL_GLYPH, CANCEL_ARIA_LABEL);
+  cancelButton.classList.add(`${EDIT_TOOLBAR_CLASS}__button--cancel`);
+  cancelButton.title = CANCEL_TITLE;
+  // 单独的挂点而不是 `data-readora-action`：那批按钮的语义是「一种格式化」，
+  // 可点性三档的取证（`disabledMap`）与 roving 都按它筛，混进来就是改那份契约。
+  cancelButton.dataset.readoraCancel = "true";
+  cancelButton.addEventListener("click", () => {
+    handlers.onCancel();
+  });
+  root.appendChild(cancelButton);
+
   // 链接 URL：工具条内的一行输入，展开时单元不能被销毁（决策 4 的 mousedown 护栏
   // 与 KEEP_EDITING 名单一起保证「点了链接按钮不会先把编辑关掉」）。
   const urlRow = doc.createElement("div");
@@ -212,13 +252,16 @@ export function createFormatToolbar(
       // 嵌套提示优先：Escape 先收起 URL 输入，不退整次编辑（E2 的 Escape 语义不变，
       // 那条路径没有 URL 输入框参与）。
       keyboard.preventDefault();
+      // `stopPropagation` 是 E8 之后才必需的：根节点现在也听 `Escape`（整次编辑的
+      // 出口），不收这一层就是「收输入框顺带把编辑也退了」。
+      keyboard.stopPropagation();
       closeUrlRow();
     }
   });
   urlRow.append(urlInput, urlApply);
   root.appendChild(urlRow);
 
-  root.addEventListener("keydown", onKeyNav);
+  root.addEventListener("keydown", onRootKeyDown);
   // 全件 `mousedown` 一律 preventDefault：焦点转移不能让选区丢（§6.3 的降级前提）。
   // 输入框自己需要焦点，所以在 preventDefault 之后显式 focus 回去。
   root.addEventListener("mousedown", (event) => {
@@ -256,8 +299,22 @@ export function createFormatToolbar(
     return list;
   }
 
-  /** roving tabindex：整条工具条在 tab 序列里只占一格，内部走方向键（照 ExportMenu）。 */
-  function onKeyNav(event: KeyboardEvent): void {
+  /**
+   * 工具条根节点的两个键盘出口（`Escape` 与 roving 四键）。
+   *
+   * `Escape` **必须在这一层听**（E8）：焦点落在工具条里那枚按钮上时，按键沿
+   * `body` 冒泡就到头了 —— 工具条不挂在正文子树里（决策 4），单元挂在区块上的
+   * 那个 `keydown` 收不到它，那是一段真实死区。鼠标点按钮不会进这段死区
+   * （`mousedown` 被 `preventDefault`，焦点从未离开正文），键盘操作一定会。
+   */
+  function onRootKeyDown(event: KeyboardEvent): void {
+    if (event.key === "Escape") {
+      // URL 输入行展开着的那一次已经被输入框吃掉并 stopPropagation，到不了这里。
+      event.preventDefault();
+      event.stopPropagation();
+      handlers.onCancel();
+      return;
+    }
     const keys = ["ArrowLeft", "ArrowRight", "Home", "End"];
     if (!keys.includes(event.key)) {
       return;
@@ -370,7 +427,7 @@ export function createFormatToolbar(
       }
     },
     destroy() {
-      root.removeEventListener("keydown", onKeyNav);
+      root.removeEventListener("keydown", onRootKeyDown);
       closeUrlRow();
       root.remove();
       visible = false;

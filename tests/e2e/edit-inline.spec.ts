@@ -428,4 +428,47 @@ test.describe("行内格式化", () => {
     expect((await model(page)).text).toBe(DOC);
     expect(await viewMessages(page, "document.edit")).toEqual([]);
   });
+
+  /* --------------------------------------------------------------- 取消出口（E8） */
+
+  test("加粗后点工具条上的 Cancel：星号从屏幕上消失，文件一个字节没动", async ({ page }) => {
+    await openEditor(page);
+    const paragraph = await activate(page, "2:2");
+    await selectText(page, "2:2", { node: 0, offset: 6 }, { node: 0, offset: 15 });
+    await tool(page, "Bold").click();
+    await expect(paragraph).toHaveText("Alpha **paragraph** one.");
+
+    // 这一条是整个取消出口的落点：鼠标用户在「已经看见星号」之后能退回去，
+    // 而原本这一退只有两条路 —— 点别处（那是**提交**）或按没人知道的 Escape。
+    await expect(tool(page, "Cancel editing")).toBeEnabled();
+    await tool(page, "Cancel editing").click();
+    await expect(paragraph).toHaveText("Alpha paragraph one.");
+    await expect(paragraph).toHaveAttribute("data-readora-edit-state", "idle");
+    await expect(toolbar(page)).toHaveCount(0);
+    // 逐字节 + 零消息：取消不是「一次把原串写回去的编辑」
+    await expectSource(page, {});
+    expect((await model(page)).version).toBe(1);
+    expect(await viewMessages(page, "document.edit")).toEqual([]);
+  });
+
+  test("焦点走进工具条之后 Escape 仍退得出编辑（工具条挂 body，区块上的监听收不到这一发）", async ({ page }) => {
+    await openEditor(page);
+    const paragraph = await activate(page, "2:2");
+    await selectText(page, "2:2", { node: 0, offset: 6 }, { node: 0, offset: 15 });
+    await tool(page, "Bold").click();
+    await expect(paragraph).toHaveText("Alpha **paragraph** one.");
+
+    // 焦点转移本身是被测对象：`focus()` 到 tabIndex -1 的按钮上会把块的 focusout
+    // 递出去（靠 `.readora-edit-toolbar` 在 KEEP_EDITING 名单里才没变成提交），
+    // 这一串只能在真 Chromium 里跑 —— jsdom 的焦点模型不认 tabIndex -1。
+    await tool(page, "Bold").focus();
+    expect(
+      await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))
+    ).toBe("Bold");
+    await page.keyboard.press("Escape");
+    await expect(paragraph).toHaveText("Alpha paragraph one.");
+    await expect(toolbar(page)).toHaveCount(0);
+    await expectSource(page, {});
+    expect(await viewMessages(page, "document.edit")).toEqual([]);
+  });
 });

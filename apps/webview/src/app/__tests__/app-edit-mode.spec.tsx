@@ -14,8 +14,9 @@
  * 逐字节写回在 `tests/e2e/edit.spec.ts`，这里不重复。
  */
 import { afterEach, describe, expect, test } from "vitest";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import {
+  READORA_ERROR_CODES,
   type DocumentLoadPayload,
   type ExportDataPayload,
   type ReaderPreferences
@@ -251,5 +252,120 @@ describe("不可写文档（§7.2 的禁用而非隐藏）", () => {
     expect(editButton().disabled).toBe(false);
     fireEvent.click(editButton());
     expect(handles().length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * 大纲章节结构菜单的接线（E7）：面板侧的动作形态在
+ * `content/__tests__/outline-panel.spec.tsx`，这里只钉「接线才成立」的四件事：
+ * 入口门槛、`document.edit` 出线形状、连续动作的版本记账、错误码到提示。
+ * 夹具 `TEXT` 共 6 行（文件绝对行 0 基）：0 `# Edit` … 5 空行；唯一一节
+ * 没有兄弟边界，所以新增落点钳在末行 5。
+ */
+describe("大纲结构菜单接线（E7）", () => {
+  function openMenu(): void {
+    fireEvent.click(screen.getByRole("button", { name: "Section actions for Edit" }));
+  }
+
+  function enableEditing(): void {
+    fireEvent.click(editButton());
+  }
+
+  test("只读时零入口；开编辑后行尾出现 ⋯", () => {
+    setup();
+    expect(screen.queryByRole("button", { name: /Section actions for/ })).toBeNull();
+    enableEditing();
+    expect(screen.getByRole("button", { name: "Section actions for Edit" })).toBeTruthy();
+  });
+
+  test("动作发 `document.edit`：uri / 区间 / 文本 / baseVersion 全部现读快照", () => {
+    const host = setup();
+    enableEditing();
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Add section after" }));
+    expect(host.sent("document.edit")).toEqual([
+      {
+        documentUri: FILE_URI,
+        range: { startLine: 5, endLine: 5 },
+        newText: "\n# 新章节",
+        baseVersion: 5
+      }
+    ]);
+  });
+
+  test("连续两笔动作：第二笔的 baseVersion 用上一笔回执，不被自己的回声误杀", async () => {
+    const host = setup();
+    enableEditing();
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Add section after" }));
+    act(() => {
+      expect(host.respondTo("document.edit", { version: 6 })).toBe(true);
+    });
+    // 成功回执：菜单收起，且没有 document.update 回声（快照 version 仍停在 5）。
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Add section after" })).toBeNull();
+    });
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Add section after" }));
+    const edits = host.sent("document.edit") as { baseVersion: number }[];
+    expect(edits).toHaveLength(2);
+    expect(edits[1]?.baseVersion).toBe(6);
+  });
+
+  test("换文档后版本记账重开：新文档用自家的 version", async () => {
+    const host = setup();
+    enableEditing();
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Add section after" }));
+    act(() => {
+      host.respondTo("document.edit", { version: 6 });
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Add section after" })).toBeNull();
+    });
+    act(() => {
+      host.emit("document.load", {
+        documentUri: "file:///vault/notes/second.md",
+        languageId: "markdown",
+        version: 1,
+        text: TEXT,
+        preferences: PREFERENCES
+      });
+    });
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Add section after" }));
+    const edits = host.sent("document.edit") as { documentUri: string; baseVersion: number }[];
+    expect(edits[1]?.documentUri).toBe("file:///vault/notes/second.md");
+    // 上一版的回执 6 泄漏进新文档就会让宿主把 baseVersion=6 判成未来版本；
+    // 重置后应回到 max(1, -1) = 1。
+    expect(edits[1]?.baseVersion).toBe(1);
+  });
+
+  test("stale 错误码 → 面板内一行提示，不是对话框也不是 reader.error", async () => {
+    const host = setup();
+    enableEditing();
+    openMenu();
+    fireEvent.click(screen.getByRole("button", { name: "Add section after" }));
+    const before = host.posted
+      .map((entry) => entry.type)
+      .filter((type) => type !== "metrics.report");
+    act(() => {
+      expect(
+        host.respondToError("document.edit", READORA_ERROR_CODES.EDIT_STALE, "base version 5 is gone")
+      ).toBe(true);
+    });
+    await waitFor(() => {
+      expect(
+        document.querySelector('[data-readora-outline="section-note"]')
+      ).toBeTruthy();
+    });
+    expect(
+      document.querySelector('[data-readora-outline="section-note"]')?.textContent
+    ).toContain("The document changed outside the outline");
+    // 失败不新增任何出站消息（提示是纯本地；也不会退化成 reader.error 上报）。
+    // metrics.report 不参与对比：渲染上报落在 waitFor 的任意帧里，与失败无关。
+    expect(
+      host.posted.map((entry) => entry.type).filter((type) => type !== "metrics.report")
+    ).toEqual(before);
   });
 });

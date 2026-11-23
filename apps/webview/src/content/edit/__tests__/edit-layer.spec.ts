@@ -27,6 +27,7 @@ import {
   EDIT_ACTIVE_STATE,
   EDIT_CONFLICT_CLASS,
   EDIT_CONFLICT_STATE,
+  EDIT_IDLE_STATE,
   EDIT_MODE_ATTRIBUTE,
   EDIT_STATE_ATTRIBUTE
 } from "../edit-unit";
@@ -317,6 +318,15 @@ function levelButton(level: number): HTMLButtonElement {
 /** 点一枚动作按钮（disabled 按钮收不到 click，这本身就是 §6.3 屏蔽那一条的断言）。 */
 function clickTool(action: string): void {
   toolButton(action).click();
+}
+
+/** 取消出口那一枚（E8）：它不带 `data-readora-action`，所以单独一个找法。 */
+function cancelTool(): HTMLButtonElement {
+  const button = toolbarRoot()?.querySelector<HTMLButtonElement>(`[data-readora-cancel]`);
+  if (!button) {
+    throw new Error("cancel button missing");
+  }
+  return button;
 }
 
 function note(container: HTMLElement): string | null {
@@ -1208,6 +1218,42 @@ describe("格式化动作（§6.3 主链路）", () => {
     clickTool("italic");
     expect(readEditableText(block, "paragraph")).toBe("Alpha **paragraph one.**");
     expect(h.requests).toHaveLength(0);
+  });
+});
+
+describe("取消出口（E8：文本加了样式后鼠标路径上要有退路）", () => {
+  test("加粗后点工具条上的 Cancel：字面星号一起撤掉，零请求，工具条摘净", () => {
+    const h = setup({ text: LATIN });
+    const block = h.open(1);
+    const before = block.innerHTML;
+    h.select(6, 15);
+    clickTool("bold");
+    expect(readEditableText(block, "paragraph")).toBe("Alpha **paragraph** one.");
+    cancelTool().click();
+    // 与 `Escape` 逐字节同果： DOM 回到进入编辑时那份快照，而不是「把星号删掉」。
+    expect(block.innerHTML).toBe(before);
+    // 不是「属性摘净」而是「回到 idle」：编辑模式还开着，这一块的把手依旧在。
+    expect(block.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_IDLE_STATE);
+    expect(block.hasAttribute("contenteditable")).toBe(false);
+    expect(h.layer.snapshot().activeRangeKey).toBeNull();
+    expect(h.requests).toHaveLength(0);
+    expect(toolbarCount()).toBe(0);
+  });
+
+  test("焦点在工具条里按 Escape 也退得出去（挂在区块上的监听收不到 body 里的泡）", () => {
+    const h = setup({ text: LATIN });
+    const block = h.open(1);
+    const before = block.innerHTML;
+    h.select(6, 15);
+    clickTool("bold");
+    // 工具条挂在 body 上（决策 4），所以这一发按键只能被工具条根节点接住；
+    // 不接住就是「编辑退不出去」那段真实死区（E8 的起因）。
+    toolButton("bold").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })
+    );
+    expect(block.innerHTML).toBe(before);
+    expect(h.requests).toHaveLength(0);
+    expect(toolbarCount()).toBe(0);
   });
 });
 

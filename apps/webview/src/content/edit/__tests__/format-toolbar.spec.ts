@@ -54,22 +54,36 @@ function recorded() {
   const actions: InlineAction[] = [];
   const levels: HeadingLevel[] = [];
   const urls: string[] = [];
+  const cancels: number[] = [];
   /** `onUrlOpen` 被叫到的那一刻的 `activeElement`：选区就是在这一帧被抄走的。 */
   const urlOpens: Array<string | null> = [];
   return {
     actions,
     levels,
     urls,
+    cancels,
     urlOpens,
     handlers: {
       onAction: (action: InlineAction) => actions.push(action),
       onLevel: (level: HeadingLevel) => levels.push(level),
       onLink: (url: string) => urls.push(url),
+      onCancel: () => {
+        cancels.push(1);
+      },
       onUrlOpen: () => {
         urlOpens.push(document.activeElement?.tagName ?? null);
       }
     }
   };
+}
+
+/** 取消出口那一枚：它不带 `data-readora-action`，所以单独一个找法。 */
+function cancelButton(toolbar: ReturnType<typeof createFormatToolbar>): HTMLButtonElement {
+  const button = toolbar.root.querySelector<HTMLButtonElement>(`[data-readora-cancel]`);
+  if (!button) {
+    throw new Error("cancel button missing");
+  }
+  return button;
 }
 
 describe("placeToolbar（纯函数，可穷举）", () => {
@@ -109,7 +123,7 @@ describe("placeToolbar（纯函数，可穷举）", () => {
 });
 
 describe("节点形态：文本字形 + aria-label（不新增 Icon）", () => {
-  test("六枚动作按钮齐全，可见内容是字面字形", () => {
+  test("六枚动作 + 一枚取消齐全，可见内容是字面字形", () => {
     const toolbar = createFormatToolbar(target(), recorded().handlers);
     toolbar.show(state());
     const glyphs = Array.from(
@@ -127,7 +141,9 @@ describe("节点形态：文本字形 + aria-label（不新增 Icon）", () => {
       "S/Strikethrough",
       "<>/Inline code",
       "[]/Link",
-      "[^n]/Footnote reference"
+      "[^n]/Footnote reference",
+      // E8：它排在最后，与格式化动作之间靠分隔线划开（样式在 markdown.css）。
+      "Cancel/Cancel editing"
     ]);
     toolbar.destroy();
   });
@@ -266,6 +282,8 @@ describe("点击与键盘", () => {
     expect(toolbar.awaitingUrl).toBe(false);
     expect(scope.urls).toEqual([]);
     expect(event.defaultPrevented).toBe(true);
+    // E8 之后这一句才是真判据：根节点也听 Escape，输入框不收泡就会连带退了编辑。
+    expect(scope.cancels).toEqual([]);
     toolbar.destroy();
   });
 
@@ -352,6 +370,69 @@ describe("点击与键盘", () => {
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })
     );
     expect(document.activeElement).toBe(footnote);
+    toolbar.destroy();
+  });
+});
+
+describe("取消出口（E8：文本加了样式后鼠标路径上要有退路）", () => {
+  test("点 Cancel 回一次 onCancel，不带动作与级别", () => {
+    const scope = recorded();
+    const toolbar = createFormatToolbar(target(), scope.handlers);
+    toolbar.show(state());
+    cancelButton(toolbar).click();
+    expect(scope.cancels).toEqual([1]);
+    expect(scope.actions).toEqual([]);
+    expect(scope.levels).toEqual([]);
+    toolbar.destroy();
+  });
+
+  test("Cancel 不参与可点性三档：无选区、代码段内都照旧可点", () => {
+    const toolbar = createFormatToolbar(target(), recorded().handlers);
+    // 「退得出去」这件事不能连它自己都要先看选区脸色 —— 灰掉的取消 = 没有取消。
+    expect(cancelButton(toolbar).hasAttribute("data-readora-action")).toBe(false);
+    for (const override of [{}, { canWrap: false }, { insideCode: true }] as const) {
+      toolbar.show(state(override));
+      expect(cancelButton(toolbar).disabled).toBe(false);
+    }
+    toolbar.destroy();
+  });
+
+  test("焦点在工具条里按 Escape = 退整次编辑（单元挂在区块上的监听收不到 body 里的泡）", () => {
+    const scope = recorded();
+    const toolbar = createFormatToolbar(target(), scope.handlers);
+    toolbar.show(state());
+    const bold = toolbar.root.querySelector<HTMLButtonElement>(`[data-readora-action="bold"]`);
+    const event = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    // 只收到 `[1]` 就是「没再往上冒」的证据：挂在 document 上的那只耳朵什么都
+    // 没听见（听见会 push 100）—— 工具条不退编辑时不该顺手把别人的按键也吃了。
+    const reachedDocument = (): void => {
+      scope.cancels.push(100);
+    };
+    document.addEventListener("keydown", reachedDocument);
+    bold?.dispatchEvent(event);
+    document.removeEventListener("keydown", reachedDocument);
+    expect(scope.cancels).toEqual([1]);
+    expect(event.defaultPrevented).toBe(true);
+    toolbar.destroy();
+  });
+
+  test("Cancel 不进 roving 序列：tabIndex 恒为 -1，方向键循环也不落在它身上", () => {
+    const toolbar = createFormatToolbar(target(), recorded().handlers);
+    toolbar.show(state());
+    const cancel = cancelButton(toolbar);
+    expect(cancel.tabIndex).toBe(-1);
+    const actions = Array.from(
+      toolbar.root.querySelectorAll<HTMLButtonElement>(`[data-readora-action]`)
+    );
+    const last = actions[actions.length - 1];
+    if (!last) {
+      throw new Error("夹具里没有动作按钮");
+    }
+    last.focus();
+    toolbar.root.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, cancelable: true })
+    );
+    expect(document.activeElement).toBe(actions[0]);
     toolbar.destroy();
   });
 });

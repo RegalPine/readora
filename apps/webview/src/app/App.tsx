@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ConfigPatchKey,
+  DocumentEditResult,
   DocumentLoadPayload,
   ExportCapturePayload,
   ExportFormat,
@@ -28,6 +29,7 @@ import type {
 import { READORA_ERROR_CODES } from "@readora/contracts";
 import type { OutlineItem } from "@readora/markdown-core";
 import type { HostBridge } from "../bridge/host-bridge";
+import { bridgeErrorParts } from "../bridge/bridge-error";
 import { useSearchShortcuts } from "../content/interactions";
 import { documentRoot } from "../content/heading-query";
 import { exportDocumentRoot, serializeExportDocument } from "../content/export-document";
@@ -35,6 +37,7 @@ import type { EditLayer } from "../content/edit/edit-layer";
 import { isFileSchemeUri } from "../content/edit/source-text";
 import { createHeadingLocator, type HeadingLocator } from "../content/heading-locator";
 import { ancestorKeysOf, buildOutlineTree } from "../content/outline-tree";
+import type { SectionOpAction, SectionOpPlan } from "../content/outline-section-ops";
 import { OutlinePanel } from "../content/OutlinePanel";
 import { SearchPanel } from "../content/SearchPanel";
 import { useActiveHeading } from "../content/use-active-heading";
@@ -169,6 +172,11 @@ export function App({ bridge }: AppProps) {
 
   const versionRef = useRef(-1);
   const renderedVersionRef = useRef(-1);
+  /**
+   * 大纲结构写回的版本记账（E7）：上一次成功 `document.edit` 返回的 version。
+   * 换文档重置 -1，详见 `runSectionOp` 的注释。
+   */
+  const sectionBumpRef = useRef(-1);
   const pendingRestoreRef = useRef<ReadingState | null>(null);
   const activeHeadingRef = useRef<string | null>(null);
   const documentUriRef = useRef<string | undefined>(undefined);
@@ -208,6 +216,8 @@ export function App({ bridge }: AppProps) {
         documentUriRef.current = next.documentUri;
         renderedVersionRef.current = -1;
         activeHeadingRef.current = null;
+        // 新文档是另一条版本计数线，上一版的写回执不能拿来当它的 baseVersion。
+        sectionBumpRef.current = -1;
         // 指标的去重键含版本号，但「A v1 → B v1 → 回到 A v1」是同键的两次真实首帧，
         // 所以换文档必须清掉已上报标记，否则第二次跳转就没有任何指标记录。
         reportedRef.current = null;
@@ -523,6 +533,50 @@ export function App({ bridge }: AppProps) {
     [bridge]
   );
 
+  /**
+   * 大纲章节结构写回（E7）：和编辑层一样走 `document.edit` 的一次按行区间替换，
+   * 但版本记账必须自己做一套 —— 编辑层现读 `payload.version` 就够了（同一块
+   * 不会连交两次），这里上一个动作的成功回声可能还在路上，现读旧值会被宿主
+   * 乐观锁误判 stale，于是取 `max(payload.version, 上次回执 version)`。
+   * `action` 只表面板意图，写回载荷全在 `plan` 里；错误码到文案的映射集中在
+   * 这一层，面板不持 bridge。本函数 + 编辑层 = View 侧仅有的两个 `document.edit`
+   * 发送方，ARC-009 原先那条「只有 edit-layer 发」的不变量已按本轮改写（登记在
+   * 该文档 §16.7 第 1 条）。声明在 `!payload` 早退之前：hook 顺序必须两条
+   * 渲染路径一致（React Rules of Hooks）；没文档时的拒收走 `payloadRef` 现读。
+   */
+  const runSectionOp = useCallback(
+    async (action: SectionOpAction, plan: SectionOpPlan): Promise<string | null> => {
+      const current = payloadRef.current;
+      if (!current) {
+        return "No document is open.";
+      }
+      const baseVersion = Math.max(current.version, sectionBumpRef.current);
+      try {
+        const result = await bridge.request<DocumentEditResult>("document.edit", {
+          documentUri: current.documentUri,
+          range: plan.range,
+          newText: plan.newText,
+          baseVersion
+        });
+        sectionBumpRef.current = result.version;
+        return null;
+      } catch (error) {
+        const { code, message } = bridgeErrorParts(
+          error,
+          READORA_ERROR_CODES.EDIT_APPLY_FAILED
+        );
+        if (code === READORA_ERROR_CODES.EDIT_STALE) {
+          return "The document changed outside the outline; open the menu again to retry.";
+        }
+        if (code === READORA_ERROR_CODES.EDIT_RANGE_INVALID) {
+          return "The section range is no longer valid; wait for the outline to refresh.";
+        }
+        return `The edit was rejected: ${message}`;
+      }
+    },
+    [bridge]
+  );
+
   if (!payload) {
     return <div className="readora-loading">Loading document…</div>;
   }
@@ -650,6 +704,8 @@ export function App({ bridge }: AppProps) {
               });
             }}
             onSelect={selectHeading}
+            sectionOpsEnabled={editMode && isFileSchemeUri(payload.documentUri)}
+            onSectionOp={runSectionOp}
           />
         }
         statusbar={
