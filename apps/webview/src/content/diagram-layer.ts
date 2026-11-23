@@ -604,6 +604,9 @@ export function createDiagramLayer(deps: DiagramLayerDeps = {}): DiagramLayer {
         continue;
       }
       const record = buildChrome(wrapper, source);
+      // 接管即收起源码：buildChrome 已添加 toolbar + container，标记 "mounting"
+      // 让 CSS 在引擎出图前就隐藏 note/source，避免编辑提交后重渲染时源码一闪。
+      setState(record, "mounting");
       records.set(wrapper, record);
       wrapper.addEventListener("click", onClick);
       queued.set(wrapper, source);

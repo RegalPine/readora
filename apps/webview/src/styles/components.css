@@ -46,11 +46,15 @@
   color: var(--readora-diagram-muted);
 }
 
-/* 接管后不再需要 M2 的占位说明；源码默认收起。 */
+/* 接管后不再需要 M2 的占位说明；源码默认收起。
+ * "mounting" 也隐藏：buildChrome 一旦添上 toolbar + container，即便引擎尚未出图，
+ * 展示源码占位也不如在等渲染——避免编辑提交后重渲染一闪。 */
 .readora-diagram[data-readora-diagram-state="rendered"] .readora-diagram-note,
 .readora-diagram[data-readora-diagram-state="failed"] .readora-diagram-note,
+.readora-diagram[data-readora-diagram-state="mounting"] .readora-diagram-note,
 .readora-diagram[data-readora-diagram-state="rendered"] .readora-diagram-source,
-.readora-diagram[data-readora-diagram-state="failed"] .readora-diagram-source {
+.readora-diagram[data-readora-diagram-state="failed"] .readora-diagram-source,
+.readora-diagram[data-readora-diagram-state="mounting"] .readora-diagram-source {
   display: none;
 }
 

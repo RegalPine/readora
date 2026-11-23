@@ -2,8 +2,8 @@
  * 源文本换算层取证（ARC-009 §6.1 / §6.2 / §9.1，E2 · STORY-13-03 前半）。
  *
  * 本文件要钉住三件事，它们全是「写坏文件」与「不写坏文件」的分界：
- * 1. **认领表**：只有顶层的 paragraph / heading / blockquote / list 参与编辑，
- *    表格 / 代码 / 图表 / 公式 / `hr` 一律 `null`（§15-5 的「按钮不该出现」在这一层取证）；
+ * 1. **认领表**：顶层的 paragraph / heading / blockquote / list / codeBlock / diagramBlock / table / mathBlock
+ *    参与编辑，`hr` 一律 `null`（§15-5 的「按钮不该出现」在这一层取证）；
  * 2. **判据双向清单**：等号成立才允许改字（形态 A），不成立必须回落改源（形态 B）。
  *    清单里的每一条都拿**真实渲染产物**去比，不手写 DOM —— 判据的正确性依赖
  *    渲染器今天怎么输出（软换行留在文本节点里、任务标记是一个 span…），
@@ -92,10 +92,12 @@ describe("认领表（§6.1）", () => {
     "",
     "---",
     "",
-    "$$\n\\frac{1}{2}\n$$"
+    "$$",
+    "\\frac{1}{2}",
+    "$$"
   ].join("\n");
-
-  test("四类顶层区块被认领，类型取自标签名 + class", () => {
+  
+  test("八类顶层区块被认领，类型取自标签名 + class", () => {
     const host = hostOf(MIXED);
     const claimed = Array.from(host.children).map((block) => [
       block.tagName,
@@ -105,15 +107,33 @@ describe("认领表（§6.1）", () => {
     expect(claimed[1]).toEqual(["P", "paragraph"]);
     expect(claimed[2]).toEqual(["BLOCKQUOTE", "blockquote"]);
     expect(claimed[3]).toEqual(["UL", "list"]);
+    expect(claimed[4]).toEqual(["DIV", "table"]);
+    expect(claimed[5]).toEqual(["DIV", "codeBlock"]);
+    // index 6 = hr (unclaimed)
+    expect(claimed[7]).toEqual(["SPAN", "mathBlock"]);
+  });
+  
+  test("分隔线不认领（§15-5）", () => {
+    const host = hostOf(MIXED);
+    const hr = host.children[6] as HTMLElement;
+    expect(hr.tagName).toBe("HR");
+    expect(blockTypeOf(hr)).toBeNull();
   });
 
-  test("表格 / 代码 / 分隔线 / 公式一律不认领（§15-5）", () => {
-    const host = hostOf(MIXED);
-    const unclaimed = Array.from(host.children)
-      .slice(4)
-      .map((block) => `${block.tagName}:${blockTypeOf(block) ?? "null"}`);
-    expect(unclaimed.every((entry) => entry.endsWith(":null"))).toBe(true);
+  test("diagramBlock 被认领", () => {
+    const src = '```mermaid\ngraph TD;A-->B;\n```\n';
+    const host = hostOf(src);
+    const block = host.children[0] as HTMLElement;
+    expect(blockTypeOf(block)).toBe("diagramBlock");
   });
+
+  test("mathBlock 被认领", () => {
+    const src = '$$\n\\frac{1}{2}\n$$\n';
+    const host = hostOf(src);
+    const block = host.children[0] as HTMLElement;
+    expect(blockTypeOf(block)).toBe("mathBlock");
+  });
+
 
   test("嵌套的同类型区块不算认领对象：只认顶层那一层", () => {
     const host = hostOf("> 段落\n>\n> - 项\n");
@@ -247,6 +267,58 @@ describe("判据清单 · 回落形态 B（改源，提交原样写回）", () =
       );
     });
   }
+});
+
+describe("E4/E5/E6 源码型区块恒回落形态 B", () => {
+  test("codeBlock 恒返回 source（不做判据计算）", () => {
+    const src = '```js\nlet a = 1\n```\n';
+    const host = hostOf(src);
+    const block = host.children[0] as HTMLElement;
+    const type = blockTypeOf(block);
+    expect(type).toBe("codeBlock");
+    const rangeKey = block.getAttribute(SOURCE_RANGE_ATTRIBUTE) as string;
+    const source = sliceBlockSource(src, rangeKey) as string;
+    expect(editModeFor(source, type!, block)).toBe("source");
+  });
+
+  test("diagramBlock 恒返回 source", () => {
+    const src = '```mermaid\ngraph TD;A-->B;\n```\n';
+    const host = hostOf(src);
+    const block = host.children[0] as HTMLElement;
+    const type = blockTypeOf(block);
+    expect(type).toBe("diagramBlock");
+    const rangeKey = block.getAttribute(SOURCE_RANGE_ATTRIBUTE) as string;
+    const source = sliceBlockSource(src, rangeKey) as string;
+    expect(editModeFor(source, type!, block)).toBe("source");
+  });
+
+  test("table 恒返回 source", () => {
+    const src = '| a | b |\n| - | - |\n| 1 | 2 |\n';
+    const host = hostOf(src);
+    const block = host.children[0] as HTMLElement;
+    const type = blockTypeOf(block);
+    expect(type).toBe("table");
+    const rangeKey = block.getAttribute(SOURCE_RANGE_ATTRIBUTE) as string;
+    const source = sliceBlockSource(src, rangeKey) as string;
+    expect(editModeFor(source, type!, block)).toBe("source");
+  });
+
+  test("mathBlock 恒返回 source", () => {
+    const src = '$$\n\\frac{1}{2}\n$$\n';
+    const host = hostOf(src);
+    const block = host.children[0] as HTMLElement;
+    const type = blockTypeOf(block);
+    expect(type).toBe("mathBlock");
+    const rangeKey = block.getAttribute(SOURCE_RANGE_ATTRIBUTE) as string;
+    const source = sliceBlockSource(src, rangeKey) as string;
+    expect(editModeFor(source, type!, block)).toBe("source");
+  });
+
+  test("错误标签名不认领：span.readora-code-block 返回 null", () => {
+    const el = document.createElement("span");
+    el.className = "readora-code-block";
+    expect(blockTypeOf(el)).toBeNull();
+  });
 });
 
 describe("读回 DOM 时的浏览器写法还原（写回不得带不可见字符）", () => {

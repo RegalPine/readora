@@ -932,7 +932,49 @@ KaTeX 样式必须在最前、阅读器覆盖在后，这是既有不变量（IM
 
 ---
 
-## 16. 文档结论
+## 16. 编辑态视觉规范
+
+本节定义 F12 编辑接管层在正文区块上的视觉表现（ARC-009 §5–§7）。
+
+### 16.1 把手角标
+
+- 每个可编辑区块的 `::after` 伪元素以绝对定位显示一枚 **8 px 圆点**（`border-radius: 50%`）在右上角。
+- **idle 态**：`opacity: 0`，不可见、不干预阅读。
+- **hover / focus-visible 态**：`opacity: 1`，填色取 `var(--readora-color-accent)`。
+- 键盘 Tab 进入时同样显形（focus-visible），保证无障碍可发现。
+
+### 16.2 活动单元
+
+- 当前双击进入的区块为「活动单元」，描边：`outline: 1px solid var(--readora-color-focus)`，`outline-offset: 3px`。
+- 活动单元的 `::after` 把手隐藏（`opacity: 0`），避免描边 + 圆点双重吸引视线。
+
+### 16.3 形态 A / B 字体区分
+
+| 形态 | 字体 | 字号 | 场景 |
+|------|------|------|------|
+| A（改字 WYSIWYG） | 继承正文 | 不变 | paragraph / heading / blockquote / list |
+| B（改源 Source） | `var(--readora-font-mono)` | `var(--readora-font-size-sm)` | codeBlock / diagramBlock / table / mathBlock |
+
+形态 B 在区块上直接覆写 `font-family` + `font-size`，给用户「你在编辑原始源吗」的即时视觉提示。
+
+### 16.4 冲突态
+
+- 活动单元外围描边颜色切换为 `var(--readora-color-warning)`，提示外部快照与本地编辑产生分歧。
+- 紧跟活动单元下方插入**冲突卡片**：圆角容器（`border-radius: var(--readora-radius-md)`）、一句说明文字、「放弃编辑」与「保留我的版本」两枚动作按钮。
+
+### 16.5 格式化工具条
+
+- 绝对定位于当前选区上方，仅形态 A 且选区非空时显示。
+- 按钮内容用**字面字形**（`B` / `I` / `` ` ``…）配合 `aria-label`，不使用 SVG 图标（过渡形态）。
+- 键盘 Tab 序列中占一格，可纯键盘操作。
+
+### 16.6 源码型区块 cursor
+
+四类源码型区块（codeBlock / diagramBlock / table / mathBlock）在 idle 态统一设置 `cursor: pointer`，暗示「可点击 / 可双击」。
+
+---
+
+## 17. 文档结论
 
 Readora 采用 Minimal Editorial + Technical Elegance 作为视觉设计方向。
 

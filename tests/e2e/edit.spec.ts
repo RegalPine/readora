@@ -184,14 +184,15 @@ test.describe("段落级就地编辑", () => {
       .toHaveProperty("text", withLine(beforeBold, 15, "Gamma with **bold** marker.[tail]"));
   });
 
-  test("把手只落在认领的四类上，表格与分隔线一个都不给（§15-5）", async ({ page }) => {
-    // 本条自己开：要验的就是「开关前 0 枚 / 开关后 8 枚」这一段跳变
+  test("把手落在认领的区块上：表格进、分隔线不进（§15-5）", async ({ page }) => {
+    // 本条自己开：要验的就是「开关前 0 枚 / 开关后 9 枚」这一段跳变
     await openReader(page, editDoc("file:///vault/e2e/edit.md"));
     await expect(page.locator("[data-readora-editable]")).toHaveCount(0);
     await editToggle(page).click();
 
-    // 8 块认领：2 个标题 + 4 个段落 + 1 个引用 + 1 个列表
-    await expect(page.locator("[data-readora-editable]")).toHaveCount(8);
+    // 9 块认领：2 个标题 + 4 个段落 + 1 个引用 + 1 个列表 + 1 个表格
+    // （E4/E5 起表格进源码编辑，把手落在包裹它的 `div.readora-table-scroll` 上）
+    await expect(page.locator("[data-readora-editable]")).toHaveCount(9);
     expect(await page.locator("[data-readora-editable]").evaluateAll((nodes) =>
       nodes.map((node) => node.getAttribute("data-readora-editable"))
     )).toEqual([
@@ -202,9 +203,11 @@ test.describe("段落级就地编辑", () => {
       "blockquote",
       "list",
       "paragraph",
+      "table",
       "paragraph"
     ]);
-    // 不认领的那三类：连属性都不该出现（有把手没入口 = 骗一次 hover）
+    // 分隔线不认领：连属性都不该出现（有把手没入口 = 骗一次 hover）。
+    // 表格的把手在包裹它的滚动 `div` 上，`<table>` 元素本体不带该属性，故这条仍为 0。
     await expect(page.locator("table[data-readora-editable], hr[data-readora-editable]")).toHaveCount(0);
     await expect(page.locator("table")).toBeVisible();
     // 键盘可达：把手块带 `tabindex`，不用每块多一枚按钮

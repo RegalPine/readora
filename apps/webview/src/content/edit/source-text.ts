@@ -25,8 +25,8 @@
  */
 import { SOURCE_RANGE_PATTERN } from "@readora/markdown-core";
 
-/** 本轮认领的四类顶层区块（ARC-009 §6.1）。表格 / 代码 / 图表 / 公式属 E4、E5。 */
-export type EditBlockType = "paragraph" | "heading" | "blockquote" | "list";
+/** 认领的顶层区块类型（ARC-009 §6.1 + §6.2 E4/E5/E6 源码型）。 */
+export type EditBlockType = "paragraph" | "heading" | "blockquote" | "list" | "codeBlock" | "diagramBlock" | "table" | "mathBlock";
 
 /** 单元挂在哪一种编辑形态上：改字（补前缀）或改源（原样写回）。 */
 export type EditMode = "text" | "source";
@@ -59,7 +59,11 @@ const CLAIMED: ReadonlyArray<{ selector: string; type: EditBlockType }> = [
   { selector: "h6.readora-heading", type: "heading" },
   { selector: "blockquote.readora-blockquote", type: "blockquote" },
   { selector: "ul.readora-list", type: "list" },
-  { selector: "ol.readora-list", type: "list" }
+  { selector: "ol.readora-list", type: "list" },
+  { selector: "div.readora-code-block", type: "codeBlock" },
+  { selector: "div.readora-diagram", type: "diagramBlock" },
+  { selector: "div.readora-table-scroll", type: "table" },
+  { selector: "span.readora-math--block", type: "mathBlock" }
 ];
 
 /** 认领表的合并选择器：接管层每轮扫描用它取候选，再用 {@link blockTypeOf} 定型。 */
@@ -545,6 +549,12 @@ export function editModeFor(
   type: EditBlockType,
   block: HTMLElement
 ): EditMode {
+  if (
+    type === "codeBlock" || type === "diagramBlock" || type === "table" ||
+    type === "mathBlock"
+  ) {
+    return "source";
+  }
   return canUseWysiwyg(source, type, block) ? "text" : "source";
 }
 

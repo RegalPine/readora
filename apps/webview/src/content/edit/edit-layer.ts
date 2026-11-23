@@ -4,9 +4,9 @@
  * 职责边界三条：
  * 1. **只认领顶层区块**。E0 只给 `document.children` 那一层标
  *    `data-readora-source-range`（ARC-002 §12.3），所以这里也只在顶层找：
- *    paragraph / heading / blockquote / list 四类认领，其余（表格、代码、图表、
- *    公式、`hr`、没有 range 的合成节点）一律不认领 —— 没有可靠范围就没有
- *    「改哪几行」的答案，宁可不给入口。
+ *    paragraph / heading / blockquote / list / codeBlock / diagramBlock / table
+ *    七类认领，其余（公式、`hr`、没有 range 的合成节点）一律不认领 —— 没有
+ *    可靠范围就没有「改哪几行」的答案，宁可不给入口。
  * 2. **只有这一层会发 `document.edit`**。写回的权威（版本复判、行范围复判、
  *    真的落盘）全在 Host（§5.1），本层拿到拒绝就保全输入，绝不自作主张重试。
  * 3. **本层不写正文**。除了 `edit-unit.ts` 里登记过的那两处例外（取消时恢复快照、
@@ -192,7 +192,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     return block.getAttribute(SOURCE_RANGE_ATTRIBUTE);
   }
 
-  /** 认领 = 顶层 + 命中四类标签名 + 有合法 rangeKey，三个条件缺一不认领（§15-5）。 */
+  /** 认领 = 顶层 + 命中标签名 + 有合法 rangeKey，三个条件缺一不认领（§15-5）。 */
   function claimedBlocks(root: HTMLElement): HTMLElement[] {
     return Array.from(root.querySelectorAll<HTMLElement>(EDITABLE_BLOCK_SELECTOR)).filter(
       (block) => block.parentElement === root && blockTypeOf(block) !== null && rangeKeyOf(block) !== null
@@ -256,7 +256,10 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     cards.delete(rangeKey);
   }
 
-  /** 取消活动单元：DOM 还原到进入编辑时那份快照（§9.4「取消要真的取消」）。 */
+  /**
+   * 取消活动单元：DOM 还原到进入编辑时那份快照（§9.4「取消要真的取消」）。
+   * 快照已含接管层静态产物（CodeMirror 宿主 / 图表 SVG），无需再清状态属性。
+   */
   function cancelActive(unit: EditUnit): void {
     if (active === unit) {
       active = null;
@@ -366,6 +369,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
         entry.replaced.removeAttribute(EDIT_STATE_ATTRIBUTE);
       } else {
         // 没被顶掉过：单元自己那份进入时的快照就是静态产物，直接还原。
+        // 快照已含接管层静态产物，无需再清状态属性。
         entry.unit.deactivate({ restore: true });
         entry.node.removeAttribute(EDIT_STATE_ATTRIBUTE);
       }
@@ -463,20 +467,28 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     refreshAffordances();
   }
 
+  /**
+   * 真正把区块挂成活动单元；返回**是否真的进入了编辑**。
+   *
+   * 返回值只被双击入口用：进入编辑的那一次双击要 `stopPropagation`，免得同一
+   * 次双击又被 Pele 图表引擎当成缩放手势（它接管了拖拽 / 滚轮 / 双击）——
+   * 图表会在进入编辑那一刻被放大。没进入编辑（超阈值 / 非认领块）则不管，
+   * 阅读态下双击图仍归 Pele 缩放。
+   */
   function activateBlock(
     block: HTMLElement,
     rangeKey: string,
     source: string,
     draft?: string
-  ): void {
+  ): boolean {
     const type = blockTypeOf(block);
     if (!type) {
-      return;
+      return false;
     }
     if (source.length > EDIT_BLOCK_MAX_SOURCE_LENGTH) {
       // 阈值只拦「就地编辑」这一种交互：提示走行内通道，不新增提示节点种类（§9.5）。
       showInlineNote(block, EDIT_BLOCK_TOO_LARGE_NOTE);
-      return;
+      return false;
     }
     // 同一时刻只有一个活动单元。
     if (active) {
@@ -499,6 +511,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     active = unit;
     unit.activate();
     syncToolbar();
+    return true;
   }
 
   function activateAt(rangeKey: string, draft?: string): void {
@@ -512,19 +525,19 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     }
   }
 
-  function activateByRangeKey(block: HTMLElement): void {
+  function activateByRangeKey(block: HTMLElement): boolean {
     const rangeKey = rangeKeyOf(block);
     if (rangeKey === null || !editMode || !available || suspended) {
-      return;
+      return false;
     }
     if (active?.block === block) {
-      return;
+      return false;
     }
     const source = sourceOf(rangeKey);
     if (source === null) {
-      return;
+      return false;
     }
-    activateBlock(block, rangeKey, source);
+    return activateBlock(block, rangeKey, source);
   }
 
   function submitUnit(unit: EditUnit): void {
@@ -644,7 +657,9 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
    */
   function syncToolbar(): void {
     const unit = active;
-    if (!unit || !editMode || !available || suspended) {
+    if (!unit || !editMode || !available || suspended
+      || unit.type === "codeBlock" || unit.type === "diagramBlock" || unit.type === "table"
+      || unit.type === "mathBlock") {
       hideToolbar();
       return;
     }
@@ -852,7 +867,11 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     if (!target || target.parentElement !== container) {
       return;
     }
-    activateByRangeKey(target);
+    // 真的进入编辑才拦停：冒泡阶段抢在任何下游监听（尤其是图表 Pele 的双击缩放）
+    // 之前。注册在捕获阶段，所以这里是整个正文子树最早收到 dblclick 的一环。
+    if (activateByRangeKey(target)) {
+      event.stopPropagation();
+    }
   }
 
   function onKeyDown(event: KeyboardEvent): void {
@@ -958,7 +977,9 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
         dropCard(key);
       }
       if (!attached) {
-        root.addEventListener("dblclick", onDoubleClick);
+        // 捕获阶段：要在图表引擎（挂在容器内子节点上）之前拿到双击，才能决定
+        // 「进入编辑」时拦停它，不让同一次双击顺带把图缩放掉。
+        root.addEventListener("dblclick", onDoubleClick, true);
         root.addEventListener("keydown", onKeyDown);
         // 工具条跟着选区走：选区只在三个地方变 —— 键盘、鼠标、以及宿主自己
         // 改选区（`selectionchange` 是唯一能覆盖全部三种的那个事件，但它在
@@ -1012,7 +1033,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     destroy() {
       reset();
       if (container && attached) {
-        container.removeEventListener("dblclick", onDoubleClick);
+        container.removeEventListener("dblclick", onDoubleClick, true);
         container.removeEventListener("keydown", onKeyDown);
         container.removeEventListener("keyup", onSelectionMaybeChanged);
         container.removeEventListener("mouseup", onSelectionMaybeChanged);

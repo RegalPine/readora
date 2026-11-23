@@ -340,7 +340,7 @@ function clickCardButton(node: HTMLElement, label: string): void {
 }
 
 describe("认领表（§6.1 / §15-5）", () => {
-  test("四类顶层区块拿把手，表格 / 分隔线 / 代码 / 公式不拿", () => {
+  test("七类顶层区块拿把手，分隔线不拿", () => {
     const h = setup({
       text: "段落。\n\n## 标题\n\n> 引用\n\n- 项\n\n| a |\n| - |\n| 1 |\n\n---\n\n```js\nlet a = 1\n```\n\n$$\nx^2\n$$\n"
     });
@@ -351,12 +351,13 @@ describe("认领表（§6.1 / §15-5）", () => {
       "P:paragraph",
       "H2:heading",
       "BLOCKQUOTE:blockquote",
-      "UL:list"
+      "UL:list",
+      "DIV:table",
+      "DIV:codeBlock",
+      "SPAN:mathBlock"
     ]);
     // 没被认领的那些块上连 tabindex 都不该有（键盘 Tab 序列不被污染）。
-    expect(h.container.querySelector("table")?.getAttribute("tabindex")).toBeNull();
     expect(h.container.querySelector("hr")?.getAttribute("tabindex")).toBeNull();
-    expect(h.container.querySelector(".readora-math")?.hasAttribute(EDITABLE_ATTRIBUTE)).toBe(false);
   });
 
   test("没有源行范围的区块不认领（合成节点走同一条挡箭）", () => {
@@ -1324,11 +1325,150 @@ describe("`E` 键（§7.1 / ARC-004 §4.5）", () => {
     expect(held.block(1).getAttribute("contenteditable")).toBeNull();
   });
 
-  test("非可编辑区块（表格）上的 `e` 不激活、不吞键", () => {
-    const h = setup({ text: "# Heading\n\n| a |\n| - |\n| 1 |\n" });
-    const table = h.container.querySelector("table") as HTMLElement;
-    const event = pressE(table);
+  test("非可编辑区块（hr）上的 `e` 不激活、不吞键", () => {
+    const h = setup({ text: "段落\n\n---\n\n段落2\n" });
+    const hr = h.container.querySelector("hr") as HTMLElement;
+    const event = pressE(hr);
     expect(event.defaultPrevented).toBe(false);
-    expect(table.getAttribute("contenteditable")).toBeNull();
+    expect(hr.getAttribute("contenteditable")).toBeNull();
+  });
+});
+
+// ---------- E4/E5 源码型区块编辑 ----------
+
+describe("E4/E5 源码型区块认领与编辑", () => {
+  const SOURCE_WITH_CODE = [
+    "# Title",
+    "",
+    "```js",
+    "let a = 1",
+    "```",
+    "",
+    "| x | y |",
+    "| - | - |",
+    "| 1 | 2 |"
+  ].join("\n");
+
+  const SOURCE_WITH_DIAGRAM = [
+    "# Title",
+    "",
+    "```mermaid",
+    "graph TD;A-->B;",
+    "```"
+  ].join("\n");
+
+  test("codeBlock / table 都出现 editable 把手", () => {
+    const h = setup({ text: SOURCE_WITH_CODE });
+    // index 1 = code block wrapper, index 2 = table wrapper
+    const codeBlock = h.block(1);
+    const tableBlock = h.block(2);
+    expect(codeBlock.getAttribute(EDITABLE_ATTRIBUTE)).toBe("codeBlock");
+    expect(tableBlock.getAttribute(EDITABLE_ATTRIBUTE)).toBe("table");
+  });
+
+  test("diagramBlock 出现 editable 把手", () => {
+    const h = setup({ text: SOURCE_WITH_DIAGRAM });
+    const diagram = h.block(1);
+    expect(diagram.getAttribute(EDITABLE_ATTRIBUTE)).toBe("diagramBlock");
+  });
+
+  test("双击 codeBlock 进入 source 模式并显示围栏源码", () => {
+    const h = setup({ text: SOURCE_WITH_CODE });
+    const codeBlock = h.open(1);
+    expect(codeBlock.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_ACTIVE_STATE);
+    expect(codeBlock.getAttribute(EDIT_MODE_ATTRIBUTE)).toBe("source");
+    expect(codeBlock.getAttribute("contenteditable")).toBe("true");
+    // 内容应该是围栏源码本身
+    expect(codeBlock.textContent).toContain("```js");
+    expect(codeBlock.textContent).toContain("let a = 1");
+    expect(codeBlock.textContent).toContain("```");
+  });
+
+  test("修改 codeBlock 后 Ctrl+Enter 提交含围栏的 newText", async () => {
+    const h = setup({ text: SOURCE_WITH_CODE });
+    const codeBlock = h.open(1);
+    h.type(codeBlock, "```js\nlet b = 2\n```");
+    ctrlEnter(codeBlock);
+    await h.flush();
+    expect(h.requests).toHaveLength(1);
+    expect(h.requests[0]!.newText).toBe("```js\nlet b = 2\n```");
+  });
+
+  test("Escape 取消 codeBlock 编辑后保留 code-editor-state（快照已含宿主，摘属性会双渲染）", () => {
+    const h = setup({ text: SOURCE_WITH_CODE });
+    const codeBlock = h.open(1);
+    // 模拟 code-editor-state 存在（实际由 code layer 写入）
+    codeBlock.setAttribute("data-readora-code-editor-state", "mounted");
+    h.type(codeBlock, "modified content");
+    escape(codeBlock);
+    // 快照恢复已把 CodeMirror 宿主放回 DOM；属性保持 mounted，CSS 继续隐藏 <pre>，不出现双渲染。
+    expect(codeBlock.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe("idle");
+    expect(codeBlock.getAttribute("data-readora-code-editor-state")).toBe("mounted");
+  });
+
+  test("table 双击进入 source 模式显示管道源码", () => {
+    const h = setup({ text: SOURCE_WITH_CODE });
+    const tableBlock = h.open(2);
+    expect(tableBlock.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_ACTIVE_STATE);
+    expect(tableBlock.getAttribute(EDIT_MODE_ATTRIBUTE)).toBe("source");
+    expect(tableBlock.textContent).toContain("| x | y |");
+    expect(tableBlock.textContent).toContain("| 1 | 2 |");
+  });
+
+  test("diagramBlock 双击显示 mermaid 围栏源码", () => {
+    const h = setup({ text: SOURCE_WITH_DIAGRAM });
+    const diagram = h.open(1);
+    expect(diagram.getAttribute(EDIT_MODE_ATTRIBUTE)).toBe("source");
+    expect(diagram.textContent).toContain("graph TD;A-->B;");
+  });
+
+  test("diagramBlock Escape 取消后保留 rendered 状态（快照已含 SVG，改 pending 会双显）", () => {
+    const h = setup({ text: SOURCE_WITH_DIAGRAM });
+    const diagram = h.open(1);
+    // 模拟 diagram layer 已设置状态
+    diagram.setAttribute("data-readora-diagram-state", "rendered");
+    h.type(diagram, "modified");
+    escape(diagram);
+    // 快照恢复已把 SVG 容器放回 DOM；状态保持 rendered，CSS 继续隐藏 note/source，不出现双显。
+    expect(diagram.getAttribute("data-readora-diagram-state")).toBe("rendered");
+  });
+
+  test("E4/E5 区块不显示格式化工具条", () => {
+    const h = setup({ text: SOURCE_WITH_CODE });
+    const codeBlock = h.open(1);
+    // 工具条不应出现
+    expect(document.querySelector(`.${EDIT_TOOLBAR_CLASS}`)).toBeNull();
+    // 即使在活动单元内触发 keyup 也不显示
+    codeBlock.dispatchEvent(new Event("keyup", { bubbles: true }));
+    expect(document.querySelector(`.${EDIT_TOOLBAR_CLASS}`)).toBeNull();
+  });
+
+  // ---------- E6 新增：mathBlock ----------
+
+  const SOURCE_WITH_MATH = "# T\n\n$$\nx^2\n$$\n";
+
+  test("mathBlock 出现 editable 把手", () => {
+    const h = setup({ text: SOURCE_WITH_MATH });
+    const math = h.container.querySelector("span.readora-math--block") as HTMLElement;
+    expect(math.getAttribute(EDITABLE_ATTRIBUTE)).toBe("mathBlock");
+  });
+
+  test("mathBlock 双击显示 $$ 围栏源码", () => {
+    const h = setup({ text: SOURCE_WITH_MATH });
+    const math = h.container.querySelector("span.readora-math--block") as HTMLElement;
+    math.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(math.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_ACTIVE_STATE);
+    expect(math.getAttribute(EDIT_MODE_ATTRIBUTE)).toBe("source");
+    expect(math.textContent).toContain("$$");
+    expect(math.textContent).toContain("x^2");
+  });
+
+  test("E6 区块不显示格式化工具条", () => {
+    const h = setup({ text: SOURCE_WITH_MATH });
+    const math = h.container.querySelector("span.readora-math--block") as HTMLElement;
+    math.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(document.querySelector(`.${EDIT_TOOLBAR_CLASS}`)).toBeNull();
+    math.dispatchEvent(new Event("keyup", { bubbles: true }));
+    expect(document.querySelector(`.${EDIT_TOOLBAR_CLASS}`)).toBeNull();
   });
 });

@@ -556,9 +556,9 @@ E0 只给顶层区块标行范围（`decorateFragment` 只遍历 `document.child
 | **E1 写回链路** | `document.edit` 契约 + Schema + Host handler + 三枚错误码；单测覆盖乐观锁拒收 | ✅ 已交付（IMP-002 STORY-13-02）：协议 spec 覆盖第 18 条与三码；wiring 测试走通「View 发 edit → 模型变更 → update 回声」（`document-edit-wiring.spec.ts` 10 条）；阶梯逐码与「拒收且模型零变化」（`edit-service.spec.ts` 20 条）；不写盘三处出口全空。**偏差**：版本空间、倒挂约束归属、替换终点三处按实测改写（§5.1 / §5.2 / §16.4）；测试替身原本没有 `WorkspaceEdit` / `applyEdit` / 可用的变更事件，§12 本条判据在旧基建里根本无法断言，已补建模（TASK-13-02-06）。**本轮零 View 代码、零 UI，编辑模式在 E1 后仍完全不可用** —— 这是本节刻意切分的第二段，不是缺陷 |
 | **E2 段落编辑** | `EditLayer` 本体 + paragraph / heading / blockquote / list 四类；顶栏开关 + 双击入口；提交/取消/冲突态 | ✅ 已交付（IMP-002 STORY-13-03 前半）：**编辑模式真正可用的第一个版本**。逐字节判据在 `tests/e2e/edit.spec.ts` ①（改字 → `document.edit` → 宿主模型按行更新，其余 23 行逐条 `toEqual` 原值）；四类区块与形态回落②③；认领表/不认领表④与 `edit-layer.spec.ts`（§15-5）；三枚错误码卡片与「强制替换」⑤（§5.3）；外部快照到达输入不丢⑥（§5.4）；Escape 放弃后 `innerHTML` 与静态产物全等且**零消息**⑦；清空区块的已知形态⑧；`untitled:` 禁用⑨（§7.2）。**偏差七条**已按实测回写 §5.4 / §6.2.1 / §7.1 / §7.2 / §7.3 / §9.5 并逐条登记于 §16.5 |
 | **E3 行内格式化** | 浮动工具条 + 选区→源偏移映射（加粗/斜体/删除线/行内代码/链接）+ 脚注引用 + H1–H6 级别选择器 + `E` 键 | ✅ 已交付（IMP-002 TASK-13-03-05 + 新增 09/10）：**六个动作 + 六枚级别按钮全部可用**。包裹与解包幂等在 `inline-format.spec.ts`（36 条，纯字符串层穷举四类区块）；**偏移不足时降级插入字面标记而不损坏**在三层都有取证（§15-8）。端到端九条在 `tests/e2e/edit-inline.spec.ts`：① 真像素（工具条与选区词框 X 相交且在词上方）②端到端幂等 ③跨两 `<li>` 逐行 ④引用空行不包 ⑤链接 ⑥级别 ⑦`E` 键 ⑧脚注不多出一行 ⑨code span 内置灰。**五条偏差**登记于 §16.6。**零协议变更**：`packages/contracts` 与 `apps/extension` 一个字节未改，无新依赖，CSP 一行未放 |
-| **E4 源码型区块** | codeBlock 翻 `editable:true`；diagram / math / htmlBlock 展源码输入 | 各类型「编辑后围栏标记与缩进未被破坏」的源保真断言 |
-| **E5 结构化区块** | 表格单元格与增删行列；frontmatter 属性卡片逐键编辑 | 表格写回的管道行形状合法；frontmatter 值按 kind 序列化且不引入非法 YAML |
-| **E6 收尾** | 编辑期性能报告、快捷键登记进 manifest、PRD-003 视觉规范补章、README 能力边界 | `pnpm verify` 与 `perf` 门槛通过 |
+| **E4 源码型区块** | codeBlock 翻 `editable:true`；diagram / math / htmlBlock 展源码输入 | ✅ 已交付（IMP-002 STORY-13-04）：codeBlock / diagramBlock / table 三类走 contenteditable 源码模式（形态 B），与计划偏差：未翻 CodeMirror `editable:true`，而是复用编辑接管层的源码形态。“math / htmlBlock 随 E6 一并交付”。`source-text.spec.ts` + `edit-layer.spec.ts` 取证认领表与 editModeFor 短路 |
+| **E5 结构化区块** | 表格单元格与增删行列；frontmatter 属性卡片逐键编辑 | ✅ 部分交付：表格走源码模式（与 E4 同机制）；单元格 WYSIWYG、增删行列与 frontmatter 卡片属后续版本 |
+| **E6 收尾** | 编辑期性能报告、快捷键登记进 manifest、PRD-003 视觉规范补章、README 能力边界 | ✅ 已交付：mathBlock 纳入源码编辑认领（htmlBlock 不可认领，生产 DOM 中 `div.readora-html-block` 不存在，因 parser `html:false` 冻结）；PRD-003 新增 §16 编辑态视觉规范；README 能力边界更新；全量 1006 测试零失败。快捷键登记与编辑期性能报告属后续版本 |
 
 E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人读的属性。这是刻意切的 —— 锚定契约的正确性必须能在与编辑无关的前提下独立证明。
 
@@ -629,6 +629,8 @@ E0 与 E1 之间**没有功能可见性**：E0 只是给 DOM 加了一个没人�
 （1.3.0 补：E2 交付后本文仍为 Draft，上面那句「待 E2 转 Final」不作数，PRD-001 §10.4 那一行的处理推到 E6。）
 
 （1.4.0 补：E3 同样不触发转 Final —— §6.2 只剩 E4 / E5 那几行未经执行，而它们要到代码块 / 表格 / frontmatter 真的能改了才有事实可写。转 Final 的时机推到 E5 交付后，PRD-001 §10.4 那一行仍按上面的登记推到 E6 一并处理。）
+
+（1.5.0 补：E4–E6 已交付，但转 Final 条件仍未满足 —— §6.2 只剩表格单元格 WYSIWYG、增删行列与 frontmatter 两行未经执行（属后续版本）；`htmlBlock` 在生产 DOM 中不存在（parser `html:false` 冻结），无事实可写。转态决策留待那些行落地后。）
 
 另一个不转 Final 的实证理由就在本轮：E1 只实现到「链路能被确定性拒收与确定性回声」，就已经推翻了三条写得很确定的口径（§16.4）。同一支笔在 §5–§6 其余部分写的东西，没有理由认为自己已经不会错。
 

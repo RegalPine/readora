@@ -202,6 +202,19 @@ export function createEditUnit(options: EditUnitOptions): EditUnit {
   const initialText = mode === "text" ? readEditableText(block, type) : source;
   // 进入时的 DOM：cancel() 唯一允许恢复的目标。
   const snapshot = block.innerHTML;
+  /**
+   * 形态 B 取消时按**节点身份**接回的那批原始子节点。
+   *
+   * `activate()`（source）会 `replaceChildren` 把渲染子节点摘掉换成一个源文本节点，
+   * 数组这里先把被摘走的原始节点存下引用。接管层（图表 / 代码块）攥着的是这批节点
+   * 里的**活节点** —— Pele 引擎的 viewport / container、CodeMirror 宿主都活在下面。
+   * 若取消时用 `innerHTML` 字符串塞回去，塞进去的是同名同形的**新**节点，接管层的
+   * 活引用成了游离对象：工具栏按钮点了不动（引擎绑在已脱离的节点上），静态 SVG 还
+   * 会冻结在快照那一刻的 viewBox 上（看着像被放大）。按节点身份原样接回，同一批
+   * DOM 连同引擎引用一起回位，实时布局与按钮活性都不受影响。形态 A（text）没有这层
+   * 耦合（用户直接在渲染节点上改字），仍走上面的字符串恢复把改动冲掉。
+   */
+  const detachedChildren: Node[] = mode === "source" ? Array.from(block.childNodes) : [];
   let composing = false;
   let active = false;
   /**
@@ -336,7 +349,12 @@ export function createEditUnit(options: EditUnitOptions): EditUnit {
       block.setAttribute("spellcheck", "false");
       block.setAttribute("role", "textbox");
       block.setAttribute("aria-multiline", "true");
-      block.setAttribute("aria-label", "Edit paragraph");
+      const label = type === "codeBlock" ? "Edit code block source"
+        : type === "diagramBlock" ? "Edit diagram source"
+        : type === "table" ? "Edit table source"
+        : type === "mathBlock" ? "Edit math source"
+        : "Edit paragraph";
+      block.setAttribute("aria-label", label);
       if (draft !== undefined) {
         // 挂起前那份输入回位：写的是本块自己的 DOM，不动兄弟也不动正文容器。
         writeEditableText(block, mode === "text" ? type : "paragraph", draft);
@@ -370,8 +388,13 @@ export function createEditUnit(options: EditUnitOptions): EditUnit {
       block.removeAttribute("aria-label");
       block.removeAttribute(EDIT_STATE_ATTRIBUTE);
       block.removeAttribute(EDIT_MODE_ATTRIBUTE);
-      if (deactivateOptions.restore && block.innerHTML !== snapshot) {
-        block.innerHTML = snapshot;
+      if (deactivateOptions.restore) {
+        if (mode === "source") {
+          // 按节点身份接回摘走的原始子节点，保住接管层的活引擎引用（见上面注释）。
+          block.replaceChildren(...detachedChildren);
+        } else if (block.innerHTML !== snapshot) {
+          block.innerHTML = snapshot;
+        }
       }
     },
     release() {

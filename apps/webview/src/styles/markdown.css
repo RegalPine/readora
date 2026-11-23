@@ -810,6 +810,14 @@
   white-space: pre-wrap;
 }
 
+/* E4/E5/E6：源码型区块在 idle 态给 cursor 提示可点击。 */
+[data-readora-editable="codeBlock"],
+[data-readora-editable="diagramBlock"],
+[data-readora-editable="table"],
+[data-readora-editable="mathBlock"] {
+  cursor: pointer;
+}
+
 [data-readora-edit-state="conflict"] {
   outline: 1px solid var(--readora-color-warning);
   outline-offset: 3px;
