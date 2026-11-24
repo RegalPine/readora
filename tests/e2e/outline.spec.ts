@@ -326,8 +326,8 @@ test.describe("大纲导航", () => {
     await expect(expand).toHaveAttribute("aria-pressed", "false");
     await expect(collapse).toBeEnabled();
     await expect(collapse).toHaveAttribute("aria-pressed", "true");
-    const expandBg = await expand.evaluate((node) => getComputedStyle(node).backgroundColor);
-    const collapseBg = await collapse.evaluate((node) => getComputedStyle(node).backgroundColor);
+    const expandColor = await expand.evaluate((node) => getComputedStyle(node).color);
+    const collapseColor = await collapse.evaluate((node) => getComputedStyle(node).color);
 
     await collapse.click();
     await expect(page.locator(".readora-outline-item")).toHaveCount(1);
@@ -336,12 +336,15 @@ test.describe("大纲导航", () => {
     await expect(expand).toBeEnabled();
     await expect(collapse).toBeDisabled();
     // 样式真的变了：高亮从折叠那枚移到展开那枚（用户报的“点了没变化”就是这一条）。
+    // 读的是 `color` 而不是 `backgroundColor`：`shell.css` 里那段注释定了“按下态用
+    // 透明度 / 强度表达而不用底色”（亮色下 surface-raised 与 canvas 差极小，灰底
+    // 会让用户分不清那是普通按钮还是高亮），两枚的底色以设计而言本来就不变。
     await expect
-      .poll(() => expand.evaluate((node) => getComputedStyle(node).backgroundColor))
-      .not.toBe(expandBg);
+      .poll(() => expand.evaluate((node) => getComputedStyle(node).color))
+      .not.toBe(expandColor);
     await expect
-      .poll(() => collapse.evaluate((node) => getComputedStyle(node).backgroundColor))
-      .not.toBe(collapseBg);
+      .poll(() => collapse.evaluate((node) => getComputedStyle(node).color))
+      .not.toBe(collapseColor);
 
     await expand.click();
     await expect(page.locator(".readora-outline-item")).toHaveCount(total);

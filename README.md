@@ -2712,6 +2712,90 @@ Getting started 与 Notes & limitations。**PRD-001 / PRD-002 / PRD-003 / ARC-00
 IMP-002 / IMP-003 本轮未改**（F10-004 在 PRD-001 §5.10 仍是「Markdown 文件关联 P1」一行，
 本轮把它从 P1 交付到位，需求表无需改写）。
 
+### 发布 · v0.13.2（双击进入编辑的可达性：进得去，且光标落在点上）
+
+用户诉求一句话「段落很难进入编辑模式，双击默认是全选文本」。两条反馈各有根因，都在真浏览器里先采到
+**失败证据**再改代码 —— 这是本轮的立项方式，不是事后补的说明。
+
+**这一轮改的是编辑接管层的鼠标入口，零协议变更、零能力面新增**：
+
+- **入口接错了层**（「进不去」那一半）。`content/edit/edit-layer.ts` 的 `onDoubleClick` 原先写
+  `event.target.closest(EDITABLE_BLOCK_SELECTOR)` 再问一句 `target.parentElement !== container`：前者给的是
+  **最近的一个匹配祖先**，而引用里的段落与松散列表 `li` 里的段落既带 `p.readora-paragraph` 又住在认领块
+  **内部**，于是那一步直接 return。失败证据（探针实测）：双击引用内层段落 → active 数 `0`、选区剩 `"\n"`；
+  **同一条块按 `Enter` 却进得去**（键盘路径认的是 `[data-readora-editable]`，只落顶层认领块）—— 两条入口
+  不对称本身就是缺陷的形状。改为沿 `parentElement` 上跳到「父节点是正文容器且带把手」的那一层
+  （`claimedBlockFrom`），与键盘路径共用同一权威；表格 `td`、代码块内 `span` 同理受益。
+- **光标不在点上 + 没拦选区扩展**（「全选文本」那一半）。旧 `placeCaretAtEnd` 一律把光标收到块末尾
+  （实测 `caretOffset = 20 =` 块内文本长度），用户双击的那个词与光标落点无关；而 Chromium 在 `dblclick`
+  派发**之后**还会把选区往句子 / 整块那一层扩展。新增 `placeCaretAtPoint`（`caretRangeFromPoint`，Firefox
+  形态用 `caretPositionFromPoint` 兜底，读不到就退回原末尾落点）并按需施放 `preventDefault`。
+  **同一块的重双击不走这条路**，因此不挡 —— 浏览器选词习惯原样保留。
+- **顺手补齐一条自相矛盾**：`refreshAffordances` 早就写着「冲突态把手让位」，但提交被拒那一路（`park`）
+  不刷它，于是卡片底下那块仍带把手、hover 有角标而双击没反应，是同一类观感。摘把手抽成 `yieldHandle`
+  由两条路共用，鼠标路径另补 `EDIT_CONFLICT_STATE` 拒绝激活。
+- **`8` 处 `package.json` 0.13.1 → 0.13.2**：修既有缺陷、不新增能力面，与 0.13.1 / 0.12.1 同属 patch
+  （「含新增能力走 minor」那条 0.x 口径本轮未触发）。
+
+已实现的取证（新增 10 条，既有单测形态一字未改）：
+
+- `tests/e2e/edit-entry.spec.ts` **5 条**（浏览器级）：引用内层段落进入编辑且无残留选区、松散列表 `li`
+  内段落进入 `ul` 并提交到那一行、双击某个词时光标落在这一个词里、已激活块重双击保留浏览器选词
+  （断 `selectedText === "needle"`）且零条 `document.edit`、`editMode` 关着时双击不激活。落点这类判据
+  **只能**在浏览器取证：jsdom 没有 `caretRangeFromPoint`，它必然走退回分支。
+- `apps/webview/src/content/edit/__tests__/edit-layer.spec.ts` 新增一节 **5 条**（jsdom）：认领表在引用 /
+  松散列表 / 表格单元格三种嵌套形态下的上跳结果，加上开关关着与卡片占位两条负路径。
+- 两条**与本轮无关但被查清**的既有红灯：`edit.spec.ts` ⑧「清空区块提交」在本机一直红 —— macOS 的
+  Chromium 把 Select All 绑在 `Cmd+A`，`Control+a` 在 contenteditable 里不是全选；已按平台分支
+  （`process.platform === "darwin" ? "Meta+a" : "Control+a"`）。判据是 `git stash push` 回 HEAD **重新构建
+  bundle** 后复跑同样红，所以它是环境级预存在缺陷而非本轮回归（这条「先重建再对拍」的顺序不能省，
+  e2e 读的是 `dist`）。`outline.spec.ts` 那条按下态断言读 `backgroundColor`，而 `styles/shell.css` 已把按下态
+  改成用强度 / 透明度表达（注释写明亮色下灰底会误导用户分不清是不是普通按钮）；改读 `color` 并附设计依据。
+
+未纳入（不得对外宣称）：
+
+- **未在本机 VS Code 里装包实测**：本轮取证到产物字节层与夹具浏览器层，`pnpm install:check` 会动用户的
+  扩展安装，未授权就不跑
+- **`visual:check` 红，且与 HEAD 同源红**（stash 回 HEAD 复跑确认）：Token 换行符 CRLF↔LF 漂移 12 处 +
+  10 档截图 sha 不符。本轮没动任何样式，**没有跑 `visual:update` 刷基线** —— 修光标落点顺手刷视觉基线是
+  越界信号；那批漂移该单独一轮归因（怀疑与 `packages/design-tokens` 产物的换行符在两台机器间不一致有关）
+- `docs/PRD-001` UC-005 第 2 步「双击该段落（或先开顶栏 Edit 开关）」与 ARC-009 §7.1 的 E2 收窄口径矛盾，
+  一行就能改，本轮未动（等授权）
+- 没有做「hover 才浮现把手角标」的可见性增强：把手仍是 `::after` 角标（`pointer-events:none`），用户报的
+  「很难进入」根因已由入口修复，是否再加显性提示属交互决策而非缺陷
+
+门禁（本机当次实跑）：
+
+- eslint 零输出；typecheck 7 包 Done；`pnpm test` **2008 条 / 97 文件**全绿（contracts **47** /
+  design-tokens **63** / diagram-core **119** / markdown-core **342** / extension **367** / webview **1070**，
+  较 0.13.1 只多 webview 那 5 条）
+- `pnpm test:e2e` **170 条**（e2e 125 / security 31 / integration 14）首跑 **169 passed / 1 红**，红的正是
+  `edit.spec.ts:209`（`locator.dblclick` 卡在「waiting for navigation to finish」上耗尽 30s）；**单文件复跑
+  9/9**，全量再跑第二次 **170 passed 全绿**。判为并发抖动不是回归：本机连续四次全量各红一条且互不相同
+  （`outline` 折叠全部、`integration/session`、`media` 图表缩放、本条），而 `edit-entry` 那 5 条每次都绿
+- `pnpm package` **EXIT=0** → `readora-0.13.2.vsix` **39 files / 1 544 470 B**；`pnpm verify` **全绿**
+  （marker 清单逐条 HIT、smoke 注册 **9/9 命令**、27 woff2、`url()` 全部包内解析）；`pnpm perf` 首屏
+  P95 **39 / 413 / 1326 ms**（阈值 300 / 800 / —）。`reports/performance-report.md` 已由脚本重写为本机
+  那一份（darwin arm64 / Apple M1 / Node 24.13.0），而 HEAD 提交版是 win32 / i7-1355U / Node 24.9.0 的读数
+  —— 两份不可直接互比，按 M10 起既有口径**以盘上当前那一份为准**，要回溯另一台机器的读数拿
+  `git show HEAD:reports/performance-report.md`
+- **产物内容实证**（`unzip -p` + 字面 grep，两枚包对拍）：`caretRangeFromPoint` / `caretPositionFromPoint`
+  在 0.13.2 的 `main.js` 各 **1 命中**，在 0.13.1 那枚 **0 命中** —— 反向对照过，判据有鉴别力。体积
+  `main.js` **2 384 962 → 2 385 877 B**（+915 B，预算 2 516 992 B → 余量 **131 115 B**）；`main.css`
+  **89 169 B** 与 `dist/extension.js` **1 734 389 B** 与 0.13.1 **sha256 逐字节相同**，这组数字本身就是
+  「本轮只动 webview 编辑层、零宿主零样式」的证明
+- 对拍基线的选取口径：盘上那枚 0.13.1 的 `main.js` 实测 **2 384 962 B**，而上一节登记的是 2 385 206 B
+  （`main.css` 同样 89 169 vs 89 327）—— 与 0.13.1 一节自己登记的「盘上产物与 README 字节数不同源」属
+  同一条，所以本轮一律**拿盘上同源那枚做基线**，历史数字不回溯改写。另登记现状：`readora-0.12.2.vsix` 与
+  `readora-0.13.0.vsix` 现已不在盘上（当前仅 0.11.0 / 0.12.0 / 0.12.1 / 0.13.1 / 0.13.2），`*.vsix` 不入库，
+  少了哪一枚都只能回源码重打复现
+
+口径登记：ARC-009 **1.8.0**（§7.1 双击那一格改写：入口认带把手的顶层认领块、光标落在双击那个点、
+`preventDefault` 主动挡选区扩展；§16.6 决策 6 就地标注「选区收到块末尾」已被推翻；新增 §16.10 记两条
+失败证据与修复判据；修订表补 1.8.0 行）。`PRD-001 / PRD-002 / PRD-003 / ARC-002 / ARC-004 / ARC-005 /
+ARC-006 / IMP-002 / IMP-003` 本轮未改；`apps/extension/README.md`（市场侧 Details 页）也未改 —— 它目前
+根本没有介绍就地编辑模式，那是 0.13.0 就留下的文档缺口，不在本轮缺陷范围内。
+
 ## 环境偏差登记（IMP-001 §3.3）
 
 规范参考版本为 Node 26.x / pnpm 12.x；本仓库当前按实际开发环境推进：

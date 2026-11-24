@@ -46,6 +46,7 @@ import {
   EDITABLE_ATTRIBUTE,
   EDIT_MODE_ATTRIBUTE,
   createEditUnit,
+  type EditCaretPoint,
   type EditUnit
 } from "./edit-unit";
 import {
@@ -224,9 +225,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
         continue;
       }
       if (block.getAttribute(EDIT_STATE_ATTRIBUTE) === EDIT_CONFLICT_STATE) {
-        // 冲突态由卡片负责，把手让位，免得 hover 又诱导出一个编辑框。
-        block.removeAttribute("tabindex");
-        block.removeAttribute(EDITABLE_ATTRIBUTE);
+        yieldHandle(block);
         continue;
       }
       const type = blockTypeOf(block);
@@ -243,6 +242,19 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
         block.removeAttribute(EDIT_STATE_ATTRIBUTE);
       }
     }
+  }
+
+  /**
+   * 冲突态由卡片负责，把手让位。
+   *
+   * 「hover 有角标、双击却没反应」正是用户报的「段落很难进入编辑模式」那一种观感：
+   * 卡片占位的这一块留着把手，就是一次会落空的可编辑邀请。两条入口都得走到这里 ——
+   * `refreshAffordances` 里那一句只在开关 / 挂起 / 重写时被刷到，而提交被拒那一路
+   * （`park`）不会刷，所以摘把手这一步必须自己在那条路上也做一遍。
+   */
+  function yieldHandle(block: HTMLElement): void {
+    block.removeAttribute("tabindex");
+    block.removeAttribute(EDITABLE_ATTRIBUTE);
   }
 
   function stripUnitAttributes(block: HTMLElement): void {
@@ -343,6 +355,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     hideToolbar();
     unit.release();
     stripUnitAttributes(unit.block);
+    yieldHandle(unit.block);
     unit.block.setAttribute(EDIT_STATE_ATTRIBUTE, EDIT_CONFLICT_STATE);
     const entry: ParkedEdit = {
       rangeKey: unit.rangeKey,
@@ -482,7 +495,8 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     block: HTMLElement,
     rangeKey: string,
     source: string,
-    draft?: string
+    draft?: string,
+    caret?: EditCaretPoint
   ): boolean {
     const type = blockTypeOf(block);
     if (!type) {
@@ -512,7 +526,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
       }
     });
     active = unit;
-    unit.activate();
+    unit.activate(caret ? { caret } : undefined);
     syncToolbar();
     return true;
   }
@@ -528,7 +542,7 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     }
   }
 
-  function activateByRangeKey(block: HTMLElement): boolean {
+  function activateByRangeKey(block: HTMLElement, caret?: EditCaretPoint): boolean {
     const rangeKey = rangeKeyOf(block);
     if (rangeKey === null || !editMode || !available || suspended) {
       return false;
@@ -536,11 +550,17 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     if (active?.block === block) {
       return false;
     }
+    if (block.getAttribute(EDIT_STATE_ATTRIBUTE) === EDIT_CONFLICT_STATE) {
+      // 冲突态由卡片负责：`refreshAffordances` 那句「把手让位，免得 hover 又诱导出
+      // 一个编辑框」在鼠标这条路上也得算。不拦就是「卡片还在、双击两下又叠出一个
+      // 编辑框」，而那条出路上只有卡片那三枚按钮。
+      return false;
+    }
     const source = sourceOf(rangeKey);
     if (source === null) {
       return false;
     }
-    return activateBlock(block, rangeKey, source);
+    return activateBlock(block, rangeKey, source, undefined, caret);
   }
 
   function submitUnit(unit: EditUnit): void {
@@ -876,17 +896,51 @@ export function createEditLayer(options: EditLayerOptions): EditLayer {
     }
   }
 
+  /**
+   * 从命中节点上跳到**真正被认领的顶层块**。
+   *
+   * 不能用 `closest(EDITABLE_BLOCK_SELECTOR)`：它给的是「最近的一个匹配祖先」，
+   * 而引用里的段落、松散列表 `li` 里的段落既带 `p.readora-paragraph` 又住在认领块
+   * 内部，于是那一步 `parentElement !== container` 直接 return —— 引用与列表永远
+   * 双击不进编辑，屏上只剩浏览器自己的选区（用户报的「双击=全选文本」）。而同一条块
+   * 按 `Enter` 却进得去，因为键盘路径认的是 `[data-readora-editable]`：那个属性只落在
+   * 顶层认领块上。两条入口就此对齐，且 `editMode=off` / 非 `file:` / 挂起时属性本就
+   * 不在（把手与双击入口同生同灭那条决策不变），冲突态也由 `refreshAffordances`
+   * 摘掉属性交给卡片，不必在这里重问一遍 `blockTypeOf` / `rangeKey`。
+   */
+  function claimedBlockFrom(node: EventTarget | null): HTMLElement | null {
+    const root = container;
+    if (!root) {
+      return null;
+    }
+    let current = node instanceof Element ? node : null;
+    while (current && current !== root) {
+      if (current.parentElement === root && current.hasAttribute(EDITABLE_ATTRIBUTE)) {
+        // 认领表里全是区块元素（`p` / `h1`… / `ul` / `div` / `span`），
+        // 能走到这一步的 `Element` 一定是 `HTMLElement`。
+        return current as HTMLElement;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
   function onDoubleClick(event: MouseEvent): void {
-    const target =
-      event.target instanceof Element ? event.target.closest<HTMLElement>(EDITABLE_BLOCK_SELECTOR) : null;
-    if (!target || target.parentElement !== container) {
+    const target = claimedBlockFrom(event.target);
+    if (!target) {
       return;
     }
     // 真的进入编辑才拦停：冒泡阶段抢在任何下游监听（尤其是图表 Pele 的双击缩放）
     // 之前。注册在捕获阶段，所以这里是整个正文子树最早收到 dblclick 的一环。
-    if (activateByRangeKey(target)) {
-      event.stopPropagation();
+    if (!activateByRangeKey(target, { x: event.clientX, y: event.clientY })) {
+      return;
     }
+    event.stopPropagation();
+    // `preventDefault` 是「不要全选文本」那一半：派发时浏览器只把选区落在一个词上（已实测），
+    // 把选区往句子/整块那一层**延**的动作跑在事件之后。已进入编辑就不该再让浏览器
+    // 改用户刚落脚的光标 —— 不拦就是「双击 = 选中一串字」那个观感。拿不到落点的
+    // 重双击（已在编辑的那一块）不经过这里，浏览器的选词习惯原样保留。
+    event.preventDefault();
   }
 
   function onKeyDown(event: KeyboardEvent): void {

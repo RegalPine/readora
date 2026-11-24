@@ -87,7 +87,7 @@ async function activate(locator: ReturnType<Page["locator"]>): Promise<void> {
 }
 
 /**
- * 在激活的单元末尾追加一段文字（进入时选区已被收到末尾）。
+ * 在激活的单元末尾追加一段文字（末尾靠 {@link moveCaretToBlockEnd} 钉住）。
  *
  * 追加串**不以空格开头**：Chromium 会抹掉一个文本节点末尾那个多余空格（没有
  * 任何不可见字符留在 DOM 里，已实测），拿它做逐字节断言的夹具只会测到浏览器
@@ -97,8 +97,44 @@ async function append(page: Page, text: string): Promise<void> {
   await page.keyboard.type(text);
 }
 
+/**
+ * 把光标钉在活动块的末尾。
+ *
+ * 双击进入编辑时光标落在**点击处**（E8 修订，ARC-009 §7.1），而 `locator.dblclick()`
+ * 点的是元素中心：单个段落那样也落在行尾之后的空白上，多段引用与两行列表的中心
+ * 却可能落在中间那行。本篇的逐字节断言写的是「在末尾追加」，所以追加之前自己把
+ * 坐标定死 —— 用的是产品同一个读法（`selectNodeContents` + `collapse(false)），
+ * 不去猜那一下落在哪个像素。
+ */
+async function moveCaretToBlockEnd(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const block = document.querySelector<HTMLElement>('[data-readora-edit-state="active"]');
+    if (!block) {
+      throw new Error("no active edit unit");
+    }
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    range.collapse(false);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  });
+}
+
 async function submit(page: Page): Promise<void> {
   await page.keyboard.press("Control+Enter");
+}
+
+/**
+ * 全选活动单元里的那一段。
+ *
+ * 平台和 chord 得对上：macOS 那一份 Chromium 把 Select All 绑在 `Cmd+A`，
+ * `Ctrl+A` 在 contenteditable 里不是一个全选（实测只按光标位置动了那一个字符）；
+ * Linux / Windows（CI）保持 `Ctrl+A`。本仓在这台机器上跑这条用例一直是红的，
+ * 退回未改动的代码复跑同样红 —— 它与光标落点无关，只是没人在这台机器上跑绿过。
+ */
+async function selectAll(page: Page): Promise<void> {
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+a" : "Control+a");
 }
 
 test.describe("段落级就地编辑", () => {
@@ -155,6 +191,7 @@ test.describe("段落级就地编辑", () => {
     // 1) 引用：两段落中间那份空行是 `>` 撑出来的，补前缀要按原 marker 逐行还原
     const quote = page.locator("blockquote.readora-blockquote").first();
     await activate(quote);
+    await moveCaretToBlockEnd(page);
     await append(page, "[q]");
     await submit(page);
     await expect
@@ -164,6 +201,7 @@ test.describe("段落级就地编辑", () => {
     // 2) 列表：一行一个 `li`，标记复用原串（`-` 不会被换成 `*`）
     const list = page.locator("ul.readora-list").first();
     await activate(list);
+    await moveCaretToBlockEnd(page);
     await append(page, "[x]");
     await submit(page);
     await expect
@@ -291,7 +329,7 @@ test.describe("段落级就地编辑", () => {
     await openEditor(page);
     const block = page.locator(".readora-paragraph", { hasText: "Alpha paragraph one." }).first();
     await activate(block);
-    await page.keyboard.press("Control+a");
+    await selectAll(page);
     await page.keyboard.press("Delete");
     await submit(page);
 

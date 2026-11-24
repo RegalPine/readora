@@ -94,6 +94,20 @@ export const KEEP_EDITING_SELECTOR = [
   '[role="dialog"]'
 ].join(", ");
 
+/** 鼠标进入编辑时的落点（视口坐标）：点哪儿就把光标放哪儿。 */
+export interface EditCaretPoint {
+  x: number;
+  y: number;
+}
+
+export interface ActivateOptions {
+  /**
+   * 双击那一次的落点（视口坐标）。给了它且本单元没有自己重写 DOM（形态 A、无草稿）
+   * 时，光标落在**点击处**；其余情形退回块末尾。
+   */
+  caret?: EditCaretPoint | undefined;
+}
+
 export interface EditUnitOptions {
   block: HTMLElement;
   type: EditBlockType;
@@ -141,8 +155,8 @@ export interface EditUnit {
   setLevel(level: 1 | 2 | 3 | 4 | 5 | 6): boolean;
   /** 本块当前的 heading 级别；不是标题或解析不出 ATX 前缀即 `null`。 */
   headingLevel(): 1 | 2 | 3 | 4 | 5 | 6 | null;
-  /** 上属性 + 接监听 + 收选区到末尾。 */
-  activate(): void;
+  /** 上属性 + 接监听 + 落光标（有落点按落点，没有则收到末尾）。 */
+  activate(options?: ActivateOptions): void;
   /** 摘属性 + 退监听；`restore` 时把 DOM 写回进入时的快照。 */
   deactivate(options?: { restore?: boolean }): void;
   /** 只退监听、不动 DOM 与属性：正文重写前把节点摘下来交给接管层持有。 */
@@ -351,10 +365,14 @@ export function createEditUnit(options: EditUnitOptions): EditUnit {
       }
       return true;
     },
-    activate() {
+    activate(activateOptions = {}) {
       if (active) {
         return;
       }
+      // 落点只在「我们没有改动这块 DOM」时才有意义：形态 B 把子节点换成了源
+      // 文本、草稿回位把它换成了那份输入，两种重写之后屏上的字与坐标都不再对应。
+      const caretPoint =
+        mode === "text" && draft === undefined ? activateOptions.caret : undefined;
       active = true;
       block.setAttribute(EDIT_STATE_ATTRIBUTE, EDIT_ACTIVE_STATE);
       block.setAttribute(EDIT_MODE_ATTRIBUTE, mode);
@@ -384,7 +402,12 @@ export function createEditUnit(options: EditUnitOptions): EditUnit {
       block.addEventListener("compositionstart", onCompositionStart);
       block.addEventListener("compositionend", onCompositionEnd);
       block.focus({ preventScroll: true });
-      placeCaretAtEnd(block);
+      // 两条落光标的路只留一个赢家：落点读到就按落点，读不到才收到末尾。
+      // 不保留浏览器双击自带的词选区 —— 「双击后满屏选中」正是用户报的那个观感，
+      // 而进入编辑要说的是「光标在这儿，接着写」。
+      if (!placeCaretAtPoint(block, caretPoint)) {
+        placeCaretAtEnd(block);
+      }
     },
     deactivate(deactivateOptions = {}) {
       block.removeEventListener("keydown", onKeyDown);
@@ -494,7 +517,58 @@ export function createEditUnit(options: EditUnitOptions): EditUnit {
   }
 }
 
-/** 光标收到末尾：进入编辑就接着写，不要选中整块让人一敲就全没了。 */
+/**
+ * 双击落点 → 光标：点哪个词就在哪个词上改。
+ *
+ * 为什么不再是「一律收到末尾」：用户双击的是他要改的那个字，光标却跳到段落末尾，
+ * 一敲就把改动加在了句子尾巴上 —— 那不是「进入我刚点的地方」，看上去和没进去一样。
+ * 读不到落点（jsdom 没有这两个 API、坐标落在块外）一律返回 `false`，交回
+ * {@link placeCaretAtEnd}，所以键盘入口那一路的形态一字不改。
+ */
+function placeCaretAtPoint(block: HTMLElement, point: EditCaretPoint | undefined): boolean {
+  if (!point) {
+    return false;
+  }
+  const owner = block.ownerDocument;
+  const view = owner?.defaultView;
+  if (!owner || !view || typeof view.getSelection !== "function") {
+    return false;
+  }
+  // Chromium 两个都有，口径各异：`caretRangeFromPoint` 直接给 `Range`，
+  // `caretPositionFromPoint` 给 `offsetNode + offset`，需要自己拼。先问前者。
+  const rangeOf = owner.caretRangeFromPoint as
+    | ((x: number, y: number) => Range | null)
+    | undefined;
+  let range = typeof rangeOf === "function" ? rangeOf.call(owner, point.x, point.y) : null;
+  if (!range) {
+    const positionOf = owner.caretPositionFromPoint as
+      | ((x: number, y: number) => { offsetNode?: Node | null; offset?: number } | null)
+      | undefined;
+    const position = typeof positionOf === "function" ? positionOf.call(owner, point.x, point.y) : null;
+    const node = position?.offsetNode ?? null;
+    if (node && typeof position?.offset === "number") {
+      range = owner.createRange();
+      try {
+        range.setStart(node, position.offset);
+      } catch {
+        return false;
+      }
+    }
+  }
+  if (!range || !block.contains(range.startContainer)) {
+    return false;
+  }
+  const selection = view.getSelection();
+  if (!selection) {
+    return false;
+  }
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+  return true;
+}
+
+/** 兜底：光标收到末尾，避免进入编辑就带着一整块选中。 */
 function placeCaretAtEnd(block: HTMLElement): void {
   const view = block.ownerDocument?.defaultView;
   const document = block.ownerDocument;

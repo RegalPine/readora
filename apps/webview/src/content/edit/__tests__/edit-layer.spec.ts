@@ -392,6 +392,91 @@ describe("认领表（§6.1 / §15-5）", () => {
   });
 });
 
+/**
+ * 双击入口找的是**顶层认领块**，不是「最近的一个匹配祖先」。
+ *
+ * 用户报的那句「段落很难进入编辑模式，双击默认是全选文本」在 jsdom 里就能取到
+ * 证据：引用里的段落与松散列表 `li` 里的段落都带 `p.readora-paragraph`，旧写法
+ * `closest(EDITABLE_BLOCK_SELECTOR)` 拿它们当认领结果，紧随的 `parentElement !==
+ * container` 一步就 return —— 块不激活，屏上只剩浏览器自己的选区（那串选区只有
+ * 真浏览器会留下，故这一类另有 `tests/e2e/edit-entry.spec.ts` ①② 兜着）。
+ */
+describe("双击入口认顶层认领块，不认嵌套的同名段落", () => {
+  /** 引用两段（中间那个 `>` 撑出空行）+ 松散列表两项（`li` 里多出内层段落）。 */
+  const NESTED = "> 引用第一段。\n>\n> 引用第二段。\n\n- 松散第一项\n\n- 松散第二项\n\n| a |\n| - |\n| 1 |\n";
+
+  test("引用：双击内层段落，进入编辑的是引用块本身", () => {
+    const h = setup({ text: NESTED });
+    const quote = h.container.querySelector("blockquote") as HTMLElement;
+    const inner = quote.querySelector("p") as HTMLElement;
+    // 夹具形状自己先钉住：内层不是 `readora-paragraph` 就等于在测另一件事
+    expect(inner.className).toContain("readora-paragraph");
+    expect(inner.hasAttribute(EDITABLE_ATTRIBUTE)).toBe(false);
+
+    inner.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(quote.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_ACTIVE_STATE);
+    expect(h.layer.snapshot().activeRangeKey).toBe(
+      quote.getAttribute(SOURCE_RANGE_ATTRIBUTE)
+    );
+    // 内层段落自己不能被挂成编辑单元：写回范围是整块引用的那几行
+    expect(inner.getAttribute("contenteditable")).toBeNull();
+  });
+
+  test("松散列表：双击 `li` 里的段落，进入编辑的是列表块", () => {
+    const h = setup({ text: NESTED });
+    const list = h.container.querySelector("ul") as HTMLElement;
+    const inner = list.querySelector("li p") as HTMLElement;
+    expect(inner.className).toContain("readora-paragraph");
+
+    inner.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(list.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_ACTIVE_STATE);
+    expect(inner.getAttribute("contenteditable")).toBeNull();
+  });
+
+  test("表格单元格：双击落在 `td` 里，进入编辑的是包裹它的源码块", () => {
+    const h = setup({ text: NESTED });
+    const table = h.container.querySelector("div.readora-table-scroll") as HTMLElement;
+    const cell = table.querySelector("td") as HTMLElement;
+
+    cell.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(table.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_ACTIVE_STATE);
+    expect(table.getAttribute(EDIT_MODE_ATTRIBUTE)).toBe("source");
+  });
+
+  test("开关关掉：嵌套段落同样唤不出编辑（入口与把手同生同灭）", () => {
+    const h = setup({ text: NESTED });
+    h.layer.setEditMode(false);
+    const inner = h.container.querySelector("blockquote p") as HTMLElement;
+    inner.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    expect(h.layer.snapshot().activeRangeKey).toBeNull();
+    expect(h.requests).toHaveLength(0);
+  });
+
+  test("卡片占位的那一块没有把手，双击不重挂", () => {
+    const h = setup({
+      text: NESTED,
+      submit: async () => {
+        throw new Error("apply failed");
+      }
+    });
+    const quote = h.container.querySelector("blockquote") as HTMLElement;
+    quote.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    // 不脏就不发消息：`submitUnit` 那句「没改过不提交」会把这一路变成 `cancelActive`，
+    // 卡片根本不会出现，后面的断言就是在空转。
+    (quote.querySelector("p") as HTMLElement).textContent = "引用第一段。[草稿]";
+    ctrlEnter(quote);
+    return h.flush().then(() => {
+      expect(quote.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_CONFLICT_STATE);
+      expect(quote.hasAttribute(EDITABLE_ATTRIBUTE)).toBe(false);
+      // 冲突态由卡片负责：从内层段落上来的双击不该把卡片顶掉重挂
+      const inner = quote.querySelector("p") as HTMLElement;
+      inner.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+      expect(quote.getAttribute(EDIT_STATE_ATTRIBUTE)).toBe(EDIT_CONFLICT_STATE);
+      expect(h.layer.snapshot().activeRangeKey).toBeNull();
+    });
+  });
+});
+
 describe("把手只随 editMode 增删（§7.1 / §7.2）", () => {
   test("关掉开关 = 属性摘净 + 正文回到静态产物", () => {
     const h = setup();

@@ -2,7 +2,7 @@
   "name": "readora",
   "displayName": "Readora — Markdown Reader",
   "description": "A beautiful, focused reading experience for Markdown in Visual Studio Code.",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "publisher": "readora-dev",
   "license": "MIT",
   "icon": "resources/icon.png",

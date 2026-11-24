@@ -1,6 +1,6 @@
 {
   "name": "@readora/markdown-core",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "private": true,
   "type": "module",
   "description": "Markdown 渲染管线（ARC-002 P01～P08；M2 落地：markdown-it + highlight.js + DOMPurify）",
