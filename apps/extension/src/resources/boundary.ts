@@ -45,6 +45,11 @@ export function toSystemPath(
   return drive ? `${drive[1]}${drive[2] ?? ""}` : uriPath;
 }
 
+/** URI path 是否为盘符形态（`/C:/x`）：与当前运行平台无关，说明文件住在 Windows 卷上。 */
+export function isDriveUriPath(uriPath: string): boolean {
+  return URI_DRIVE_PATH.test(uriPath);
+}
+
 /** 盘符段：`C:` / `c:`，只在路径第一段出现。 */
 const DRIVE_SEGMENT = /^[A-Za-z]:$/u;
 
@@ -168,7 +173,10 @@ export async function verifyBoundary(
   }
   let canonical: string;
   try {
-    canonical = normalizeDirectory(await options.realpath(toSystemPath(filePath)));
+    // 盘符形态优先于运行平台：`/C:/x` 的前导斜杠是 URI 语法而不是路径的一部分，
+    // 不论扩展宿主跑在哪个系统上，递给 node:fs 之前都必须剥掉。
+    const stripDriveSlash = isDriveUriPath(filePath) || process.platform === "win32";
+    canonical = normalizeDirectory(await options.realpath(toSystemPath(filePath, stripDriveSlash)));
   } catch {
     // 无法确认真实路径时按越权处理：宁可拒绝，不可放行未验证的路径。
     return {
