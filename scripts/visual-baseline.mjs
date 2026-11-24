@@ -71,7 +71,6 @@ const SCOPE_SELECTOR = "html";
 /** 关键选择器：正文、外壳、代码与语法色各有代表。 */
 const SELECTORS = [
   ".readora-document-title",
-  ".readora-document-source",
   ".readora-paragraph",
   ".readora-heading--h2",
   ".readora-document a",

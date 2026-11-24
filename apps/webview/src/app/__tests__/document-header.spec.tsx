@@ -25,7 +25,6 @@ function cardOf(source: string) {
   const view = render(
     <DocumentHeader
       title={result.metadata.title ?? "note.md"}
-      fileName="note.md"
       properties={result.metadata.properties}
     />
   );

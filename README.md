@@ -2627,6 +2627,91 @@ M11 那两条导出菜单标识，**没有任何一条属于编辑模式** —�
   **不同源**。这与 M12 登记过的那次（已推的树带着两个缺陷、而 0.12.0 那枚 vsix 是从另一棵树上
   打的）属同一类风险，如实登记而不假装 HEAD 可复现本次产物
 
+### 发布 · v0.13.1（Readora 成为 `.md` 默认编辑器：`priority` option → default）
+
+用户诉求一句话「配置成默认 markdown 编辑器」，在两个生效范围（改扩展清单 vs 只配本机
+`workbench.editorAssociations`）里选了**改清单**对所有安装用户生效。
+
+**这一版只改一个字段**：`apps/extension/package.json` 的
+`contributes.customEditors[0].priority` 由 `option` 改为 `default`。零逻辑改动、零协议变更
+（消息仍 18 条）、零 Webview 代码。
+
+为什么现在改（登记于 ARC-004 §4.4 的 1.6.0 注记）：option 那条保守决策留了一个实现侧
+**修不掉**的缺陷 —— 原生面包屑选同级文件走宿主 `editorService.openEditor`，只传目标
+resource 与打开选项，不继承当前编辑器类型，公开扩展 API 又没有针对这一事件的接管点，
+于是「在阅读器里读到一半、换一篇就掉回文本编辑器」。改 default 后这条路径由宿主的默认
+关联自然解析到 readora，缺陷整条消失；代价是接管了用户原有的双击习惯。
+
+已实现：
+
+- **manifest 反转**（上面那一个字段）。`8` 处 `package.json` 0.13.0 → **0.13.1**：行为口径
+  反转但没有新能力面，与 0.12.1 / 0.12.2 同属 patch（「含新增能力走 minor」那条 0.x 口径
+  本轮未触发）
+- **跟着改口径的两处事实源**：`webview/custom-editor-provider.ts` 的文件头注释（原写「文本
+  编辑器仍是默认」、`__tests__/manifest.spec.ts` 的护栏标题与断言（`toBe("option")` →
+  `toBe("default")`）。护栏改断言而不是删断言：priority 要钉在单一事实上，不允许 manifest
+  一套注释另一套
+- **市场侧 `apps/extension/README.md`** 的 Getting started 重写：先说「双击直接进阅读器」，
+  再给两条退回路径（右键 **Open With…** → *Text Editor*；`{ "workbench.editorAssociations":
+  { "*.md": "default" } }` 长期退回）。第二条不是随手写的兑子：读了宿主 `editorResolverService`
+  的解析顺序才敢写——无 `exclusive` 编辑器在位时**用户关联直接胜出**，而我们的 `default`
+  优先级（rank 4）仍高于文本编辑器（rank 2），所以「扩展声明 default」与「用户用 `default`
+  退回去」两件事同时成立，不矛盾
+- **命令与两条右键菜单全部保留**：职责从「唯一的进阅读器入口」变成「文档已在文本编辑器里
+  时一键切进阅读器」
+
+未纳入（不得对外宣称）：
+
+- **未在本机 VS Code 里装包实测**：`pnpm install:check` 会动用户的扩展安装，未授权就不跑。
+  「双击 `.md` 进阅读器」与「面包屑切同级留在阅读器」两条是由**清单语义 + 宿主解析顺序**
+  推定的，本轮取证只到产物字节层
+- 没有新增「保留文本编辑器为默认 + 一步切进阅读器」的专用文件选择入口（此前登记过的那个
+  可选设计），也没有做首次安装引导；两个编辑器都声称 default 时宿主自己会问用户，我们不抢
+  这一步
+
+已知限制：
+
+- **用户此前用「打开方式 → 设为默认」给别的编辑器留过关联时，那条设置优先于本轮改动**，
+  装了 0.13.1 仍可能是旧编辑器打开。这不是缺陷，是宿主优先级，已在市场侧 README 的
+  Notes & limitations 里显式告知
+- **盘上那枚 `readora-0.13.0.vsix` 与 README 登记的字节数不同源**：本文「发布 · v0.13.0」
+  一节记的是 `main.js` 2 373 829 B，而盘上那枚里的 `main.js` 是 2 385 206 B（文件 mtime
+  2026-11-23 17:35，在登记之后被重打过）。所以本轮的字节对比**拿盘上同源那一枚做基线**，
+  而不是拿历史数字；历史那一段不回溯改写（同上「产物是从未提交的工作树打的」那条同性质）
+
+门禁（本机当次实跑）：
+
+- eslint 零输出；`pnpm package` 链 **EXIT=0**：typecheck 7 包 Done；六包单测计数与 M20
+  逐项一致（contracts **47** / design-tokens **63** / diagram-core **119** / markdown-core **342** /
+  extension **367 + 1 skip** / webview **1065**）；notices 60 个包、license 1098 B
+- `pnpm verify` **全绿**：`readora-0.13.1.vsix` **39 files / 1 544 277 B**；`main.js`
+  **2 385 206 B**（预算 2 516 992 B → 余量 **131 786 B**）、`main.css` **89 327 B**（预算
+  163 840 B）、27 woff2（20 KaTeX）、无 woff/ttf、27 条 `url()` 全部在包内解析得到；
+  smoke 注册 **9/9 命令**；旧包 0.12.1 / 0.12.2 / 0.13.0 **均未被覆盖**
+- **产物内容实证**（`.playwright-cli/vsix-priority-check.py`）：从包内回读
+  `extension/package.json` 得 `priority=default`；**反向对照**同一脚本读
+  `readora-0.13.0.vsix` 得 `priority=option` —— 判据有鉴别力（新包里能命中、旧包里必须不
+  命中），而不是「在最新产物里能命中」就算数
+- **同源实证**（`.playwright-cli/vsix-artifact-diff.py`）：`main.js` / `main.css` /
+  `extension.js` 三件与 0.13.0 **逐字节相同**（sha256 相等、Δ=0），只有 `package.json`
+  **+1 B**（`"option"` → `"default"` 多一个字符；version 串等长）与 `readme.md` 变化。这组
+  数字本身就是「本轮零代码改动」的证明，比一句声明有力；注意**它是在补入市场侧
+  Notes 那三行之前测的**，重打后 `readme.md` 的 Δ 会变、三件产物仍应 Δ=0
+- `pnpm test:e2e` 首跑 **165 条里 2 红**（`edit-inline.spec.ts:434` 「加粗后点工具条上的
+  Cancel」、`export.spec.ts:211` 「图表的内联 SVG 原样带走」）；**单文件 `--workers=1` 复跑
+  22/22 通过**，全量再跑第二次 **165 passed 全绿** → 判为并发抖动不是回归（与 M17–M20
+  登记的是同一条），但本轮抖的是另外两个文件而不是 `outline*`，记下以免下一个人误判成
+  manifest 改动引发的
+- `visual:check` **十档全等**且**未跑 `visual:update`**（本轮不动任何样式，去刷基线就是
+  越界信号）
+
+口径登记：ARC-004 **1.6.0**（§4.4 F10-004 第 1 条加决策反转注记、第 3 条补「冗余入口而非
+唯一入口」、§18.1 加行、新增 §18.8）；ARC-009 §15 R5 按新 priority 改写（两窗口并存从「默认
+就分开」变成「用户显式切回才有」，风险面收窄但不为零）；`apps/extension/README.md` 的
+Getting started 与 Notes & limitations。**PRD-001 / PRD-002 / PRD-003 / ARC-002 / ARC-006 /
+IMP-002 / IMP-003 本轮未改**（F10-004 在 PRD-001 §5.10 仍是「Markdown 文件关联 P1」一行，
+本轮把它从 P1 交付到位，需求表无需改写）。
+
 ## 环境偏差登记（IMP-001 §3.3）
 
 规范参考版本为 Node 26.x / pnpm 12.x；本仓库当前按实际开发环境推进：

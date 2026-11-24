@@ -77,6 +77,9 @@ All settings live under the `readora.*` namespace.
 
 ## Notes & limitations
 
+- **Your own editor associations win.** `workbench.editorAssociations` and any
+  default you previously picked in **Open With…** take precedence over Readora's
+  registration, so those files keep opening the way you configured them.
 - **Remote images are off by default** and `readora.resources.allowExternalImages`
   is not yet fully delivered; local workspace images are supported.
 - **PDF and PNG export** require a locally installed Chrome, Chromium, or Edge.

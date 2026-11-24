@@ -1,7 +1,7 @@
 /**
  * 文档头部与 Frontmatter 属性卡片（ARC-005 §9；PRD-003 §4.6 / STORY-06-02，M6 升级）。
  *
- * M5 之前这里只有「标题 + 文件名」两行，Frontmatter 的信息散落在正文里看不见。
+ * M5 之前这里只有「标题」一行，Frontmatter 的信息散落在正文里看不见。
  * PRD-003 §4.6 要求文档头部呈现这篇的元信息，承载它的就是这张属性卡：
  * **键值表格，按类型排版**（文本 / 数字 / 布尔 / 日期 / 列表）。
  *
@@ -23,7 +23,6 @@ import type { FrontmatterProperty } from "@readora/markdown-core";
 export interface DocumentHeaderProps {
   /** 已按「Frontmatter title 优先，否则文件名」定稿的标题文本。 */
   title: string;
-  fileName: string;
   properties: readonly FrontmatterProperty[];
 }
 
@@ -85,11 +84,10 @@ function PropertyValue({ property }: { property: FrontmatterProperty }) {
   return <>{property.text}</>;
 }
 
-export function DocumentHeader({ title, fileName, properties }: DocumentHeaderProps) {
+export function DocumentHeader({ title, properties }: DocumentHeaderProps) {
   return (
     <header className="readora-document-header">
       <h1 className="readora-document-title">{title}</h1>
-      <p className="readora-document-source">{fileName}</p>
 
       {properties.length > 0 ? (
         <section className="readora-properties" aria-label="Document properties">

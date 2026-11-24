@@ -71,7 +71,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: var(--readora-space-5) var(--readora-space-2) var(--readora-space-4) var(--readora-space-4);
+  padding: 0 var(--readora-space-2) var(--readora-space-4) var(--readora-space-4);
   border-right: var(--readora-hairline) solid var(--readora-color-border);
 }
 
@@ -226,6 +226,8 @@
   align-items: center;
   gap: var(--readora-space-1);
   margin: 0 var(--readora-space-1) var(--readora-space-2);
+  /* 与顶栏等高，按钮垂直中心对齐顶栏控件（22px）。 */
+  height: var(--readora-topbar-height);
   /* 面板纵向 flex 里头部不被列表挤扁（滚动只属于列表）。 */
   flex: 0 0 auto;
   display: flex;

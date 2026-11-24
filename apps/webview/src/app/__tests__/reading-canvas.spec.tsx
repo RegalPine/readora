@@ -86,7 +86,8 @@ describe("DocumentHeader", () => {
   it("frontmatter 标题优先于文件名", () => {
     const { main } = setup(payloadFor({ text: "---\ntitle: 阅读笔记\n---\n\n# 章节\n" }));
     expect(main.querySelector(".readora-document-title")?.textContent).toBe("阅读笔记");
-    expect(main.querySelector(".readora-document-source")?.textContent).toBe("note-one.md");
+    // 文件名行已移除，VS Code 原生面包屑已提供路径信息
+    expect(main.querySelector(".readora-document-source")).toBeNull();
   });
 
   it("无 frontmatter 时标题回落为文件名，文件名做 URI 解码", () => {

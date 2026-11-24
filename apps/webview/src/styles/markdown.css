@@ -22,13 +22,6 @@
   letter-spacing: var(--readora-tracking-tight);
 }
 
-.readora-document-source {
-  margin: var(--readora-space-1) 0 0;
-  font-size: var(--readora-font-sm);
-  color: var(--readora-color-text-muted);
-  word-break: break-all;
-}
-
 /* ---------- 排版 ---------- */
 
 .readora-document {
