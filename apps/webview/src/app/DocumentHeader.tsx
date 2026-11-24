@@ -1,7 +1,9 @@
 /**
- * 文档头部与 Frontmatter 属性卡片（ARC-005 §9；PRD-003 §4.6 / STORY-06-02，M6 升级）。
+ * Frontmatter 属性卡片（ARC-005 §9；PRD-003 §4.6 / STORY-06-02，M6 升级）。
  *
- * M5 之前这里只有「标题」一行，Frontmatter 的信息散落在正文里看不见。
+ * 文档标题不再在此组件渲染——正文自身的 `#` 一级标题已经承载了同样的信息，
+ * 重复显示反而干扰阅读。本组件只负责属性卡片：无属性时返回 null。
+ *
  * PRD-003 §4.6 要求文档头部呈现这篇的元信息，承载它的就是这张属性卡：
  * **键值表格，按类型排版**（文本 / 数字 / 布尔 / 日期 / 列表）。
  *
@@ -21,8 +23,6 @@
 import type { FrontmatterProperty } from "@readora/markdown-core";
 
 export interface DocumentHeaderProps {
-  /** 已按「Frontmatter title 优先，否则文件名」定稿的标题文本。 */
-  title: string;
   properties: readonly FrontmatterProperty[];
 }
 
@@ -84,37 +84,36 @@ function PropertyValue({ property }: { property: FrontmatterProperty }) {
   return <>{property.text}</>;
 }
 
-export function DocumentHeader({ title, properties }: DocumentHeaderProps) {
+export function DocumentHeader({ properties }: DocumentHeaderProps) {
+  if (properties.length === 0) {
+    return null;
+  }
   return (
     <header className="readora-document-header">
-      <h1 className="readora-document-title">{title}</h1>
-
-      {properties.length > 0 ? (
-        <section className="readora-properties" aria-label="Document properties">
-          <h2 className="readora-properties-heading">Properties</h2>
-          <table className="readora-properties-table">
-            <caption className="readora-properties-caption">
-              {`${properties.length} frontmatter ${properties.length === 1 ? "property" : "properties"}`}
-            </caption>
-            <tbody>
-              {properties.map((property, index) => (
-                <tr
-                  key={`${property.key}-${index}`}
-                  className="readora-property-row"
-                  data-readora-property-type={property.kind}
-                >
-                  <th scope="row" className="readora-property-key">
-                    {property.key}
-                  </th>
-                  <td className="readora-property-value">
-                    <PropertyValue property={property} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      ) : null}
+      <section className="readora-properties" aria-label="Document properties">
+        <h2 className="readora-properties-heading">Properties</h2>
+        <table className="readora-properties-table">
+          <caption className="readora-properties-caption">
+            {`${properties.length} frontmatter ${properties.length === 1 ? "property" : "properties"}`}
+          </caption>
+          <tbody>
+            {properties.map((property, index) => (
+              <tr
+                key={`${property.key}-${index}`}
+                className="readora-property-row"
+                data-readora-property-type={property.kind}
+              >
+                <th scope="row" className="readora-property-key">
+                  {property.key}
+                </th>
+                <td className="readora-property-value">
+                  <PropertyValue property={property} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
     </header>
   );
 }

@@ -42,7 +42,7 @@ interface Manifest {
     customEditors: {
       viewType: string;
       displayName: string;
-      selector: { filenamePattern: string }[];
+      selector: { filenamePattern: string; scheme?: string }[];
       priority: string;
     }[];
     commands: { command: string; title: string }[];
@@ -118,7 +118,7 @@ describe("manifest 护栏", () => {
    * 必须是 default（0.13.1 起 readora 是 .md / .markdown 的默认打开方式，双击
    * 直接进阅读器；文本编辑器仍可经「打开方式」与 editorAssociations 拿回）。
    */
-  test("customEditors 声明只读编辑器形态，priority=default 且选择器覆盖 .md/.markdown", () => {
+  test("customEditors 声明只读编辑器形态，priority=default 且选择器覆盖 .md/.markdown 并限定 scheme=file", () => {
     const editors = manifest.contributes.customEditors;
     expect(editors).toHaveLength(1);
     const [editor] = editors;
@@ -129,6 +129,10 @@ describe("manifest 护栏", () => {
       "*.markdown",
       "*.md"
     ]);
+    // scheme: "file" 确保 gitfs:/git: 等虚拟协议不命中自定义编辑器，git diff 走内置文本差异视图
+    for (const item of editor?.selector ?? []) {
+      expect(item.scheme).toBe("file");
+    }
   });
 
   test("宽度命令不进命令面板（它只服务键位）", () => {
@@ -155,26 +159,9 @@ describe("manifest 护栏", () => {
     }
   });
 
-  test("editor/context 按 markdown 语言过滤", () => {
-    const entries = manifest.contributes.menus["editor/context"] ?? [];
-    expect(entries.length).toBeGreaterThan(0);
-    for (const entry of entries) {
-      expect(entry.when).toContain("editorLangId == markdown");
-    }
-  });
-
-  test("explorer/context 的 when 覆盖 .md / .markdown（大小写不敏感）", () => {
-    const entries = manifest.contributes.menus["explorer/context"] ?? [];
-    expect(entries.length).toBeGreaterThan(0);
-    for (const entry of entries) {
-      const match = /resourceExtname =~ \/(.*)\/([a-z]*)$/.exec(entry.when ?? "");
-      expect(match, `${entry.command} 的 when 不是 resourceExtname 正则`).not.toBeNull();
-      const pattern = new RegExp(match?.[1] ?? "", match?.[2] ?? "");
-      expect(pattern.test(".md")).toBe(true);
-      expect(pattern.test(".markdown")).toBe(true);
-      expect(pattern.test(".MD")).toBe(true);
-      expect(pattern.test(".txt")).toBe(false);
-    }
+  test("不再贡献 editor/context 与 explorer/context（priority=default 后右键菜单冗余）", () => {
+    expect(manifest.contributes.menus["editor/context"]).toBeUndefined();
+    expect(manifest.contributes.menus["explorer/context"]).toBeUndefined();
   });
 
   test("键位只绑定已注册命令", () => {
@@ -324,7 +311,7 @@ describe("manifest 护栏", () => {
    * 右键菜单不列导出：那两处只放「打开阅读器」的两个入口（ARC-004 §4.4 的入口表），
    * 导出的主入口是顶栏 Export 下拉，三条命令继续留在命令面板里可搜到。
    */
-  test("三条导出命令成对注册，且不进任何右键菜单", () => {
+  test("三条导出命令成对注册，且不进任何菜单", () => {
     const titles = new Map(
       manifest.contributes.commands.map((command) => [command.command, command.title])
     );
@@ -332,17 +319,8 @@ describe("manifest 护栏", () => {
     expect(titles.get(READORA_COMMANDS.EXPORT_PDF)).toBe("Readora: Export as PDF");
     expect(titles.get(READORA_COMMANDS.EXPORT_PNG)).toBe("Readora: Export as PNG");
 
-    const groups = ["editor/context", "explorer/context"] as const;
-    for (const menu of groups) {
-      const entries = manifest.contributes.menus[menu] ?? [];
-      expect(entries.map((entry) => entry.group)).toEqual([
-        "navigation@100",
-        "navigation@101"
-      ]);
-      expect(entries.map((entry) => entry.command)).toEqual([
-        READORA_COMMANDS.OPEN_READER,
-        READORA_COMMANDS.OPEN_TO_SIDE
-      ]);
+    // 导出命令不在任何菜单中（只留命令面板可搜）
+    for (const entries of Object.values(manifest.contributes.menus)) {
       for (const entry of entries) {
         expect(entry.command).not.toMatch(/^readora\.export/);
       }

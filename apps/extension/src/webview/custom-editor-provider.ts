@@ -10,6 +10,8 @@
  * priority 取 "default"（0.13.1 起）：双击 / 资源管理器打开 .md 直接进阅读器，宿主在
  * 原生面包屑里切同级文件也随之走 readora —— 那正是 "option" 时代修不掉的一条限制
  * （面包屑走宿主 editorService.openEditor，不继承当前编辑器类型，公开 API 无接管点）。
+ * selector 限定 scheme="file"：只接管本地文件的打开，gitfs:/git: 等虚拟协议自然
+ * 回退到内置文本差异编辑器，保证 Git 工作树视图能正常显示文档差异。
  * 文本编辑器没有被剥夺：右键「打开方式」随时可切回，用户自己配的
  * `workbench.editorAssociations` 优先级高于本声明。
  *

@@ -259,18 +259,32 @@
   padding: 4px var(--readora-space-1);
 }
 
-/* 展开/折叠两枚常驻，当前全折叠态由 `aria-pressed` 的淡底表达：点一下高亮就从
- * 这一枚换到那一枚，不再出现「点了看不出变化」（用户反馈）。与顶栏 Outline 开合同一
- * 口径：只换淡底不加 accent 描边，免得和键盘焦点环（components.css）撞色。 */
+/* 展开/折叠两枚常驻，状态区分用透明度而非底色：
+ * “有事可做”那枚保持全强度，“没事可做”那枚淡出。
+ * 亮色模式下 surface-raised 与 canvas 差异极小，用底色表达按下态会造成认知错位
+ * （用户分不清灰色背景是“正常按钮”还是“高亮状态”）。
+ * 透明度对比在亮/暗模式都一致可辨。 */
 .readora-outline-action[aria-pressed="true"]:not(:disabled) {
-  background: var(--readora-color-surface-raised);
   color: var(--readora-color-text-primary);
+}
+
+.readora-outline-action[aria-pressed="false"]:not(:disabled) {
+  opacity: 0.4;
 }
 
 /* 过滤中展开/折叠没有可见效果（折叠态不参与过滤视图），禁用而不是空转。 */
 .readora-outline-action:disabled {
   color: var(--readora-color-text-muted);
   cursor: default;
+}
+
+/* 分组分隔符：在展开/折叠组与过滤按钮之间画一条竖线，降低三枚图标的认知负担。 */
+.readora-outline-separator {
+  width: 1px;
+  height: 16px;
+  margin: 0 var(--readora-space-1);
+  background: var(--readora-color-border);
+  flex: 0 0 auto;
 }
 
 .readora-outline-filter-input {

@@ -316,7 +316,6 @@ describe("切换主题的六条约束（ARC-006 §11.1）", () => {
     const host = setup();
     const shell = document.querySelector(".readora-shell");
     const article = document.querySelector(".readora-document");
-    const title = document.querySelector(".readora-document-title");
     const postsBefore = host.posted.length;
 
     act(() => {
@@ -327,7 +326,6 @@ describe("切换主题的六条约束（ARC-006 §11.1）", () => {
     expect(root().dataset.readoraScheme).toBe("dark");
     // 1 不重新加载文档：正文节点全等，且没有新的对 Host 投递。
     expect(document.querySelector(".readora-document")).toBe(article);
-    expect(document.querySelector(".readora-document-title")).toBe(title);
     expect(host.posted).toHaveLength(postsBefore);
     // 2 不重建 Reader Shell：外壳与工具栏同一批节点。
     expect(document.querySelector(".readora-shell")).toBe(shell);

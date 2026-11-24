@@ -328,6 +328,7 @@ export function OutlinePanel({
         >
           <CollapseIcon size={16} />
         </button>
+        <span className="readora-outline-separator" aria-hidden="true" />
         <button
           type="button"
           className={`readora-outline-action ${OUTLINE_ACTION_ICON_CLASS}`}

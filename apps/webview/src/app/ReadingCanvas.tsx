@@ -1,7 +1,7 @@
 /**
  * 阅读画布（ARC-005 §9；M3 接入资源解析、图表与 Lightbox）。
  *
- * 结构：DocumentHeader（标题 + Frontmatter 属性卡片，M6 / STORY-06-02）→
+ * 结构：DocumentHeader（Frontmatter 属性卡片，无属性时不渲染）→
  * MarkdownContent（正文 + 附加层）→
  * 诊断提示条（只呈现 error 级，页内可折叠，不弹 Host 通知）→ Lightbox 覆盖层。
  * M5 起阅读偏好改由 `<html>` 上的三个变量生效（PRD-003 §11.4），本层不再写内联样式；
@@ -85,7 +85,6 @@ export function ReadingCanvas({
   const [notesOpen, setNotesOpen] = useState(true);
   const [lightbox, setLightbox] = useState<ImageActivationRequest | null>(null);
   const { preferences } = payload;
-  const fileName = useMemo(() => fileNameOf(payload.documentUri), [payload.documentUri]);
   // 上抛回调走 ref：MarkdownContent 的 effect 只认它自己的依赖，不该被父层重渲染牵连。
   const onOutlineRef = useRef(onOutline);
   const onRenderedRef = useRef(onRendered);
@@ -175,8 +174,6 @@ export function ReadingCanvas({
        */}
       <main className={`readora-canvas${focusMode ? " readora-canvas--focus" : ""}`}>
         <DocumentHeader
-          // 标题口径不变：Frontmatter title 优先，没有就用文件名（ARC-005 §9）。
-          title={rendered?.metadata.title ?? fileName}
           // M6 / STORY-06-02：卡片的数据是 markdown-core 交出的字面量名单，
           // 本层不解析 Frontmatter 文本，也不在这里做第二次裁剪。
           properties={rendered?.metadata.properties ?? []}

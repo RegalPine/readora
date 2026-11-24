@@ -83,16 +83,17 @@ afterEach(() => {
 });
 
 describe("DocumentHeader", () => {
-  it("frontmatter 标题优先于文件名", () => {
-    const { main } = setup(payloadFor({ text: "---\ntitle: 阅读笔记\n---\n\n# 章节\n" }));
-    expect(main.querySelector(".readora-document-title")?.textContent).toBe("阅读笔记");
-    // 文件名行已移除，VS Code 原生面包屑已提供路径信息
-    expect(main.querySelector(".readora-document-source")).toBeNull();
+  it("有 frontmatter 属性时渲染卡片，无属性时不渲染标题", () => {
+    const { main } = setup(payloadFor({ text: "---\ntitle: 阅读笔记\ntags: [a]\n---\n\n# 章节\n" }));
+    // 属性卡片存在
+    expect(main.querySelector('[aria-label="Document properties"]')).not.toBeNull();
+    // 不再有独立的标题行
+    expect(main.querySelector(".readora-document-title")).toBeNull();
   });
 
-  it("无 frontmatter 时标题回落为文件名，文件名做 URI 解码", () => {
+  it("无 frontmatter 时 DocumentHeader 不渲染，文件名工具函数仍可用", () => {
     const { main } = setup(payloadFor({ text: "# 章节\n" }));
-    expect(main.querySelector(".readora-document-title")?.textContent).toBe("note-one.md");
+    expect(main.querySelector(".readora-document-header")).toBeNull();
     expect(fileNameOf("file:///vault/笔记/第二章.md")).toBe("第二章.md");
     expect(fileNameOf("file:///vault/%E7%AC%94%E8%AE%B0/a.md")).toBe("a.md");
   });

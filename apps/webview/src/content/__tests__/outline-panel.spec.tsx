@@ -309,13 +309,18 @@ describe("头部动作：展开全部 / 折叠全部 / 过滤（§10.7）", () =
     expect(action(partial.view, "Collapse all").getAttribute("aria-pressed")).toBe("true");
   });
 
-  test("两枚图标形状不同：展开朝外张开、折叠朝中间收拢", () => {
+  test("两枚图标形状不同：展开箭头朝外、折叠箭头朝内，都有水平参考线", () => {
     const { view } = panel({ items: PLACED });
     const shape = (name: string): string =>
       action(view, name).querySelector("path")?.getAttribute("d") ?? "";
     expect(shape("Expand all")).not.toBe(shape("Collapse all"));
-    expect(shape("Expand all")).toContain("l4-4");
-    expect(shape("Collapse all")).toContain("l4 4");
+    // 两枚都包含水平线 h12，与漏斗图标形成结构性差异
+    expect(shape("Expand all")).toContain("h12");
+    expect(shape("Collapse all")).toContain("h12");
+    // 展开枚：箭头在 y=7 向上（l3-3）= 远离中心线
+    expect(shape("Expand all")).toContain("7l3-3");
+    // 折叠枚：箭头在 y=5 向下（l3 3）= 朝向中心线
+    expect(shape("Collapse all")).toContain("5l3 3");
   });
 
   test("展开全部交回空集合，折叠全部交回所有可折叠 key 的名单", () => {

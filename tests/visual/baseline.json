@@ -230,26 +230,6 @@
         "--readora-warning-border": "#8a5a00"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(11, 28, 48)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(11, 28, 48)",
-          "borderLeftColor": "rgb(11, 28, 48)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(107, 100, 120)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(107, 100, 120)",
-          "borderLeftColor": "rgb(107, 100, 120)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(11, 28, 48)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -544,7 +524,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -568,7 +548,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -580,7 +560,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -592,7 +572,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -613,7 +593,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -625,7 +605,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -636,7 +616,7 @@
       },
       "screenshot": {
         "path": "artifacts/light.png",
-        "sha256": "ff15b4287849b5ed0c981139ab80ea127aeccbf8fe1912ec4342652b506191c2"
+        "sha256": "91f417548c208f52ed94763608ea66377d8601341e1b13c78b4236de34971363"
       }
     },
     "dark": {
@@ -857,26 +837,6 @@
         "--readora-warning-border": "#fbbf24"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(223, 226, 235)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(223, 226, 235)",
-          "borderLeftColor": "rgb(223, 226, 235)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(142, 148, 159)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(142, 148, 159)",
-          "borderLeftColor": "rgb(142, 148, 159)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(223, 226, 235)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -1171,7 +1131,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -1195,7 +1155,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -1207,7 +1167,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -1219,7 +1179,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -1240,7 +1200,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -1252,7 +1212,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -1263,7 +1223,7 @@
       },
       "screenshot": {
         "path": "artifacts/dark.png",
-        "sha256": "2f56d08cb35ae73901c3a2a3994697b9053e5721480e89a549ce4d249be78c3f"
+        "sha256": "e3456358dc8f0a01faaea89d63573ae5049f7ab73a2971a02e853e8aa416c7c0"
       }
     },
     "vscode-light": {
@@ -1484,26 +1444,6 @@
         "--readora-warning-border": "#8a5a00"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(11, 28, 48)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(11, 28, 48)",
-          "borderLeftColor": "rgb(11, 28, 48)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(107, 100, 120)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(107, 100, 120)",
-          "borderLeftColor": "rgb(107, 100, 120)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(11, 28, 48)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -1798,7 +1738,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -1822,7 +1762,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -1834,7 +1774,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -1846,7 +1786,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -1867,7 +1807,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -1879,7 +1819,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -1890,7 +1830,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-light.png",
-        "sha256": "196e9d12cf90de740cf8aad7838fe67df0404c0ac5ea79c4cdcfa49261e991a6"
+        "sha256": "d2d4f29e62bb75b6f078ee919cec23950224d0dff46ee95427c84fb2b83378f1"
       }
     },
     "vscode-dark": {
@@ -2111,26 +2051,6 @@
         "--readora-warning-border": "#fbbf24"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(223, 226, 235)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(223, 226, 235)",
-          "borderLeftColor": "rgb(223, 226, 235)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(142, 148, 159)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(142, 148, 159)",
-          "borderLeftColor": "rgb(142, 148, 159)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(223, 226, 235)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -2425,7 +2345,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -2449,7 +2369,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -2461,7 +2381,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -2473,7 +2393,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -2494,7 +2414,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -2506,7 +2426,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -2517,7 +2437,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-dark.png",
-        "sha256": "f43dc5923cdf743f32dd98534ab7c0980a0c8bdab924271a53521d87d767aed0"
+        "sha256": "2cd1cb8546da2e7381bb48d953f14b8517181b7f567fa15e591a5304a5843cda"
       }
     },
     "light--high-contrast": {
@@ -2738,26 +2658,6 @@
         "--readora-warning-border": "#8a5a00"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(11, 28, 48)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(11, 28, 48)",
-          "borderLeftColor": "rgb(11, 28, 48)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(78, 72, 87)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(78, 72, 87)",
-          "borderLeftColor": "rgb(78, 72, 87)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(11, 28, 48)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -3052,7 +2952,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -3076,7 +2976,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -3088,7 +2988,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -3100,7 +3000,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -3121,7 +3021,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -3133,7 +3033,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -3144,7 +3044,7 @@
       },
       "screenshot": {
         "path": "artifacts/light--high-contrast.png",
-        "sha256": "bfbe609d44c4f280bd6a96e2eee62bbc20353ef26d466e6e07cc1e93e62a9b05"
+        "sha256": "670cc389fedd0242460b139d0ab7e145b05ee0503f49356bdb028a7763be1175"
       }
     },
     "dark--high-contrast": {
@@ -3365,26 +3265,6 @@
         "--readora-warning-border": "#fbbf24"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(223, 226, 235)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(223, 226, 235)",
-          "borderLeftColor": "rgb(223, 226, 235)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(177, 182, 192)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(177, 182, 192)",
-          "borderLeftColor": "rgb(177, 182, 192)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(223, 226, 235)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -3679,7 +3559,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -3703,7 +3583,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -3715,7 +3595,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -3727,7 +3607,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -3748,7 +3628,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -3760,7 +3640,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -3771,7 +3651,7 @@
       },
       "screenshot": {
         "path": "artifacts/dark--high-contrast.png",
-        "sha256": "b6a12139097889191b99ff290709a1489c786bb489078d91e6ad08325ba6386a"
+        "sha256": "df4f73e9a1c51e0706ff187f42fa52cd71cb222856258ac26045671045f9ef28"
       }
     },
     "vscode-light--high-contrast": {
@@ -3992,26 +3872,6 @@
         "--readora-warning-border": "#8a5a00"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(11, 28, 48)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(11, 28, 48)",
-          "borderLeftColor": "rgb(11, 28, 48)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(78, 72, 87)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(78, 72, 87)",
-          "borderLeftColor": "rgb(78, 72, 87)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(11, 28, 48)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -4306,7 +4166,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -4330,7 +4190,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -4342,7 +4202,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -4354,7 +4214,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -4375,7 +4235,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -4387,7 +4247,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -4398,7 +4258,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-light--high-contrast.png",
-        "sha256": "7c037615578045762e970854498a8c40ff958c457c09d321cec5d44da1b7e5f9"
+        "sha256": "40000ad2d052a91e48f93be51642867e45edc89fed06873d1cbf02d9e8e23fab"
       }
     },
     "vscode-dark--high-contrast": {
@@ -4619,26 +4479,6 @@
         "--readora-warning-border": "#fbbf24"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(223, 226, 235)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(223, 226, 235)",
-          "borderLeftColor": "rgb(223, 226, 235)",
-          "fontSize": "38.25px",
-          "fontFamily": "Newsreader, \"Songti SC\", \"Noto Serif CJK SC\", serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(177, 182, 192)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(177, 182, 192)",
-          "borderLeftColor": "rgb(177, 182, 192)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(223, 226, 235)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -4933,7 +4773,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -4957,7 +4797,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -4969,7 +4809,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -4981,7 +4821,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -5002,7 +4842,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -5014,7 +4854,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -5025,7 +4865,7 @@
       },
       "screenshot": {
         "path": "artifacts/vscode-dark--high-contrast.png",
-        "sha256": "437ef743959203c0cead0c488b55cd14e942cfe76cc2c4d573d0d93418c4fba2"
+        "sha256": "70001fd521acdb83cab4f8b0100078cffc77910de724b43b16963e64ab8037b9"
       }
     },
     "light--geist": {
@@ -5246,26 +5086,6 @@
         "--readora-warning-border": "#8a5a00"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(11, 28, 48)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(11, 28, 48)",
-          "borderLeftColor": "rgb(11, 28, 48)",
-          "fontSize": "38.25px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(107, 100, 120)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(107, 100, 120)",
-          "borderLeftColor": "rgb(107, 100, 120)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(11, 28, 48)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -5560,7 +5380,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -5584,7 +5404,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -5596,7 +5416,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -5608,7 +5428,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -5629,7 +5449,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -5641,7 +5461,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -5652,7 +5472,7 @@
       },
       "screenshot": {
         "path": "artifacts/light--geist.png",
-        "sha256": "42078dec767b2f795c38edfbab46187fa36e849d6596f321d7f3b5f17ee62159"
+        "sha256": "b10dfaaec07342dee75b50295f489a0da80fefbd04087ce12f0c6aa7d947f8ff"
       }
     },
     "dark--geist": {
@@ -5873,26 +5693,6 @@
         "--readora-warning-border": "#fbbf24"
       },
       "styles": {
-        ".readora-document-title": {
-          "color": "rgb(223, 226, 235)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(223, 226, 235)",
-          "borderLeftColor": "rgb(223, 226, 235)",
-          "fontSize": "38.25px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "500",
-          "lineHeight": "43.9875px"
-        },
-        ".readora-document-source": {
-          "color": "rgb(142, 148, 159)",
-          "backgroundColor": "rgba(0, 0, 0, 0)",
-          "borderTopColor": "rgb(142, 148, 159)",
-          "borderLeftColor": "rgb(142, 148, 159)",
-          "fontSize": "13px",
-          "fontFamily": "Geist, Inter, -apple-system, \"Segoe UI\", \"PingFang SC\", \"Microsoft YaHei\", sans-serif",
-          "fontWeight": "400",
-          "lineHeight": "22.75px"
-        },
         ".readora-paragraph": {
           "color": "rgb(223, 226, 235)",
           "backgroundColor": "rgba(0, 0, 0, 0)",
@@ -6187,7 +5987,7 @@
       "rects": {
         ".readora-canvas": {
           "width": 820,
-          "height": 1797
+          "height": 1726
         },
         ".readora-document": {
           "width": 772,
@@ -6211,7 +6011,7 @@
         },
         ".readora-body": {
           "width": 1280,
-          "height": 1909
+          "height": 1838
         },
         ".readora-statusbar": {
           "width": 1280,
@@ -6223,7 +6023,7 @@
         },
         ".readora-shell-main": {
           "width": 1024,
-          "height": 1909
+          "height": 1838
         },
         ".readora-properties": {
           "width": 772,
@@ -6235,7 +6035,7 @@
         "rects": {
           ".readora-canvas": {
             "width": 820,
-            "height": 1797
+            "height": 1726
           },
           ".readora-document": {
             "width": 772,
@@ -6256,7 +6056,7 @@
           },
           ".readora-body": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-statusbar": {
             "width": 880,
@@ -6268,7 +6068,7 @@
           },
           ".readora-shell-main": {
             "width": 880,
-            "height": 1909
+            "height": 1838
           },
           ".readora-properties": {
             "width": 772,
@@ -6279,7 +6079,7 @@
       },
       "screenshot": {
         "path": "artifacts/dark--geist.png",
-        "sha256": "48c0b9aae1ef622069909fec8583cd204bd62e7fe8532487d23565f47bbac37a"
+        "sha256": "0ba3b5066e8c222e4ac4ea53ae79985e77a038c009e8b14310de2db317786ded"
       }
     }
   }

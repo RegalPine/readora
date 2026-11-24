@@ -12,16 +12,6 @@
   border-bottom: var(--readora-hairline) solid var(--readora-color-border);
 }
 
-.readora-document-title {
-  margin: 0;
-  /* 标题用 display 字族、字号按 em 相对正文，缩放只改一个变量即可整体跟随（§5.4）。 */
-  font-family: var(--readora-font-family-display);
-  font-size: 2.25em;
-  font-weight: 500;
-  line-height: 1.15;
-  letter-spacing: var(--readora-tracking-tight);
-}
-
 /* ---------- 排版 ---------- */
 
 .readora-document {

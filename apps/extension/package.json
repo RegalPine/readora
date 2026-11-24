@@ -36,10 +36,12 @@
         "displayName": "Readora",
         "selector": [
           {
-            "filenamePattern": "*.md"
+            "filenamePattern": "*.md",
+            "scheme": "file"
           },
           {
-            "filenamePattern": "*.markdown"
+            "filenamePattern": "*.markdown",
+            "scheme": "file"
           }
         ],
         "priority": "default"
@@ -88,30 +90,6 @@
         {
           "command": "readora.adjustContentWidth",
           "when": "false"
-        }
-      ],
-      "editor/context": [
-        {
-          "command": "readora.openReader",
-          "when": "editorLangId == markdown",
-          "group": "navigation@100"
-        },
-        {
-          "command": "readora.openToSide",
-          "when": "editorLangId == markdown",
-          "group": "navigation@101"
-        }
-      ],
-      "explorer/context": [
-        {
-          "command": "readora.openReader",
-          "when": "resourceExtname =~ /\\.(md|markdown)$/i",
-          "group": "navigation@100"
-        },
-        {
-          "command": "readora.openToSide",
-          "when": "resourceExtname =~ /\\.(md|markdown)$/i",
-          "group": "navigation@101"
         }
       ]
     },

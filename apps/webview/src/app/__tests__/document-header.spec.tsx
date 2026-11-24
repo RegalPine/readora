@@ -24,7 +24,6 @@ function cardOf(source: string) {
   });
   const view = render(
     <DocumentHeader
-      title={result.metadata.title ?? "note.md"}
       properties={result.metadata.properties}
     />
   );
@@ -171,7 +170,7 @@ describe("不执行任何脚本或表达式（STORY-06-02 验收线）", () => {
     const { view, properties } = cardOf("# 只有正文\n");
     expect(properties).toEqual([]);
     expect(view.container.querySelector('[aria-label="Document properties"]')).toBeNull();
-    expect(view.container.querySelector(".readora-document-title")?.textContent).toBe("note.md");
+    expect(view.container.querySelector(".readora-document-header")).toBeNull();
   });
 
   it("未闭合的 Frontmatter 不产出半个卡片：名单为空即不显示", () => {
